@@ -1,0 +1,14 @@
+before_script:
+        - hostname
+        - pwd
+        - export PATH=/usr/local/cuda/bin:$PATH
+        - export LD_LIBRARY_PATH=/usr/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+        - export LIBRARY_PATH=/usr/local/cuda/lib64:$LIBRARY_PATH
+        - export C_INCLUDE_PATH=/usr/local/cuda/include:$C_INCLUDE_PATH
+        - export CPLUS_INCLUDE_PATH=/usr/local/cuda/include:$CPLUS_INCLUDE_PATH
+        - export PYTHONPATH=$PYTHONPATH:$PWD
+
+dummy-test:
+        script:
+                - python3 -c 'import graphdot'
+
