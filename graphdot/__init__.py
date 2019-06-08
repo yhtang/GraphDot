@@ -1,1 +1,1 @@
-import struct
+__version__ = '0.1-a1'
