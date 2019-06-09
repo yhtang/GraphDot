@@ -1,11 +1,11 @@
 import struct
 import numpy
 
-__all__ = ['TensorProduct',
-           'Convolution',
-           'Unity',
+__all__ = ['Constant',
            'KroneckerDelta',
-           'SquareExponential']
+           'SquareExponential',
+           'TensorProduct',
+           'Convolution']
 
 __cpp_namespace__ = 'graphdot::basekernel'
 
@@ -82,9 +82,9 @@ class Constant(Kernel):
 
 class KroneckerDelta(Kernel):
 
-    def __init__(self, hi, lo):
-        self.hi = hi
+    def __init__(self, lo, hi=1.0):
         self.lo = lo
+        self.hi = hi
 
     def __call__(self, object1, object2):
         return self.hi if object1 == object2 else self.lo
@@ -93,7 +93,7 @@ class KroneckerDelta(Kernel):
         return 'δ({}, {})'.format(self.hi, self.lo)
 
     def __theta__(self):
-        return [self.hi, self.lo]
+        return [self.lo, self.hi]
 
     def __layout__(self):
         return '{ff}'
@@ -175,38 +175,38 @@ class Convolution(Kernel):
                                            cls='convolution',
                                            arg=self.kernel.__decltype__())
 
-
-k1 = KroneckerDelta(1, 0.5)
-k2 = KroneckerDelta(0.9, 0.4)
-k3 = Constant(1.0)
-k4 = SquareExponential(1.0)
-print(k1)
-print(k2)
-print(k3)
-print(k4)
-print(TensorProduct(k1, k2))
-print(TensorProduct(k1, k2, k3))
-print(TensorProduct(k1, k2, k4))
-print(Convolution(k4))
-print(Convolution(k3))
-print(Convolution(k2))
-
-
-def examine(k):
-    print('==============================')
-    print(repr(k))
-    print(k.__theta__())
-    print(k.__layout__())
-    print(k.__decltype__())
-    print('==============================')
+if __name__ == '__main__':
+    k1 = KroneckerDelta(1, 0.5)
+    k2 = KroneckerDelta(0.9, 0.4)
+    k3 = Constant(1.0)
+    k4 = SquareExponential(1.0)
+    print(k1)
+    print(k2)
+    print(k3)
+    print(k4)
+    print(TensorProduct(k1, k2))
+    print(TensorProduct(k1, k2, k3))
+    print(TensorProduct(k1, k2, k4))
+    print(Convolution(k4))
+    print(Convolution(k3))
+    print(Convolution(k2))
 
 
-examine(TensorProduct(k1, k2))
-examine(TensorProduct(k1, k3))
-examine(k1 + k3)
-examine(k2 + k4)
-examine(k4 + 1.0)
-examine(2.0 + k4)
-examine(k2 * k4)
-examine(k4 * 1.0)
-examine(Convolution(k4))
+    def examine(k):
+        print('==============================')
+        print(repr(k))
+        print(k.__theta__())
+        print(k.__layout__())
+        print(k.__decltype__())
+        print('==============================')
+
+
+    examine(TensorProduct(k1, k2))
+    examine(TensorProduct(k1, k3))
+    examine(k1 + k3)
+    examine(k2 + k4)
+    examine(k4 + 1.0)
+    examine(2.0 + k4)
+    examine(k2 * k4)
+    examine(k4 * 1.0)
+    examine(Convolution(k4))
