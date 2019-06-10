@@ -10,5 +10,5 @@ before_script:
 
 dummy-test:
         script:
-                - python3 -c 'import graphdot'
+                - pytest-3 --cov=graphdot/ --cov-report=term --cov-report=html
 

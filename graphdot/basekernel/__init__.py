@@ -20,6 +20,9 @@ class Kernel:
     def __mul__(self, b):
         return KernelProd(self, b if isinstance(b, Kernel) else Constant(b))
 
+    def __rmul__(self, b):
+        return KernelProd(b if isinstance(b, Kernel) else Constant(b), self)
+
 
 class KernelOperator:
     def __init__(self, k1, k2):
@@ -33,7 +36,7 @@ class KernelOperator:
         return self.k1.__theta__() + self.k2.__theta__()
 
     def __layout__(self):
-        return '{{{}}}{{{}}}'.format(self.k1.__layout__(),
+        return '[{}][{}]'.format(self.k1.__layout__(),
                                      self.k2.__layout__())
 
     def __decltype__(self):
@@ -73,7 +76,7 @@ class Constant(Kernel):
         return [self.constant]
 
     def __layout__(self):
-        return '{f}'
+        return '[f]'
 
     def __decltype__(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
@@ -96,7 +99,7 @@ class KroneckerDelta(Kernel):
         return [self.lo, self.hi]
 
     def __layout__(self):
-        return '{ff}'
+        return '[ff]'
 
     def __decltype__(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
@@ -117,7 +120,7 @@ class SquareExponential(Kernel):
         return [self.length_scale]
 
     def __layout__(self):
-        return '{f}'
+        return '[f]'
 
     def __decltype__(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
@@ -141,7 +144,7 @@ class TensorProduct(Kernel):
         return [a for k in self.kernels for a in k.__theta__()]
 
     def __layout__(self):
-        return '{{{}}}'.format(''.join([k.__layout__() for k in self.kernels]))
+        return '[{}]'.format(''.join([k.__layout__() for k in self.kernels]))
 
     def __decltype__(self):
         arg = ','.join([k.__decltype__() for k in self.kernels])
@@ -168,7 +171,7 @@ class Convolution(Kernel):
         return self.kernel.__theta__()
 
     def __layout__(self):
-        return '{{{}}}'.format(self.kernel.__layout__())
+        return '[{}]'.format(self.kernel.__layout__())
 
     def __decltype__(self):
         return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
