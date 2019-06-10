@@ -5,6 +5,10 @@ before_script:
         - export C_INCLUDE_PATH=/usr/local/cuda/include:$C_INCLUDE_PATH
         - export CPLUS_INCLUDE_PATH=/usr/local/cuda/include:$CPLUS_INCLUDE_PATH
 
-test:
+unittest:
         script:
                 - tox
+
+coverage:
+        script:
+                - print 'Hello world!'
