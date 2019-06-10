@@ -11,4 +11,4 @@ unittest:
 
 coverage:
         script:
-                - print 'Hello world!'
+                - tox -e py37
