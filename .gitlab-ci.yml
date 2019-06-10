@@ -7,8 +7,8 @@ before_script:
 
 unittest:
         script:
-                - tox
+                - tox -p auto -e py27,py37
 
 coverage:
         script:
-                - tox -e py37
+                - tox -e coverage
