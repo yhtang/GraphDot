@@ -44,7 +44,7 @@ class KernelOperator:
 
     def __layout__(self):
         return '[{}][{}]'.format(self.k1.__layout__(),
-                                     self.k2.__layout__())
+                                 self.k2.__layout__())
 
     def __decltype__(self):
         return '{ns}::{cls}<{a1},{a2}>'.format(ns=__cpp_namespace__,
@@ -57,23 +57,23 @@ class KernelSum(KernelOperator):
     op = '+'
     cls = 'add'
 
-    def __call__(self, object):
-        return self.k1(object) + self.k2(object)
+    def __call__(self, i, j):
+        return self.k1(i, j) + self.k2(i, j)
 
 
 class KernelProd(KernelOperator):
     op = '*'
     cls = 'mul'
 
-    def __call__(self, object):
-        return self.k1(object) * self.k2(object)
+    def __call__(self, i, j):
+        return self.k1(i, j) * self.k2(i, j)
 
 
 class Constant(Kernel):
     def __init__(self, constant):
         self.constant = constant
 
-    def __call__(self, object1, object2):
+    def __call__(self, i, j):
         return self.constant
 
     def __repr__(self):
@@ -96,8 +96,8 @@ class KroneckerDelta(Kernel):
         self.lo = lo
         self.hi = hi
 
-    def __call__(self, object1, object2):
-        return self.hi if object1 == object2 else self.lo
+    def __call__(self, i, j):
+        return self.hi if i == j else self.lo
 
     def __repr__(self):
         return 'δ({}, {})'.format(self.hi, self.lo)
@@ -184,39 +184,3 @@ class Convolution(Kernel):
         return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
                                            cls='convolution',
                                            arg=self.kernel.__decltype__())
-
-if __name__ == '__main__':
-    k1 = KroneckerDelta(1, 0.5)
-    k2 = KroneckerDelta(0.9, 0.4)
-    k3 = Constant(1.0)
-    k4 = SquareExponential(1.0)
-    print(k1)
-    print(k2)
-    print(k3)
-    print(k4)
-    print(TensorProduct(k1, k2))
-    print(TensorProduct(k1, k2, k3))
-    print(TensorProduct(k1, k2, k4))
-    print(Convolution(k4))
-    print(Convolution(k3))
-    print(Convolution(k2))
-
-
-    def examine(k):
-        print('==============================')
-        print(repr(k))
-        print(k.__theta__())
-        print(k.__layout__())
-        print(k.__decltype__())
-        print('==============================')
-
-
-    examine(TensorProduct(k1, k2))
-    examine(TensorProduct(k1, k3))
-    examine(k1 + k3)
-    examine(k2 + k4)
-    examine(k4 + 1.0)
-    examine(2.0 + k4)
-    examine(k2 * k4)
-    examine(k4 * 1.0)
-    examine(Convolution(k4))
