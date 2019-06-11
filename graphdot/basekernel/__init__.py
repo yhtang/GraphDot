@@ -11,6 +11,10 @@ __cpp_namespace__ = 'graphdot::basekernel'
 
 
 class Kernel:
+    """
+    Parent class for all base kernels
+    """
+
     def __add__(self, b):
         return KernelSum(self, b if isinstance(b, Kernel) else Constant(b))
 

@@ -1,1 +1,2 @@
-pycuda==2019.1
+sphinx
+sphinx-materialdesign-theme-nopyc
