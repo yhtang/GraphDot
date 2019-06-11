@@ -1,4 +1,7 @@
-import struct
+"""
+This module defines base kernels and composibility rules for creating vertex
+and edges kernels for the marginalized graph kernel.
+"""
 import numpy
 
 __all__ = ['Constant',
