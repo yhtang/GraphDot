@@ -1,9 +1,9 @@
 import struct
 
 
-def pad(abstract_layout, depth=0):
+def flatten(abstract_layout, depth=0):
     """
-    Convert nested structures into native C++ layout
+    Convert nested structures into native C++ layout with proper padding
     """
 
     padded_layout = ''
@@ -12,10 +12,9 @@ def pad(abstract_layout, depth=0):
 
     i = 0
     while i < len(abstract_layout):
-        print('%s%s  %s' % ('  ' * depth, abstract_layout[i:], padded_layout))
         c = abstract_layout[i]
         if c == '[':
-            step, sublayout = pad(abstract_layout[i+1:], depth + 1)
+            step, sublayout = flatten(abstract_layout[i+1:], depth + 1)
             alignment = max(alignment, sublayout['align'])
             padding = (sublayout['align'] - padded_size) % sublayout['align']
             padded_layout += 'x' * padding + sublayout['layout']
@@ -38,16 +37,3 @@ def pad(abstract_layout, depth=0):
     padded_size += padding
 
     return padded_layout, alignment
-
-
-if __name__ == '__main__':
-
-    # for format in ['f', 'fc', 'cf', 'chf', 'hcf', 'hcfd']:
-    #     print(struct.calcsize(pad_one(format)[0]), struct.calcsize(format))
-
-    # for format in [['df', 'fc']]:
-    #     f, p, a = pad(format)
-    #     print(f, p, a, struct.calcsize(f))
-
-    # pad_recursive('[[f][cc]]')
-    print(pad('[[ch][fdh]]'))
