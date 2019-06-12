@@ -18,6 +18,7 @@ kernels = [
 def test_simple_kernel_behavior(kernel):
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
+    assert(isinstance(repr(kernel), str))
     ''' corner cases '''
     assert(kernel(0, inf) <= 1)
     assert(kernel(0, -inf) <= 1)

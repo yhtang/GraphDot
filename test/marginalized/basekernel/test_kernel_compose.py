@@ -15,34 +15,35 @@ kernels = [
 ]
 
 
-@pytest.mark.parametrize('kernel1', kernels)
-@pytest.mark.parametrize('kernel2', kernels)
-def test_tensor_product_2(kernel1, kernel2):
-    k = TensorProduct(kernel1, kernel2)
+@pytest.mark.parametrize('k1', kernels)
+@pytest.mark.parametrize('k2', kernels)
+def test_tensor_product_2(k1, k2):
+    k = TensorProduct(k1, k2)
+    assert(isinstance(repr(k), str))
     for i1, j1 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
         for i2, j2 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
             ''' default and corner cases '''
-            assert(k((i1, i2), (j1, j2)) == kernel1(i1, j1) * kernel2(i2, j2))
+            assert(k((i1, i2), (j1, j2)) == k1(i1, j1) * k2(i2, j2))
     for _ in range(10000):
         i1 = random.paretovariate(0.1)
         j1 = random.paretovariate(0.1)
         i2 = random.paretovariate(0.1)
         j2 = random.paretovariate(0.1)
         ''' check by definition '''
-        assert(k((i1, i2), (j1, j2)) == kernel1(i1, j1) * kernel2(i2, j2))
+        assert(k((i1, i2), (j1, j2)) == k1(i1, j1) * k2(i2, j2))
 
 
-@pytest.mark.parametrize('kernel1', kernels)
-@pytest.mark.parametrize('kernel2', kernels)
+@pytest.mark.parametrize('k1', kernels)
+@pytest.mark.parametrize('k2', kernels)
 @pytest.mark.parametrize('kernel3', kernels)
-def test_tensor_product_3(kernel1, kernel2, kernel3):
-    k = TensorProduct(kernel1, kernel2, kernel3)
+def test_tensor_product_3(k1, k2, kernel3):
+    k = TensorProduct(k1, k2, kernel3)
     ''' default and corner cases only '''
     for i1, j1 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
         for i2, j2 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
             for i3, j3 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
                 assert(k((i1, i2, i3), (j1, j2, j3)) ==
-                       kernel1(i1, j1) * kernel2(i2, j2) * kernel3(i3, j3))
+                       k1(i1, j1) * k2(i2, j2) * kernel3(i3, j3))
 
 
 @pytest.mark.parametrize('kernel', kernels)

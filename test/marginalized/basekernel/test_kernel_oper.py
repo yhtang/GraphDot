@@ -24,16 +24,16 @@ def test_kernel_add_constant(kernel):
         assert(kadd(i, j) == kadd(j, i))
 
 
-@pytest.mark.parametrize('kernel1', kernels)
-@pytest.mark.parametrize('kernel2', kernels)
-def test_kernel_add_kernel(kernel1, kernel2):
+@pytest.mark.parametrize('k1', kernels)
+@pytest.mark.parametrize('k2', kernels)
+def test_kernel_add_kernel(k1, k2):
     ''' check by definition '''
-    kadd = kernel1 + kernel2
+    kadd = k1 + k2
     random.seed(0)
     for _ in range(1000):
         i = random.paretovariate(0.1)
         j = random.paretovariate(0.1)
-        assert(kadd(i, j) == kernel1(i, j) + kernel2(i, j))
+        assert(kadd(i, j) == k1(i, j) + k2(i, j))
         assert(kadd(i, j) == kadd(j, i))
 
 
@@ -49,14 +49,14 @@ def test_kernel_mul_constant(kernel):
         assert(kmul(i, j) == kmul(j, i))
 
 
-@pytest.mark.parametrize('kernel1', kernels)
-@pytest.mark.parametrize('kernel2', kernels)
-def test_kernel_mul_kernel(kernel1, kernel2):
+@pytest.mark.parametrize('k1', kernels)
+@pytest.mark.parametrize('k2', kernels)
+def test_kernel_mul_kernel(k1, k2):
     ''' check by definition '''
-    kmul = kernel1 * kernel2
+    kmul = k1 * k2
     random.seed(0)
     for _ in range(1000):
         i = random.paretovariate(0.1)
         j = random.paretovariate(0.1)
-        assert(kmul(i, j) == kernel1(i, j) * kernel2(i, j))
+        assert(kmul(i, j) == k1(i, j) * k2(i, j))
         assert(kmul(i, j) == kmul(j, i))
