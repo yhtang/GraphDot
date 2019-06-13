@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from graphdot.interop.structure import flatten
-
 import itertools
 import struct
 import pytest
+
+from graphdot.interop.structure import flatten
 
 
 nested_layout_examples = [

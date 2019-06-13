@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import random
+import copy
+import struct
+import pytest
+
 from graphdot.marginalized.basekernel import Constant
 from graphdot.marginalized.basekernel import KroneckerDelta
 from graphdot.marginalized.basekernel import SquareExponential
 from graphdot.marginalized.basekernel import Convolution
 from graphdot.marginalized.basekernel import TensorProduct
-
-import random
-import copy
-import struct
-import pytest
 
 inf = float('inf')
 nan = float('nan')
@@ -24,7 +24,6 @@ kernels = [
 def test_simple_kernel(kernel):
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
-    assert(isinstance(repr(kernel), str))
     ''' corner cases '''
     assert(kernel(0, inf) <= 1)
     assert(kernel(0, -inf) <= 1)
@@ -116,7 +115,7 @@ def test_tensor_product_2(k1, k2):
     for t1, t2 in zip(k.__theta__(), k1.__theta__() + k2.__theta__()):
         assert(t1 == t2)
     ''' representation generation '''
-    assert(len(repr(k).split(u'⊗'.encode('utf-8'))) == 2)
+    assert(len(repr(k).split('⊗')) == 2)
     assert(repr(k1) in repr(k))
     assert(repr(k2) in repr(k))
     ''' C++ counterpart layout '''
@@ -132,7 +131,6 @@ def test_tensor_product_2(k1, k2):
 @pytest.mark.parametrize('k3', kernels)
 def test_tensor_product_3(k1, k2, k3):
     k = TensorProduct(k1, k2, k3)
-    assert(isinstance(repr(k), str))
     ''' default and corner cases only '''
     for i1, j1 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
         for i2, j2 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
@@ -150,7 +148,7 @@ def test_tensor_product_3(k1, k2, k3):
                       k3.__theta__()):
         assert(t1 == t2)
     ''' representation generation '''
-    assert(len(repr(k).split(u'⊗'.encode('utf-8'))) == 3)
+    assert(len(repr(k).split('⊗')) == 3)
     assert(repr(k1) in repr(k))
     assert(repr(k2) in repr(k))
     assert(repr(k3) in repr(k))
@@ -167,7 +165,6 @@ def test_tensor_product_3(k1, k2, k3):
 @pytest.mark.parametrize('kernel', kernels)
 def test_convolution(kernel):
     k = Convolution(kernel)
-    assert(isinstance(repr(k), str))
     ''' length cases '''
     assert(k([], []) == 0)
     assert(k(tuple(), tuple()) == 0)
@@ -182,7 +179,7 @@ def test_convolution(kernel):
     for t1, t2 in zip(k.__theta__(), kernel.__theta__()):
         assert(t1 == t2)
     ''' representation generation '''
-    assert(u'ΣΣ'.encode('utf-8') in repr(k))
+    assert('ΣΣ' in repr(k))
     assert(repr(kernel) in repr(k))
     ''' C++ counterpart layout '''
     assert(kernel.__layout__() in k.__layout__())
@@ -194,7 +191,6 @@ def test_convolution(kernel):
 def test_kernel_add_constant(kernel):
     ''' check by definition '''
     for kadd in [kernel + 1, 1 + kernel]:
-        assert(isinstance(repr(kadd), str))
         random.seed(0)
         for _ in range(10000):
             i = random.paretovariate(0.1)
@@ -206,7 +202,7 @@ def test_kernel_add_constant(kernel):
         for t in kernel.__theta__():
             assert(t in kadd.__theta__())
         ''' representation generation '''
-        assert(len(repr(kadd).split('+'.encode('utf-8'))) == 2)
+        assert(len(repr(kadd).split('+')) == 2)
         assert(repr(kernel) in repr(kadd))
 
 
@@ -228,7 +224,7 @@ def test_kernel_add_kernel(k1, k2):
         for t1, t2 in zip(kadd.__theta__(), k1.__theta__() + k2.__theta__()):
             assert(t1 == t2)
         ''' representation generation '''
-        assert(len(repr(kadd).split('+'.encode('utf-8'))) == 2)
+        assert(len(repr(kadd).split('+')) == 2)
         assert(repr(k1) in repr(kadd))
         assert(repr(k2) in repr(kadd))
         ''' C++ counterpart layout '''
@@ -254,7 +250,7 @@ def test_kernel_mul_constant(kernel):
         for t in kernel.__theta__():
             assert(t in kmul.__theta__())
         ''' representation generation '''
-        assert(len(repr(kmul).split('*'.encode('utf-8'))) == 2)
+        assert(len(repr(kmul).split('*')) == 2)
         assert(repr(kernel) in repr(kmul))
 
 
@@ -276,7 +272,7 @@ def test_kernel_mul_kernel(k1, k2):
         for t1, t2 in zip(kmul.__theta__(), k1.__theta__() + k2.__theta__()):
             assert(t1 == t2)
         ''' representation generation '''
-        assert(len(repr(kmul).split('*'.encode('utf-8'))) == 2)
+        assert(len(repr(kmul).split('*')) == 2)
         assert(repr(k1) in repr(kmul))
         assert(repr(k2) in repr(kmul))
         ''' C++ counterpart layout '''

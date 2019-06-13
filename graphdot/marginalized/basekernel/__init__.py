@@ -39,7 +39,7 @@ class KernelOperator:
         self.k2 = k2
 
     def __repr__(self):
-        return u'{} {} {}'.encode('utf-8').format(repr(self.k1),
+        return '{} {} {}'.format(repr(self.k1),
                                                   self.op,
                                                   repr(self.k2))
 
@@ -81,7 +81,7 @@ class Constant(Kernel):
         return self.constant
 
     def __repr__(self):
-        return u'{}'.format(self.constant).encode('utf-8')
+        return '{}'.format(self.constant)
 
     def __theta__(self):
         return [self.constant]
@@ -104,7 +104,7 @@ class KroneckerDelta(Kernel):
         return self.hi if i == j else self.lo
 
     def __repr__(self):
-        return u'δ({}, {})'.format(self.hi, self.lo).encode('utf-8')
+        return 'δ({}, {})'.format(self.hi, self.lo)
 
     def __theta__(self):
         return [self.lo, self.hi]
@@ -125,7 +125,7 @@ class SquareExponential(Kernel):
         return numpy.exp(-0.5 * numpy.sum((x1 - x2)**2) / self.length_scale**2)
 
     def __repr__(self):
-        return u'SqExp({})'.format(self.length_scale).encode('utf-8')
+        return 'SqExp({})'.format(self.length_scale)
 
     def __theta__(self):
         return [self.length_scale]
@@ -149,7 +149,7 @@ class TensorProduct(Kernel):
         return prod
 
     def __repr__(self):
-        return u' ⊗ '.encode('utf-8').join([repr(k) for k in self.kernels])
+        return ' ⊗ '.join([repr(k) for k in self.kernels])
 
     def __theta__(self):
         return [a for k in self.kernels for a in k.__theta__()]
@@ -176,7 +176,7 @@ class Convolution(Kernel):
         return sum
 
     def __repr__(self):
-        return u'ΣΣ{}'.encode('utf-8').format(repr(self.kernel))
+        return 'ΣΣ{}'.format(repr(self.kernel))
 
     def __theta__(self):
         return self.kernel.__theta__()
