@@ -25,4 +25,4 @@ Coverage:
 Lint:
   stage: static-analysis
   script:
-    - flake8 --max-line-length=80 graphdot/
+    - flake8 --max-line-length=80 graphdot/ test/
