@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 This module defines base kernels and composibility rules for creating vertex
 and edges kernels for the marginalized graph kernel.
@@ -37,7 +39,9 @@ class KernelOperator:
         self.k2 = k2
 
     def __repr__(self):
-        return '{} {} {}'.format(repr(self.k1), self.op, repr(self.k2))
+        return u'{} {} {}'.encode('utf-8').format(repr(self.k1),
+                                                  self.op,
+                                                  repr(self.k2))
 
     def __theta__(self):
         return self.k1.__theta__() + self.k2.__theta__()
@@ -77,7 +81,7 @@ class Constant(Kernel):
         return self.constant
 
     def __repr__(self):
-        return '{}'.format(self.constant)
+        return u'{}'.format(self.constant).encode('utf-8')
 
     def __theta__(self):
         return [self.constant]
@@ -100,7 +104,7 @@ class KroneckerDelta(Kernel):
         return self.hi if i == j else self.lo
 
     def __repr__(self):
-        return 'δ({}, {})'.format(self.hi, self.lo)
+        return u'δ({}, {})'.format(self.hi, self.lo).encode('utf-8')
 
     def __theta__(self):
         return [self.lo, self.hi]
@@ -121,7 +125,7 @@ class SquareExponential(Kernel):
         return numpy.exp(-0.5 * numpy.sum((x1 - x2)**2) / self.length_scale**2)
 
     def __repr__(self):
-        return 'SqExp({})'.format(self.length_scale)
+        return u'SqExp({})'.format(self.length_scale).encode('utf-8')
 
     def __theta__(self):
         return [self.length_scale]
@@ -145,7 +149,7 @@ class TensorProduct(Kernel):
         return prod
 
     def __repr__(self):
-        return ' ⊗ '.join([repr(k) for k in self.kernels])
+        return u' ⊗ '.encode('utf-8').join([repr(k) for k in self.kernels])
 
     def __theta__(self):
         return [a for k in self.kernels for a in k.__theta__()]
@@ -172,7 +176,7 @@ class Convolution(Kernel):
         return sum
 
     def __repr__(self):
-        return 'ΣΣ{}'.format(repr(self.kernel))
+        return u'ΣΣ{}'.encode('utf-8').format(repr(self.kernel))
 
     def __theta__(self):
         return self.kernel.__theta__()

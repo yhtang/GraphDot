@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+This module provides utility functions to translate nested python objects into
+corresonding C++ POD structures.
+"""
 import struct
 
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 from graphdot.interop.structure import flatten
 
 import itertools
