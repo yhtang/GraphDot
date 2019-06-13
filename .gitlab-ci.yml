@@ -1,14 +1,28 @@
 before_script:
-        - export PATH=/usr/local/cuda/bin:$PATH
-        - export LD_LIBRARY_PATH=/usr/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-        - export LIBRARY_PATH=/usr/local/cuda/lib64:$LIBRARY_PATH
-        - export C_INCLUDE_PATH=/usr/local/cuda/include:$C_INCLUDE_PATH
-        - export CPLUS_INCLUDE_PATH=/usr/local/cuda/include:$CPLUS_INCLUDE_PATH
+  - pip install --user tox flake8
 
-unittest:
-        script:
-                - tox -p auto -e py27,py37
+stages:
+  - static-analysis
+  - unit-test
+  - coverage-analysis
 
-coverage:
-        script:
-                - tox -e coverage
+Python2.7:
+  stage: unit-test
+  script:
+    - tox -e py27
+
+Python3.7:
+  stage: unit-test
+  script:
+    - tox -e py37
+
+Coverage:
+  stage: coverage-analysis
+  script:
+    - tox -e coverage
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
+
+Lint:
+  stage: static-analysis
+  script:
+    - flake8 --max-line-length=80 graphdot/

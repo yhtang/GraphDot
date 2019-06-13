@@ -39,9 +39,7 @@ class KernelOperator:
         self.k2 = k2
 
     def __repr__(self):
-        return '{} {} {}'.format(repr(self.k1),
-                                                  self.op,
-                                                  repr(self.k2))
+        return '{} {} {}'.format(repr(self.k1), self.op, repr(self.k2))
 
     def __theta__(self):
         return self.k1.__theta__() + self.k2.__theta__()
