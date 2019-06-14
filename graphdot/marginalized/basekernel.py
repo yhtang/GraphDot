@@ -41,18 +41,21 @@ class KernelOperator:
     def __repr__(self):
         return '{} {} {}'.format(repr(self.k1), self.op, repr(self.k2))
 
+    @property
     def __theta__(self):
-        return self.k1.__theta__() + self.k2.__theta__()
+        return self.k1.__theta__ + self.k2.__theta__
 
+    @property
     def __layout__(self):
-        return '[{}][{}]'.format(self.k1.__layout__(),
-                                 self.k2.__layout__())
+        return '[{}][{}]'.format(self.k1.__layout__,
+                                 self.k2.__layout__)
 
+    @property
     def __decltype__(self):
         return '{ns}::{cls}<{a1},{a2}>'.format(ns=__cpp_namespace__,
                                                cls=self.cls,
-                                               a1=self.k1.__decltype__(),
-                                               a2=self.k2.__decltype__())
+                                               a1=self.k1.__decltype__,
+                                               a2=self.k2.__decltype__)
 
 
 class KernelSum(KernelOperator):
@@ -81,12 +84,15 @@ class Constant(Kernel):
     def __repr__(self):
         return '{}'.format(self.constant)
 
+    @property
     def __theta__(self):
         return [self.constant]
 
+    @property
     def __layout__(self):
         return '[f]'
 
+    @property
     def __decltype__(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='constant')
@@ -104,12 +110,15 @@ class KroneckerDelta(Kernel):
     def __repr__(self):
         return 'δ({}, {})'.format(self.hi, self.lo)
 
+    @property
     def __theta__(self):
         return [self.lo, self.hi]
 
+    @property
     def __layout__(self):
         return '[ff]'
 
+    @property
     def __decltype__(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='kronecker_delta')
@@ -125,12 +134,15 @@ class SquareExponential(Kernel):
     def __repr__(self):
         return 'SqExp({})'.format(self.length_scale)
 
+    @property
     def __theta__(self):
         return [self.length_scale]
 
+    @property
     def __layout__(self):
         return '[f]'
 
+    @property
     def __decltype__(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='square_exponential')
@@ -149,14 +161,17 @@ class TensorProduct(Kernel):
     def __repr__(self):
         return ' ⊗ '.join([repr(k) for k in self.kernels])
 
+    @property
     def __theta__(self):
-        return [a for k in self.kernels for a in k.__theta__()]
+        return [a for k in self.kernels for a in k.__theta__]
 
+    @property
     def __layout__(self):
-        return '[{}]'.format(''.join([k.__layout__() for k in self.kernels]))
+        return '[{}]'.format(''.join([k.__layout__ for k in self.kernels]))
 
+    @property
     def __decltype__(self):
-        arg = ','.join([k.__decltype__() for k in self.kernels])
+        arg = ','.join([k.__decltype__ for k in self.kernels])
         return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
                                            cls='tensor_product',
                                            arg=arg)
@@ -176,13 +191,16 @@ class Convolution(Kernel):
     def __repr__(self):
         return 'ΣΣ{}'.format(repr(self.kernel))
 
+    @property
     def __theta__(self):
-        return self.kernel.__theta__()
+        return self.kernel.__theta__
 
+    @property
     def __layout__(self):
-        return '[{}]'.format(self.kernel.__layout__())
+        return '[{}]'.format(self.kernel.__layout__)
 
+    @property
     def __decltype__(self):
         return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
                                            cls='convolution',
-                                           arg=self.kernel.__decltype__())
+                                           arg=self.kernel.__decltype__)
