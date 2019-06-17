@@ -42,20 +42,20 @@ class KernelOperator:
         return '{} {} {}'.format(repr(self.k1), self.op, repr(self.k2))
 
     @property
-    def __theta__(self):
-        return self.k1.__theta__ + self.k2.__theta__
+    def theta(self):
+        return self.k1.theta + self.k2.theta
 
     @property
-    def __layout__(self):
-        return '[{}][{}]'.format(self.k1.__layout__,
-                                 self.k2.__layout__)
+    def _layout(self):
+        return '[{}][{}]'.format(self.k1._layout,
+                                 self.k2._layout)
 
     @property
-    def __decltype__(self):
+    def _decltype(self):
         return '{ns}::{cls}<{a1},{a2}>'.format(ns=__cpp_namespace__,
                                                cls=self.cls,
-                                               a1=self.k1.__decltype__,
-                                               a2=self.k2.__decltype__)
+                                               a1=self.k1._decltype,
+                                               a2=self.k2._decltype)
 
 
 class KernelSum(KernelOperator):
@@ -85,15 +85,15 @@ class Constant(Kernel):
         return '{}'.format(self.constant)
 
     @property
-    def __theta__(self):
+    def theta(self):
         return [self.constant]
 
     @property
-    def __layout__(self):
+    def _layout(self):
         return '[f]'
 
     @property
-    def __decltype__(self):
+    def _decltype(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='constant')
 
@@ -111,15 +111,15 @@ class KroneckerDelta(Kernel):
         return 'δ({}, {})'.format(self.hi, self.lo)
 
     @property
-    def __theta__(self):
+    def theta(self):
         return [self.lo, self.hi]
 
     @property
-    def __layout__(self):
+    def _layout(self):
         return '[ff]'
 
     @property
-    def __decltype__(self):
+    def _decltype(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='kronecker_delta')
 
@@ -135,15 +135,15 @@ class SquareExponential(Kernel):
         return 'SqExp({})'.format(self.length_scale)
 
     @property
-    def __theta__(self):
+    def theta(self):
         return [self.length_scale]
 
     @property
-    def __layout__(self):
+    def _layout(self):
         return '[f]'
 
     @property
-    def __decltype__(self):
+    def _decltype(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='square_exponential')
 
@@ -162,16 +162,16 @@ class TensorProduct(Kernel):
         return ' ⊗ '.join([repr(k) for k in self.kernels])
 
     @property
-    def __theta__(self):
-        return [a for k in self.kernels for a in k.__theta__]
+    def theta(self):
+        return [a for k in self.kernels for a in k.theta]
 
     @property
-    def __layout__(self):
-        return '[{}]'.format(''.join([k.__layout__ for k in self.kernels]))
+    def _layout(self):
+        return '[{}]'.format(''.join([k._layout for k in self.kernels]))
 
     @property
-    def __decltype__(self):
-        arg = ','.join([k.__decltype__ for k in self.kernels])
+    def _decltype(self):
+        arg = ','.join([k._decltype for k in self.kernels])
         return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
                                            cls='tensor_product',
                                            arg=arg)
@@ -192,15 +192,15 @@ class Convolution(Kernel):
         return 'ΣΣ{}'.format(repr(self.kernel))
 
     @property
-    def __theta__(self):
-        return self.kernel.__theta__
+    def theta(self):
+        return self.kernel.theta
 
     @property
-    def __layout__(self):
-        return '[{}]'.format(self.kernel.__layout__)
+    def _layout(self):
+        return '[{}]'.format(self.kernel._layout)
 
     @property
-    def __decltype__(self):
+    def _decltype(self):
         return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
                                            cls='convolution',
-                                           arg=self.kernel.__decltype__)
+                                           arg=self.kernel._decltype)
