@@ -43,6 +43,9 @@ setup(
     description='GPU-accelerated graph similarity measurement library',
     long_description=long_description,
     packages=find_packages(exclude='test'),
+    package_data={
+        'graphdot': ['*.h'],
+    },
     # include_package_data=True,
     platforms='any',
     classifiers=[
