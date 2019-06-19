@@ -37,7 +37,11 @@ setup(
     license='TBD',
     author='Yu-Hang Tang',
     tests_require=['tox'],
-    install_requires=['numpy'],
+    install_requires=['numpy', 'pandas'],
+    extras_require={
+        'ASE': ['ase'],
+        'NetworkX': ['networkx'],
+    },
     cmdclass={'test': Tox},
     author_email='Tang.Maxin@gmail.com',
     description='GPU-accelerated graph similarity measurement library',
