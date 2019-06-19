@@ -97,6 +97,9 @@ class Constant(Kernel):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='constant')
 
+    def gencode(self, x, y):
+        return '{:f}f'.format(self.constant)
+
 
 class KroneckerDelta(Kernel):
 
@@ -123,6 +126,9 @@ class KroneckerDelta(Kernel):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='kronecker_delta')
 
+    def gencode(self, x, y):
+        return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.hi, self.lo)
+
 
 class SquareExponential(Kernel):
     def __init__(self, length_scale):
@@ -146,6 +152,10 @@ class SquareExponential(Kernel):
     def _decltype(self):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='square_exponential')
+
+    def gencode(self, x, y):
+        return 'expf({:f}f * power({} - {}, 2))'.format(
+            -0.5 / self.length_scale**2, x, y)
 
 
 class TensorProduct(Kernel):
@@ -171,10 +181,17 @@ class TensorProduct(Kernel):
 
     @property
     def _decltype(self):
-        arg = ','.join([k._decltype for k in self.kernels])
-        return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
-                                           cls='tensor_product',
-                                           arg=arg)
+        kernels = 'std::tuple<{}>'.format(','.join([k._decltype
+                                                    for k in self.kernels]))
+        idx = ','.join([str(i) for i in range(len(self.kernels))])
+        return '{ns}::{cls}<{kernels},{idx}>'.format(ns=__cpp_namespace__,
+                                                     cls='tensor_product',
+                                                     kernels=kernels,
+                                                     idx=idx)
+
+    def gencode(self, X, Y):
+        return ' * '.join([k.gencode(x, y)
+                           for k, x, y in zip(self.kernels, X, Y)])
 
 
 class Convolution(Kernel):
@@ -204,3 +221,22 @@ class Convolution(Kernel):
         return '{ns}::{cls}<{arg}>'.format(ns=__cpp_namespace__,
                                            cls='convolution',
                                            arg=self.kernel._decltype)
+
+    def gencode(self, X, Y):
+        return ' + '.join([self.kernel.gencode(x, y) for x in X for y in Y])
+
+
+# if __name__ == '__main__':
+#
+#     kernels = [
+#         Constant(0.5),
+#         KroneckerDelta(0.5, 1.0),
+#         SquareExponential(2.0),
+#     ]
+#     for k in kernels:
+#         print(k.gencode('x', 'y'))
+#
+#     print(TensorProduct(KroneckerDelta(0.3,1.0), SquareExponential(1.0)).gencode(['a1', 'b1'], ['a2', 'b2']))
+#
+#     print(Convolution(KroneckerDelta(0.3,1.0)).gencode(['a1', 'b1'], ['a2', 'b2', 'c2']))
+#     print(Convolution(SquareExponential(1.0)).gencode(['a1', 'b1'], ['a2', 'b2', 'c2']))
