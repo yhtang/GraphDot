@@ -14,8 +14,8 @@ class Graph:
         nodes: dataframe
         edges: dataframe
         """
-
-        pass
+        self.nodes = nodes
+        self.edges = edges
 
     @classmethod
     def from_auto(cls, graph):
@@ -48,25 +48,40 @@ class Graph:
         pass
 
     @classmethod
-    def from_networkx(cls, graph, check=True):
+    def from_networkx(cls, graph):
         """
-        check: whether to perform node/edge attribute consistency check
+        graph: NetworkX Graph objects with nodal/edge attributes
         """
         import networkx as nx
         graph = nx.relabel.convert_node_labels_to_integers(graph)
 
-        ''' convert nodes attributes '''
-        attr_keys = sorted(graph.nodes[0])
-        if check:
-            for index, attributes in graph.nodes.items():
-                if sorted(attributes.keys()) != attr_keys:
-                    raise TypeError('Node {} attribute(s) {} inconsistent with {}'.
-                                    format(index, attributes.keys(), attr_keys))
-        node_attr = [graph.nodes[index].values() for index in graph.nodes]
+        ''' convert node attributes '''
+        node_list = []
+        node_attr = None
+        for index, node in graph.nodes.items():
+            if node_attr is None:
+                node_attr = sorted(node.keys())
+            elif node_attr != sorted(node.keys()):
+                raise TypeError('Node {} '.format(index) +
+                                'attributes {} '.format(node.keys()) +
+                                'inconsistent with {}'.format(node_attr))
+            node_list.append([node[key] for key in node_attr])
+        node_df = pandas.DataFrame(node_list, columns=node_attr)
 
-        nodes = pandas.DataFrame(node_attr, columns=attr_keys)
+        ''' convert edge attributes '''
+        edge_list = []
+        edge_attr = None
+        for (i, j), edge in graph.edges.items():
+            if edge_attr is None:
+                edge_attr = sorted(edge.keys())
+            elif edge_attr != sorted(edge.keys()):
+                raise TypeError('Edge {} '.format((i, j)) +
+                                'attributes {} '.format(edge.keys()) +
+                                'inconsistent with {}'.format(edge_attr))
+            edge_list.append([i, j] + [edge[key] for key in edge_attr])
+        edge_df = pandas.DataFrame(edge_list, columns=['_i', '_j'] + edge_attr)
 
-        print(nodes)
+        return cls(node_df, edge_df)
 
     @classmethod
     def from_graphviz(cls, molecule):
@@ -87,16 +102,16 @@ if __name__ == '__main__':
 
     class Hybridization:
         NONE = 0
-        SP   = 1
-        SP2  = 2
-        SP3  = 3
+        SP = 1
+        SP2 = 2
+        SP3 = 3
 
     g = nx.Graph()
     g.add_node('O1', hybridization=Hybridization.SP2, charge=1)
     g.add_node('H1', hybridization=Hybridization.SP3, charge=-1)
-    # g.add_node('H2', hybridization=Hybridization.SP, charge=2)
-    g.add_node('H2', hybridization=Hybridization.SP, charge=2, time=1)
+    g.add_node('H2', hybridization=Hybridization.SP, charge=2)
+    # g.add_node('H2', hybridization=Hybridization.SP, charge=2, time=1)
     g.add_edge('O1', 'H1', order=1, length=0.5)
     g.add_edge('O1', 'H2', order=2, length=1.0)
 
-    Graph.from_networkx(g)
+    gg = Graph.from_networkx(g)
