@@ -194,6 +194,29 @@ class TensorProduct(Kernel):
                            for k, x, y in zip(self.kernels, X, Y)])
 
 
+class KeywordTensorProduct(Kernel):
+    def __init__(self, **kw_kernels):
+        self.kw_kernels = kw_kernels
+
+    def __call__(self, object1, object2):
+        prod = 1.0
+        for key, kernel in self.kw_kernels.items():
+            prod *= kernel(object1[key], object2[key])
+        return prod
+
+    def __repr__(self):
+        return ' ⊗ '.join([kw + ':' + repr(k)
+                           for kw, k in self.kw_kernels.items()])
+
+    @property
+    def theta(self):
+        return [a for k in self.kw_kernels.values() for a in k.theta]
+
+    def gencode(self, X, Y):
+        return ' * '.join([k.gencode(X[key], Y[key])
+                           for key, k in self.kw_kernels.items()])
+
+
 class Convolution(Kernel):
     def __init__(self, kernel):
         self.kernel = kernel
