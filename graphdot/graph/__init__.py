@@ -9,13 +9,27 @@ import pandas
 
 class Graph:
 
-    def __init__(self, nodes, edges):
+    def __init__(self, nodes, edges, title=''):
         """
         nodes: dataframe
         edges: dataframe
         """
-        self.nodes = nodes
-        self.edges = edges
+        self.title = title
+        if isinstance(nodes, pandas.DataFrame):
+            self.nodes = nodes
+        else:
+            self.nodes = pandas.DataFrame(nodes)
+        if isinstance(edges, pandas.DataFrame):
+            self.edges = edges
+        else:
+            self.edges = pandas.DataFrame(edges)
+
+    def __repr__(self):
+        return '<{}(nodes={}, edges={}, title={})>'.\
+            format(type(self).__name__,
+                   self.nodes.to_dict(),
+                   self.edges.to_dict(),
+                   repr(self.title))
 
     @classmethod
     def from_auto(cls, graph):
@@ -55,8 +69,10 @@ class Graph:
         import networkx as nx
         graph = nx.relabel.convert_node_labels_to_integers(graph)
 
+        ''' extrac title '''
+        title = graph.graph['title'] if 'title' in graph.graph.keys() else ''
+
         ''' convert node attributes '''
-        node_list = []
         node_attr = None
         for index, node in graph.nodes.items():
             if node_attr is None:
@@ -65,11 +81,12 @@ class Graph:
                 raise TypeError('Node {} '.format(index) +
                                 'attributes {} '.format(node.keys()) +
                                 'inconsistent with {}'.format(node_attr))
-            node_list.append([node[key] for key in node_attr])
-        node_df = pandas.DataFrame(node_list, columns=node_attr)
+
+        node_df = pandas.DataFrame(index=range(graph.number_of_nodes()))
+        for key in node_attr:
+            node_df[key] = [node[key] for node in graph.nodes.values()]
 
         ''' convert edge attributes '''
-        edge_list = []
         edge_attr = None
         for (i, j), edge in graph.edges.items():
             if edge_attr is None:
@@ -78,10 +95,13 @@ class Graph:
                 raise TypeError('Edge {} '.format((i, j)) +
                                 'attributes {} '.format(edge.keys()) +
                                 'inconsistent with {}'.format(edge_attr))
-            edge_list.append([i, j] + [edge[key] for key in edge_attr])
-        edge_df = pandas.DataFrame(edge_list, columns=['_i', '_j'] + edge_attr)
 
-        return cls(node_df, edge_df)
+        edge_df = pandas.DataFrame(index=range(graph.number_of_edges()))
+        edge_df['_ij'] = list(graph.edges.keys())
+        for key in edge_attr:
+            edge_df[key] = [edge[key] for edge in graph.edges.values()]
+
+        return cls(nodes=node_df, edges=edge_df, title=title)
 
     @classmethod
     def from_graphviz(cls, molecule):
@@ -98,15 +118,14 @@ class Graph:
 
 if __name__ == '__main__':
 
-    import networkx as nx
-
     class Hybridization:
         NONE = 0
         SP = 1
         SP2 = 2
         SP3 = 3
 
-    g = nx.Graph()
+    import networkx
+    g = networkx.Graph(title='H2O')
     g.add_node('O1', hybridization=Hybridization.SP2, charge=1)
     g.add_node('H1', hybridization=Hybridization.SP3, charge=-1)
     g.add_node('H2', hybridization=Hybridization.SP, charge=2)
@@ -115,3 +134,7 @@ if __name__ == '__main__':
     g.add_edge('O1', 'H2', order=2, length=1.0)
 
     gg = Graph.from_networkx(g)
+
+    print(gg)
+    print(gg.nodes)
+    print(gg.edges)
