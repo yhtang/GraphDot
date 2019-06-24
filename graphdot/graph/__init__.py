@@ -114,27 +114,3 @@ class Graph:
         https://en.wikipedia.org/wiki/DOT_(graph_description_language)
         """
         pass
-
-
-if __name__ == '__main__':
-
-    class Hybridization:
-        NONE = 0
-        SP = 1
-        SP2 = 2
-        SP3 = 3
-
-    import networkx
-    g = networkx.Graph(title='H2O')
-    g.add_node('O1', hybridization=Hybridization.SP2, charge=1)
-    g.add_node('H1', hybridization=Hybridization.SP3, charge=-1)
-    g.add_node('H2', hybridization=Hybridization.SP, charge=2)
-    # g.add_node('H2', hybridization=Hybridization.SP, charge=2, time=1)
-    g.add_edge('O1', 'H1', order=1, length=0.5)
-    g.add_edge('O1', 'H2', order=2, length=1.0)
-
-    gg = Graph.from_networkx(g)
-
-    print(gg)
-    print(gg.nodes)
-    print(gg.edges)
