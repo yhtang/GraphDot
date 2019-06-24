@@ -7,47 +7,36 @@ import pycuda
 import pycuda.gpuarray
 import pycuda.autoinit
 from graphdot.codegen import Template
+from graphdot.codegen.dtype import decltype
 
 
-supported_basetypes = {
-    int: 'int',
-    float: 'float',
-    bool: 'bool',
-    numpy.bool_: 'bool',
-    numpy.float32: 'float',
-    numpy.float64: 'double',
-    numpy.int16: 'std::int16_t',
-    numpy.int32: 'std::int32_t',
-    numpy.int64: 'std::int64_t',
-    numpy.dtype(numpy.bool_): 'bool',
-    numpy.dtype(numpy.float32): 'float',
-    numpy.dtype(numpy.float64): 'double',
-    numpy.dtype(numpy.int16): 'std::int16_t',
-    numpy.dtype(numpy.int32): 'std::int32_t',
-    numpy.dtype(numpy.int64): 'std::int64_t',
+'''
+namespace nptype {
+    using int16 = std::int16_t;
+    using int32 = std::int32_t;
+    using int64 = std::int64_t;
+    using float32 = float;
+    using float64 = double;
 }
-
-def get_accessor(dtype, parent):
-    if isinstance(dtype, numpy.dtype):
-        if dtype.fields is not None:
-            return {key: get_accessor(dtype.fields[key][0],
-                                      'get<%d>(%s)' % (i, parent))
-                    for i, key in enumerate(dtype.fields)}
-        else:
-            return parent
-    elif isinstance(dtype, (list, tuple)):
-        return [get_accessor(d, 'get<%d>(%s)' % (i, parent))
-                for i, d in enumerate(dtype)]
-    elif dtype in supported_basetypes:
-        return parent
-    else:
-        raise TypeError('type ' + repr(dtype) + ' is not allowed.')
+'''
 
 
-def gencode_kvert(dtype):
-    def gencode(vertex, kernel):
-        return kernel.gencode(get_accessor(vertex, 'X'),
-                              get_accessor(vertex, 'Y'))
+# def get_accessor(dtype, parent):
+#     dtype = numpy.dtype(dtype, align=True)
+#     if dtype.fields is not None:
+#         return {key: get_accessor(dtype.fields[key][0],
+#                                   '%s.%s' % (parent, key))
+#                 for i, key in enumerate(dtype.fields)}
+#         else:
+#             return parent
+#     elif isinstance(dtype, (list, tuple)):
+#         return [get_accessor(d, 'get<%d>(%s)' % (i, parent))
+#                 for i, d in enumerate(dtype)]
+#     elif dtype in supported_basetypes:
+#         return parent
+#     else:
+#         raise TypeError('type ' + repr(dtype) + ' is not allowed.')
+
 
 
 def compute(graph, kernel):
@@ -78,11 +67,16 @@ def compute(graph, kernel):
         static auto compute(V const &v1, V const &v2) {
             ${statement};
         }
-    };''').render(statement=kernel.gencode(get_accessor(packed_dtype, 'v1'),
-                                           get_accessor(packed_dtype, 'v2'))))
+    };''').render(statement=kernel.gencode(packed_dtype, 'v1', 'v2')))
 
-    node_gpu = pycuda.gpuarray.GPUArray(df.shape[0], packed_dtype)
-    print(repr(node_gpu))
+    source = Template('''
+    a
+    ''').render()
+
+    print(source)
+
+    #node_gpu = pycuda.gpuarray.GPUArray(df.shape[0], packed_dtype)
+    #print(repr(node_gpu))
 
 
 if __name__ == '__main__':
