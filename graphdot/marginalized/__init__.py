@@ -44,21 +44,6 @@ def get_accessor(dtype, parent):
         raise TypeError('type ' + repr(dtype) + ' is not allowed.')
 
 
-def decltype(dtype):
-    if isinstance(dtype, numpy.dtype):
-        if dtype.fields is not None:
-            return 'tuple<{}>'.format(','.join([decltype(dtype.fields[key][0])
-                                                for key in dtype.fields]))
-        else:
-            return supported_basetypes[dtype]
-    elif isinstance(dtype, (list, tuple)):
-        return 'tuple<{}>'.format(','.join([decltype(d) for d in dtype]))
-    elif dtype in supported_basetypes:
-        return supported_basetypes[dtype]
-    else:
-        raise TypeError('type ' + repr(dtype) + ' is not allowed.')
-
-
 def gencode_kvert(dtype):
     def gencode(vertex, kernel):
         return kernel.gencode(get_accessor(vertex, 'X'),

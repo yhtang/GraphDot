@@ -2,11 +2,11 @@ from graphdot.codegen import Template
 import numpy
 
 
-def as_struct(type):
+def decltype(type):
     type = numpy.dtype(type, align=True)  # convert numpy.float32 etc. to dtype
     if type.names is not None:
-        return Template('''struct { ${members;}; }''').render(
-            members=['{} {}'.format(as_struct(t), v)
+        return Template('''struct{${members;};}''').render(
+            members=['{} {}'.format(decltype(t), v)
                      for v, (t, offset) in type.fields.items()])
     else:
         return str(type.name)
@@ -22,4 +22,4 @@ if __name__ == '__main__':
     ]
 
     for type in types:
-        print(as_struct(type))
+        print(decltype(type))
