@@ -23,3 +23,14 @@ dtypes = [
 @pytest.mark.parametrize('dtype', dtypes)
 def test_decltype(dtype):
     print(decltype(dtype))
+
+
+# types = [
+#     numpy.dtype(numpy.float32),
+#     numpy.dtype([('a', numpy.float32)]),
+#     numpy.dtype([('a', numpy.dtype([('X', numpy.float32), ('Y', 'i8')])),
+#                  ('b', numpy.bool_)]),
+# ]
+#
+# for type in types:
+#     print(decltype(type))
