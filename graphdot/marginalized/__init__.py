@@ -100,10 +100,6 @@ if __name__ == '__main__':
         g.add_edge('O1', 'H1', order=1, length=0.5)
         g.add_edge('O1', 'H2', order=2, length=1.0)
 
-        gg = Graph.from_networkx(g)
-
-        print('GRAPH:\n', gg)
-
         node_kernel = KeywordTensorProduct(
                           hybridization=KroneckerDelta(0.3, 1.0),
                           charge=SquareExponential(1.0),
@@ -115,4 +111,4 @@ if __name__ == '__main__':
 
         mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel)
 
-        mlgk.compute(gg)
+        mlgk.compute(Graph.from_networkx(g))

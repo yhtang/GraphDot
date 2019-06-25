@@ -4,7 +4,6 @@
 #include <cuda/balloc.h>
 #include <cuda/util_host.h>
 #include <cuda/util_device.h>
-#include <marginalized/common.h>
 #include <misc/hash.h>
 #include <misc/format.h>
 

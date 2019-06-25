@@ -1,4 +1,3 @@
-#include <marginalized/common.h>
 #include <marginalized/kernel.h>
 #include <math/power.h>
 #include <misc/numpy_type.h>
