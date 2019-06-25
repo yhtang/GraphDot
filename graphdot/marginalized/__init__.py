@@ -1,85 +1,79 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import sys
 sys.path.append('/home/ytang/Seafile/research/source/graphdot')
 
 
+import os
 import numpy
 import pycuda
 import pycuda.gpuarray
-import pycuda.autoinit
+from pycuda.compiler import SourceModule
 from graphdot.codegen import Template
 from graphdot.codegen.dtype import decltype
+import graphdot.cpp
 
 
-'''
-namespace nptype {
-    using int16 = std::int16_t;
-    using int32 = std::int32_t;
-    using int64 = std::int64_t;
-    using float32 = float;
-    using float64 = double;
-}
-'''
+class MarginalizedGraphKernel:
 
+    _template = os.path.join(os.path.dirname(__file__), 'kernel.cu')
 
-# def get_accessor(dtype, parent):
-#     dtype = numpy.dtype(dtype, align=True)
-#     if dtype.fields is not None:
-#         return {key: get_accessor(dtype.fields[key][0],
-#                                   '%s.%s' % (parent, key))
-#                 for i, key in enumerate(dtype.fields)}
-#         else:
-#             return parent
-#     elif isinstance(dtype, (list, tuple)):
-#         return [get_accessor(d, 'get<%d>(%s)' % (i, parent))
-#                 for i, d in enumerate(dtype)]
-#     elif dtype in supported_basetypes:
-#         return parent
-#     else:
-#         raise TypeError('type ' + repr(dtype) + ' is not allowed.')
+    def __init__(self, node_kernel, edge_kernel):
+        self.node_kernel = node_kernel
+        self.edge_kernel = edge_kernel
+        self.template = Template(self._template)
 
+    @classmethod
+    def _pack_type(cls, df):
+        order = numpy.argsort([df.dtypes[key].itemsize for key in df.columns])
+        packed_attributes = [df.columns[i] for i in order[-1::-1]]
+        packed_dtype = numpy.dtype([(key, df.dtypes[key].newbyteorder('='))
+                                    for key in packed_attributes], align=True)
+        return packed_dtype
 
+    def compute(self, graph):
+        node_type = self._pack_type(graph.nodes)
+        edge_type = self._pack_type(graph.edges.drop(['_ij'], axis=1))
 
-def compute(graph, kernel):
-    """
-    todo:
-    for [nodes, edges]:
-        1. infer attribute structure and layout
-        2. pack_into attributes
-        3. kernel code gen based on layout of attributes
-    """
-    print('===============================================')
+        node_kernel_src = Template(r'''
+        struct node_kernel {
+            template<class V> __device__
+            static auto compute(V const &v1, V const &v2) {
+                return ${node_expr};
+            }
+        };
+        ''').render(node_expr=node_kernel.gencode('v1', 'v2'))
 
-    df = graph.nodes
+        edge_kernel_src = Template(r'''
+        struct edge_kernel {
+            template<class T> __device__
+            static auto compute(T const &e1, T const &e2) {
+                return ${edge_expr};
+            }
+        };
+        ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
 
-    packing = numpy.argsort([df.dtypes[key].itemsize for key in df.columns])
-    packed_attributes = [df.columns[i] for i in packing[-1::-1]]
-    packed_dtype = numpy.dtype([(key, df.dtypes[key].newbyteorder('='))
-                                for key in packed_attributes], align=True)
-    print('dtype\n', packed_dtype)
+        source = self.template.render(node_kernel=node_kernel_src,
+                                      edge_kernel=edge_kernel_src,
+                                      node_t=decltype(node_type),
+                                      edge_t=decltype(edge_type))
 
-    print(Template(r'''
-    using vert_t = ${vert_t};
-    ''').render(vert_t=decltype(packed_dtype)))
+        print('SOURCE\n', source, sep='')
 
-    print(Template(r'''
-    struct vertex_kernel {
-        template<class V>
-        static auto compute(V const &v1, V const &v2) {
-            ${statement};
-        }
-    };''').render(statement=kernel.gencode(packed_dtype, 'v1', 'v2')))
-
-    source = Template('''
-    a
-    ''').render()
-
-    print(source)
-
-    #node_gpu = pycuda.gpuarray.GPUArray(df.shape[0], packed_dtype)
-    #print(repr(node_gpu))
+        mod = SourceModule(source,
+                           options=['-std=c++14',
+                                    '--expt-relaxed-constexpr'],
+                           no_extern_c=True,
+                           include_dirs=graphdot.cpp.__path__)
+        print(mod)
+        print(mod.get_function('graph_kernel_solver'))
+        # node_gpu = pycuda.gpuarray.GPUArray(df.shape[0], packed_dtype)
+        # print(repr(node_gpu))
 
 
 if __name__ == '__main__':
+
+    import pycuda.autoinit
 
     if True:
         import networkx as nx
@@ -108,10 +102,17 @@ if __name__ == '__main__':
 
         gg = Graph.from_networkx(g)
 
-        kv = KeywordTensorProduct(hybridization=KroneckerDelta(0.3, 1.0),
-                                  charge=SquareExponential(1.0),
-                                  conjugate=KroneckerDelta(0.5))
+        print('GRAPH:\n', gg)
 
-        print(gg)
+        node_kernel = KeywordTensorProduct(
+                          hybridization=KroneckerDelta(0.3, 1.0),
+                          charge=SquareExponential(1.0),
+                          conjugate=KroneckerDelta(0.5))
 
-        compute(gg, kv)
+        edge_kernel = KeywordTensorProduct(
+                          order=KroneckerDelta(0.3, 1.0),
+                          length=SquareExponential(0.05))
+
+        mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel)
+
+        mlgk.compute(gg)

@@ -97,7 +97,7 @@ class Constant(Kernel):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='constant')
 
-    def gencode(self, type, x, y):
+    def gencode(self, x, y):
         return '{:f}f'.format(self.constant)
 
 
@@ -126,7 +126,7 @@ class KroneckerDelta(Kernel):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='kronecker_delta')
 
-    def gencode(self, type, x, y):
+    def gencode(self, x, y):
         return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.hi, self.lo)
 
 
@@ -153,7 +153,7 @@ class SquareExponential(Kernel):
         return '{ns}::{cls}'.format(ns=__cpp_namespace__,
                                     cls='square_exponential')
 
-    def gencode(self, type, x, y):
+    def gencode(self, x, y):
         return 'expf({:f}f * power({} - {}, 2))'.format(
             -0.5 / self.length_scale**2, x, y)
 
@@ -212,11 +212,10 @@ class KeywordTensorProduct(Kernel):
     def theta(self):
         return [a for k in self.kw_kernels.values() for a in k.theta]
 
-    def gencode(self, type, x, y):
+    def gencode(self, x, y):
         # return ' * '.join([k.gencode(X[key], Y[key])
         #                    for key, k in self.kw_kernels.items()])
-        return ' * '.join([k.gencode(type[key],
-                                     '%s.%s' % (x, key),
+        return ' * '.join([k.gencode('%s.%s' % (x, key),
                                      '%s.%s' % (y, key))
                            for key, k in self.kw_kernels.items()])
 
