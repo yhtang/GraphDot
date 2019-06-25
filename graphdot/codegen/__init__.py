@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import re
 
 
@@ -7,7 +9,10 @@ class Template:
     """
 
     def __init__(self, template):
-        self.template = template
+        try:
+            self.template = open(template).read()
+        except OSError:
+            self.template = template
 
     def render(self, **substitutions):
         """
