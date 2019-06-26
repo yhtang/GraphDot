@@ -97,7 +97,7 @@ class Graph:
                                 'inconsistent with {}'.format(edge_attr))
 
         edge_df = pandas.DataFrame(index=range(graph.number_of_edges()))
-        edge_df['_ij'] = list(graph.edges.keys())
+        edge_df['!ij'] = list(graph.edges.keys())
         for key in edge_attr:
             edge_df[key] = [edge[key] for edge in graph.edges.values()]
 
@@ -114,3 +114,23 @@ class Graph:
         https://en.wikipedia.org/wiki/DOT_(graph_description_language)
         """
         pass
+
+
+if __name__ == '__main__':
+
+    import networkx as nx
+
+    class Hybrid:
+        NONE = 0
+        SP = 1
+        SP2 = 2
+        SP3 = 3
+
+    g = nx.Graph(title='H2O')
+    g.add_node('O1', hybridization=Hybrid.SP2, charge=1, conjugate=False)
+    g.add_node('H1', hybridization=Hybrid.SP3, charge=-1, conjugate=True)
+    g.add_node('H2', hybridization=Hybrid.SP, charge=2, conjugate=True)
+    g.add_edge('O1', 'H1', order=1, length=0.5)
+    g.add_edge('O1', 'H2', order=2, length=1.0)
+
+    print(Graph.from_networkx(g))
