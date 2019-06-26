@@ -7,11 +7,20 @@ sys.path.append('/home/ytang/Seafile/research/source/graphdot')
 import os
 import numpy
 import pycuda
-import pycuda.gpuarray
+from pycuda.gpuarray import GPUArray
 from pycuda.compiler import SourceModule
 from graphdot.codegen import Template
 from graphdot.codegen.dtype import decltype
 import graphdot.cpp
+
+
+# class ScratchPool:
+#     def __init__(self):
+#         pass
+#
+#
+#     def reserve(self, n, m):
+#         pass
 
 
 class MarginalizedGraphKernel:
@@ -22,19 +31,9 @@ class MarginalizedGraphKernel:
         self.node_kernel = node_kernel
         self.edge_kernel = edge_kernel
         self.template = Template(self._template)
-
-    @classmethod
-    def _pack_type(cls, df):
-        order = numpy.argsort([df.dtypes[key].itemsize for key in df.columns])
-        packed_attributes = [df.columns[i] for i in order[-1::-1]]
-        packed_dtype = numpy.dtype([(key, df.dtypes[key].newbyteorder('='))
-                                    for key in packed_attributes], align=True)
-        return packed_dtype
+        self.scratch = None
 
     def compute(self, graph):
-        node_type = self._pack_type(graph.nodes)
-        edge_type = self._pack_type(graph.edges.drop(['_ij'], axis=1))
-
         node_kernel_src = Template(r'''
         struct node_kernel {
             template<class V> __device__
@@ -69,6 +68,8 @@ class MarginalizedGraphKernel:
         print(mod.get_function('graph_kernel_solver'))
         # node_gpu = pycuda.gpuarray.GPUArray(df.shape[0], packed_dtype)
         # print(repr(node_gpu))
+
+
 
 
 if __name__ == '__main__':
