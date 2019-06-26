@@ -101,6 +101,24 @@ class Constant(Kernel):
         return '{:f}f'.format(self.constant)
 
 
+class Multiply(Kernel):
+    def __init__(self):
+        pass
+
+    def __call__(self, i, j):
+        return i * j
+
+    def __repr__(self):
+        return '*'
+
+    @property
+    def theta(self):
+        return []
+
+    def gencode(self, x, y):
+        return '({} * {})'.format(x, y)
+
+
 class KroneckerDelta(Kernel):
 
     def __init__(self, lo, hi=1.0):

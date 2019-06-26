@@ -15,6 +15,8 @@ using scratch_t = graphdot::marginalized::block_scratch;
 using job_t     = graphdot::marginalized::job_t;
 using solver_t  = graphdot::marginalized::octile_block_solver<graph_t>;
 
+__constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
+
 extern "C" {
     __global__ void graph_kernel_solver(
         graph_t const * graphs,

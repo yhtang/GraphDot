@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from pycuda.gpuarray import GPUArray, to_gpu
+from pycuda.gpuarray import to_gpu
 from graphdot.codegen.interop import cpptype
-from graphdot.codegen.dtype import dftype
+from graphdot.codegen.dtype import rowtype
 
 
-@cpptype([('upper', np.int32), ('left', np.int32), ('elements', np.uintp)])
+@cpptype([('upper', np.int32), ('left', np.int32),
+          ('nzmask', np.uint64), ('elements', np.uintp)])
 class Octile:
     """
     using octile_t = struct {
@@ -15,11 +16,13 @@ class Octile:
     };
     """
 
-    def __init__(self, upper, left, elements):
+    def __init__(self, upper, left, nzmask, elements):
         self.upper = upper
         self.left = left
-        self.__elements = GPUArray(8 * 8, elements.dtype)
-        self.__elements.set(elements)
+        self.nzmask = nzmask
+        print('nzmask', np.binary_repr(nzmask, 64))
+        print(elements)
+        self.__elements = to_gpu(elements)
 
     @property
     def elements(self):
@@ -40,23 +43,21 @@ class OctileGraph:
 
     def __init__(self, graph, stopping_probability, wcol=None):
         ''' extract type information '''
-        node_attr, node_type = dftype(graph.nodes)
-        edge_attr, edge_type = dftype(graph.edges.drop(['!ij'], axis=1))
-        print(node_type)
-        print(edge_type)
+        node_type = rowtype(graph.nodes)
+        edge_type = rowtype(graph.edges.drop(['!ij'], axis=1))
+
+        n_node = len(graph.nodes)
 
         ''' directly upload node labels to GPU '''
-        n_node = len(graph.nodes)
-        node_d = GPUArray(n_node, node_type)
-        node_d.set(graph.nodes[node_attr]
+        node_d = to_gpu(graph.nodes[list(node_type.names)]
                         .to_records(index=False)
                         .astype(node_type))
 
-        ''' node degree need to be computed '''
+        ''' node degree need to be computed from edges '''
         if wcol is None:
             # default label for edge weight lookup
             wcol = '!w'
-        if wcol in edge_attr:
+        if wcol in graph.edges.columns:
             degree_h = np.zeros(n_node, dtype=np.float32)
             for (i, j), w in zip(graph.edges['!ij'], graph.edges[wcol]):
                 degree_h[i] += w
@@ -72,26 +73,31 @@ class OctileGraph:
                               for i, j in graph.edges['!ij']], axis=0)
         uniq_oct = np.unique(uniq_oct + uniq_oct[:, -1::-1], axis=0)
 
-        octile_table = {(upper, left): np.zeros(64, dtype=edge_type)
+        octile_table = {(upper, left): [0, np.zeros(64, dtype=edge_type)]
                         for upper, left in uniq_oct}
 
         for index, row in graph.edges.iterrows():
             i, j = row['!ij']
-            edge = tuple(row[key] for key in edge_attr)
+            edge = tuple(row[key] for key in edge_type.names)
             r = i % 8
             c = j % 8
             upper = i - r
             left = j - c
-            octile_table[(upper, left)][r + c * 8] = edge
-            octile_table[(left, upper)][c + r * 8] = edge
+            octile_table[(upper, left)][0] |= 1 << (r + c * 8)
+            octile_table[(upper, left)][1][r + c * 8] = edge
+            octile_table[(left, upper)][0] |= 1 << (c + r * 8)
+            octile_table[(left, upper)][1][c + r * 8] = edge
 
         ''' create octiles on GPU '''
-        octile_list = [Octile(upper, left, elements)
-                       for (upper, left), elements in octile_table.items()]
+        octile_list = [Octile(upper, left, nzmask, elements)
+                       for (upper, left), (nzmask, elements) in octile_table.items()]
 
         ''' collect octile structures into continuous buffer '''
         octile_hdr = to_gpu(np.array([x.state for x in octile_list],
                                      Octile.dtype))
+
+        self.node_type = node_type
+        self.edge_type = edge_type
 
         self.n_node = n_node
         self.n_octile = len(octile_list)
@@ -111,6 +117,10 @@ class OctileGraph:
     @property
     def node(self):
         return self.__node.ptr
+
+    @property
+    def padded_size(self):
+        return (self.n_node + 7) & ~7
 
 
 if __name__ == '__main__':
@@ -143,7 +153,7 @@ if __name__ == '__main__':
 
     og = OctileGraph(dfg, 0.5)
 
-    og_hdr = to_gpu(np.array([x.state for x in [og]], OctileGraph.dtype))
+    og_hdr = to_gpu(np.array([x.state for x in [og, og, og]], OctileGraph.dtype))
 
     mod = SourceModule(Template(r'''
     #include <cstdio>
@@ -179,25 +189,29 @@ if __name__ == '__main__':
         octile_t * octile;
     };
 
-    __global__ void fun(graph_t * g) {
-        printf("n_node %d\n", g->n_node);
-        printf("n_octile %d\n", g->n_octile);
-        for(int i = 0; i < g->n_node; ++i) {
-            printf("node %d degree %f label (%ld, %ld, %d)\n", i, g->degree[i], g->node[i].hybridization, g->node[i].charge, g->node[i].conjugate);
-        }
-        for(int i = 0; i < g->n_octile; ++i) {
-            printf("octile %d: (%d, %d)\n", i, g->octile[i].upper, g->octile[i].left);
-            for(int r = 0; r < 8; ++r) {
-                for(int c = 0; c < 8; ++c) {
-                    printf("(%ld,%.3lf) ", g->octile[i].elements[r + c * 8].order, g->octile[i].elements[r + c * 8].length);
+    __global__ void fun(graph_t * graph_list, const int n_graph) {
+        for(int I = 0; I < n_graph; ++I) {
+            printf("Graph %d\n", I);
+            auto & g = graph_list[I];
+            printf("n_node %d\n", g.n_node);
+            printf("n_octile %d\n", g.n_octile);
+            for(int i = 0; i < g.n_node; ++i) {
+                printf("node %d degree %f label (%ld, %ld, %d)\n", i, g.degree[i], g.node[i].hybridization, g.node[i].charge, g.node[i].conjugate);
+            }
+            for(int i = 0; i < g.n_octile; ++i) {
+                printf("octile %d: (%d, %d)\n", i, g.octile[i].upper, g.octile[i].left);
+                for(int r = 0; r < 8; ++r) {
+                    for(int c = 0; c < 8; ++c) {
+                        printf("(%ld,%.3lf) ", g.octile[i].elements[r + c * 8].order, g.octile[i].elements[r + c * 8].length);
+                    }
+                    printf("\n");
                 }
-                printf("\n");
             }
         }
     }
-    ''').render(node_t=decltype(dftype(dfg.nodes)[1]),
-                edge_t=decltype(dftype(dfg.edges.drop(['!ij'], axis=1))[1])))
+    ''').render(node_t=decltype(rowtype(dfg.nodes)),
+                edge_t=decltype(rowtype(dfg.edges.drop(['!ij'], axis=1)))))
 
     fun = mod.get_function('fun')
 
-    fun(og_hdr, grid=(1,1,1), block=(1,1,1))
+    fun(og_hdr, np.int32(3), grid=(1,1,1), block=(1,1,1))

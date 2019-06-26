@@ -3,15 +3,11 @@
 import numpy as np
 
 
-class CppType(type):
-    pass
-
-
 def cpptype(dtype):
     dtype = np.dtype(dtype, align=True)
 
     def decor(clss):
-        class MetaClass(CppType):
+        class CppType(type):
             @property
             def dtype(cls):
                 return dtype
@@ -19,19 +15,18 @@ def cpptype(dtype):
             def __repr__(cls):
                 return '@cpptype({})\n{}'.format(repr(dtype), repr(clss))
 
-        class Class(clss, metaclass=MetaClass):
+        class Class(clss, metaclass=CppType):
             @property
             def state(self):
                 state = []
                 for key, (field, _) in Class.dtype.fields.items():
                     if field.names is not None:
                         state.append(getattr(self, key).state)
-                    else:
+                    else:  # fixed-length vector treated the same as scalars
                         state.append(getattr(self, key))
                 return tuple(state)
 
-            # TODO: need a nicer one
-            # def __repr__(self):
+            # TODO: need a nicer __repr__
 
         return Class
 
@@ -48,9 +43,9 @@ if __name__ == '__main__':
 
     print(A.dtype)
     a = A()
-    print(a.pack())
+    print(a.state)
     a.A = 4
-    print(a.pack())
+    print(a.state)
 
     @cpptype([('X', np.bool_), ('Y', A.dtype)])
     class B:
@@ -59,6 +54,6 @@ if __name__ == '__main__':
             self.Y = A()
     #
     # print(A.dtype)
-    # print(A().pack())
+    # print(A().state)
     print(B.dtype)
-    print(B().pack())
+    print(B().state)

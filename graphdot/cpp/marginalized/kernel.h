@@ -45,18 +45,19 @@ template<class Node, class Edge> struct graph_t {
     using edge_t = Edge;
     using octile_t = struct {
         int upper, left;
+        std::uint64_t nzmask;
         edge_t * elements;
     };
 
     constexpr static float eps = 1e-14;
 
-    int n_vertex, n_octile;
+    int n_node, n_octile;
     deg_t    * degree;
     node_t   * vertex;
     octile_t * octile;
 
     constexpr __inline__ __host__ __device__ int padded_size() const {
-        return ( n_vertex + 7 ) & ~7U;
+        return ( n_node + 7 ) & ~7U;
     }
 };
 
@@ -131,6 +132,8 @@ struct octile_block_solver {
         const int i1_upper,
         const int i1_lower,
         const int i2,
+        const std::uint64_t nzmask1,
+        const std::uint64_t nzmask2,
         octile octile1,
         octile octile2,
         rhs rhs,
@@ -142,12 +145,17 @@ struct octile_block_solver {
         for ( int j1 = 0; j1 < octile_w && j1 < j1_margin; ++j1 ) {
             auto e1_upper = octile1( i1_upper, j1 );
             auto e1_lower = octile1( i1_lower, j1 );
+            bool m1_upper = nzmask1 & (1ULL << (i1_upper + j1 * octile_h));
+            bool m1_lower = nzmask1 & (1ULL << (i1_lower + j1 * octile_h));
             #pragma unroll (octile_w)
             for ( int j2 = 0; j2 < octile_w; ++j2 ) {
                 auto e2 = octile2( i2, j2 );
                 auto r  = rhs( j1, j2 );
-                sum_upper -= EdgeKernel::compute( e1_upper, e2 ) * r;
-                sum_lower -= EdgeKernel::compute( e1_lower, e2 ) * r;
+                bool m2 = nzmask2 & (1ULL << (i2 + j2 * octile_h));
+                //printf("i1 %d i2 %d j1 %d j2 %d e1 (%ld,%lf) e2 (%ld,%lf) kernel %f\n", i1_upper, i2, j1, j2, e1_upper.order, e1_upper.length, e2.order, e2.length, EdgeKernel::compute( e1_upper, e2 ) * m1_upper * m2);
+                //printf("i1 %d i2 %d j1 %d j2 %d e1 (%ld,%lf) e2 (%ld,%lf) kernel %f\n", i1_lower, i2, j1, j2, e1_upper.order, e1_upper.length, e2.order, e2.length, EdgeKernel::compute( e1_upper, e2 ) * m1_lower * m2);
+                sum_upper -= ( m1_upper && m2 ) ? EdgeKernel::compute( e1_upper, e2 ) * m1_upper * m2 * r : 0;
+                sum_lower -= ( m1_lower && m2 ) ? EdgeKernel::compute( e1_lower, e2 ) * m1_lower * m2 * r : 0;
             }
         }
     }
@@ -176,10 +184,11 @@ struct octile_block_solver {
             float d1 = g1.degree[ i1 ];
             float d2 = g2.degree[ i2 ];
             scratch.x( i ) = 0;
+            //printf( "setting x[%d] <- %.7f\n", i, scratch.x( i ) );
             float r = d1 * d2 * q * q;
             scratch.r( i ) = r;
             scratch.p( i ) = r;
-            scratch.Ap( i ) = d1 * d2 / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * r;
+            scratch.Ap( i ) = ( i1 < g1.n_node && i2 < g2.n_node ) ? d1 * d2 / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * r : 0.f;
         }
         __syncthreads();
 
@@ -190,7 +199,7 @@ struct octile_block_solver {
 
             #if 0
             __syncthreads();
-            if ( threadIdx.x == 0 && blockIdx.x == 0 ) {
+            if ( threadIdx.x == 0 ) {
                 for ( int ij = 0; ij < N; ++ij ) {
                     printf( "iteration %d solution x[%d] = %.7f\n", k, ij, scratch.x( ij ) );
                 }
@@ -200,6 +209,14 @@ struct octile_block_solver {
             const int i1_upper =   lane               / octile_h;
             const int i1_lower = ( lane + warp_size ) / octile_h;
             const int i2       =   lane               % octile_h;
+
+            // __syncthreads();
+            // if ( threadIdx.x == 0 ) {
+            //     for ( int ij = 0; ij < N; ++ij ) {
+            //         printf( "line %d iteration %d Ap[%d] = %.7f\n", __LINE__, k, ij, scratch.Ap( ij ) );
+            //     }
+            // }
+            // __syncthreads();
 
             // Ap = A * p, off-diagonal part
             for( int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local ) {
@@ -242,9 +259,11 @@ struct octile_block_solver {
                         auto o1 = g1.octile[ O1 + p1 ];
                         const int I1 = o1.upper;
                         const int J1 = o1.left;
+                        const std::uint64_t nzmask1 = o1.nzmask;
                         auto o2 = g2.octile[ O2 + p2 ];
                         const int I2 = o2.upper;
                         const int J2 = o2.left;
+                        const std::uint64_t nzmask2 = o2.nzmask;
 
                         octile octile1 { p_shared + p1 * shmem_bytes_per_warp };
                         octile octile2 { p_shared + p2 * shmem_bytes_per_warp + octile::size_bytes };
@@ -257,7 +276,8 @@ struct octile_block_solver {
                         rhs( j1 + warp_size / octile_w, j2 ) = scratch.p( ( J1 + j1 + warp_size / octile_w ) * n2 + ( J2 + j2 ) );
 
                         float sum_upper = 0, sum_lower = 0;
-                        mmv_octile<EdgeKernel>( i1_upper, i1_lower, i2, octile1, octile2, rhs, g1.n_vertex - J1, sum_upper, sum_lower );
+                        mmv_octile<EdgeKernel>( i1_upper, i1_lower, i2, nzmask1, nzmask2, octile1, octile2, rhs, g1.n_node - J1, sum_upper, sum_lower );
+                        //printf("threadIdx %d sum_upper %f sum_lower %f\n", threadIdx.x, sum_upper, sum_lower);
 
 
                         atomicAdd( &scratch.Ap( ( I1 + i1_upper ) * n2 + ( I2 + i2 ) ), sum_upper );
@@ -269,6 +289,15 @@ struct octile_block_solver {
             }
 
             __syncthreads();
+
+            // __syncthreads();
+            // if ( threadIdx.x == 0 ) {
+            //     for ( int ij = 0; ij < N; ++ij ) {
+            //         printf( "line %d iteration %d Ap[%d] = %.7f\n", __LINE__, k, ij, scratch.Ap( ij ) );
+            //     }
+            // }
+            // __syncthreads();
+            // break;
 
             // alpha = rTr / dot( p, Ap );
             auto pAp = block_vdotv( scratch.p(), scratch.Ap(), N );
@@ -295,7 +324,8 @@ struct octile_block_solver {
                 int i2 = i % n2;
                 float p = scratch.r( i ) + beta * scratch.p( i );
                 scratch.p( i ) = p;
-                scratch.Ap( i ) = g1.degree[ i1 ] * g2.degree[ i2 ] / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * p;
+                //scratch.Ap( i ) = g1.degree[ i1 ] * g2.degree[ i2 ] / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * p;
+                scratch.Ap( i ) = ( i1 < g1.n_node && i2 < g2.n_node ) ? g1.degree[ i1 ] * g2.degree[ i2 ] / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * p : 0.f;
             }
             __syncthreads();
 
@@ -312,7 +342,7 @@ struct octile_block_solver {
         __syncthreads();
         if ( laneid() == 0 ) atomicAdd( &block_R, R );
         __syncthreads();
-        #if 0
+        #if 1
         __syncthreads();
         if ( threadIdx.x == 0 ) {
             printf( "Converged after %d iterations\n", k );
@@ -331,140 +361,6 @@ struct octile_block_solver {
         return retval;
     }
 };
-
-// struct marginalized_kronecker_sqexp {
-//
-//     using real_t      = float;
-//     using scratch_t   = block_scratch;
-//
-//
-//     cuda::belt_allocator allocator;
-//
-//     std::size_t scratch_size = 0;
-//     device_ptr<scratch_t>    dev_scratch;
-//     device_ptr<job_t>       dev_jobs;
-//     device_ptr<unsigned int> dev_i_job_global;
-//     device_ptr<graph_t>      dev_graph_list;
-//
-//     marginalized_kronecker_sqexp( pybind11::dict runtime_config ) {
-//         // setup CUDA context
-//         device       = pybind11::cast<int>( runtime_config["device"      ] );
-//         block_per_sm = pybind11::cast<int>( runtime_config["block_per_sm"] );
-//         block_size   = pybind11::cast<int>( runtime_config["block_size"  ] );
-//
-//         cuda::detect_cuda( device );
-//         cuda::verify( cudaGetDeviceProperties( &gpu_properties, device ) );
-//         cuda::verify( cudaSetDevice( device ) );
-//     }
-//
-//     void allocate_scratch( std::size_t n, std::size_t max_size ) {
-//         cudaDeviceSynchronize();
-//
-//         allocator.~belt_allocator();
-//
-//         std::size_t scratch_allocation_granularity = 128 * 1024 * 1024; // 128 MB
-//
-//         new( &allocator ) cuda::belt_allocator( scratch_allocation_granularity );
-//
-//         std::vector<scratch_t> scratches;
-//         for ( std::size_t i = 0; i < n; ++i ) scratches.emplace_back( max_size, allocator );
-//
-//         dev_scratch.resize( n );
-//
-//         cudaMemcpy( dev_scratch, scratches.data(), dev_scratch.size * dev_scratch.element_size, cudaMemcpyDefault );
-//
-//         cudaDeviceSynchronize();
-//     }
-//
-//     auto compute( pybind11::dict hyperparameters, pybind11::list jobs, pybind11::list graph_list ) {
-//
-//         kernel_vertex kv( pybind11::cast<float>( hyperparameters["vertex_baseline_similarity" ] ) );
-//         kernel_edge   ke( pybind11::cast<float>( hyperparameters["edge_length_scale"          ] ) );
-//         float s = pybind11::cast<float>( hyperparameters["starting_probability"       ] );
-//         float q = pybind11::cast<float>( hyperparameters["stopping_probability"       ] );
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         std::size_t job_count = jobs.size();
-//         dev_jobs.resize( job_count );
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         dev_i_job_global.resize( 1 );
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         cudaMemset( dev_i_job_global, 0, dev_i_job_global.size * dev_i_job_global.element_size );
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         std::vector<job_t> job_list_cpu;
-//         for(auto const &item: jobs) {
-//             auto pair = pybind11::cast<pybind11::tuple>(item);
-//             job_t job;
-//             job.in.i = pybind11::cast<int>( pair[0] );
-//             job.in.j = pybind11::cast<int>( pair[1] );
-//             job_list_cpu.push_back( job );
-//         }
-//         cudaMemcpy( dev_jobs, job_list_cpu.data(), dev_jobs.size * dev_jobs.element_size, cudaMemcpyDefault );
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         dev_graph_list.resize( graph_list.size() );
-//         std::vector<graph_t> graph_list_cpu;
-//         int max_graph_size = 0;
-//         for(auto const &pygraph: graph_list ) {
-//             graph_list_cpu.push_back( pybind11::cast<graph_t>( pygraph ) );
-//             max_graph_size = std::max<int>( max_graph_size, graph_list_cpu.back().padded_size() );
-//         }
-//         cudaMemcpy( dev_graph_list, graph_list_cpu.data(), dev_graph_list.size * dev_graph_list.element_size, cudaMemcpyDefault );
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         std::size_t launch_block_count = gpu_properties.multiProcessorCount * block_per_sm;
-//         std::size_t shmem_bytes_per_block = octile_block_solver<graph_t>::shmem_bytes_per_warp * block_size / cuda::warp_size;
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         if ( max_graph_size * max_graph_size > scratch_size ) {
-//             scratch_size = max_graph_size * max_graph_size;
-//             allocate_scratch( launch_block_count, scratch_size );
-//         }
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         std::cout << format("Derived launch parameters:" ) << std::endl;
-//         std::cout << format("------------------------------------------------------------------" ) << std::endl;
-//         std::cout << format("%-32s : %ld", "Blocks launched", launch_block_count ) << std::endl;
-//         std::cout << format("%-32s : %ld", "Shared memory per block", shmem_bytes_per_block ) << std::endl;
-//         std::cout << format("------------------------------------------------------------------" ) << std::endl;
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         mlgk_batch_conjugate_gradient<graph_t, kernel_vertex, kernel_edge>
-//         <<< launch_block_count, block_size, shmem_bytes_per_block >>>
-//         ( kv,
-//           ke,
-//           dev_graph_list,
-//           dev_scratch,
-//           dev_jobs,
-//           dev_i_job_global,
-//           dev_jobs.size,
-//           s,
-//           q );
-//
-//         cuda::sync_and_peek( __FILE__, __LINE__ );
-//
-//         cudaMemcpyAsync( job_list_cpu.data(), dev_jobs, dev_jobs.size * dev_jobs.element_size, cudaMemcpyDefault );
-//
-//         cuda::verify( ( cudaDeviceSynchronize() ) );
-//
-//         std::vector<float> result;
-//         for(auto const &j: job_list_cpu) result.push_back( j.out.r );
-//
-//         return result;
-//     }
-// };
 
 }
 
