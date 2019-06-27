@@ -342,7 +342,7 @@ struct octile_block_solver {
         __syncthreads();
         if ( laneid() == 0 ) atomicAdd( &block_R, R );
         __syncthreads();
-        #if 1
+        #if 0
         __syncthreads();
         if ( threadIdx.x == 0 ) {
             printf( "Converged after %d iterations\n", k );

@@ -24,11 +24,9 @@ class JobIn:
         self.j = j
 
 
-# @cpptype([('i', np.int32), ('j', np.int32)])
-# class JobOut:
-#     def __init__(self, i, j):
-#         self.i = i
-#         self.j = j
+@cpptype([('similarity', np.float32), ('iterations', np.int32)])
+class JobOut:
+    pass
 
 
 class MarginalizedGraphKernel:
@@ -111,10 +109,10 @@ class MarginalizedGraphKernel:
         print(kernel.num_regs)
 
         N = len(graph_list)
-        jobs = to_gpu(np.array([JobIn(i, j).state
-                                for i in range(N)
-                                for j in range(i, N)],
-                               JobIn.dtype))
+        jobs = np.array([JobIn(i, j).state
+                         for i in range(N)
+                         for j in range(i, N)], JobIn.dtype)
+        jobs_d = to_gpu(jobs)
 
         i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
 
@@ -133,7 +131,7 @@ class MarginalizedGraphKernel:
 
         kernel(graph_list_d,
                self.scratch_d,
-               jobs,
+               jobs_d,
                i_job_global,
                np.uint32(jobs.size),
                np.float32(1.0),
@@ -141,6 +139,15 @@ class MarginalizedGraphKernel:
                grid=(launch_block_count, 1, 1),
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
+
+        result = jobs_d.get().view(JobOut.dtype)
+        print('result\n', result, sep='')
+
+        R = np.zeros((N, N))
+        for (i, j), (r, iter) in zip(jobs, result):
+            R[i, j] = R[j, i] = r
+
+        return R
 
     #     cuda::sync_and_peek( __FILE__, __LINE__ );
     #
@@ -155,8 +162,6 @@ class MarginalizedGraphKernel:
     # }
 
 if __name__ == '__main__':
-
-    import pycuda.autoinit
 
     if True:
         import networkx as nx
@@ -204,4 +209,6 @@ if __name__ == '__main__':
         print(mlgk.scratch_d)
         print(BlockScratch.dtype)
 
-        mlgk.compute([Graph.from_networkx(g1), Graph.from_networkx(g2)])
+        R = mlgk.compute([Graph.from_networkx(g1), Graph.from_networkx(g2)])
+        # R = mlgk.compute([Graph.from_networkx(g2)])
+        print(R)

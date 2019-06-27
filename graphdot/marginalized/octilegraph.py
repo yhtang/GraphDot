@@ -46,7 +46,7 @@ class OctileGraph:
         node_type = rowtype(graph.nodes)
         edge_type = rowtype(graph.edges.drop(['!ij'], axis=1))
 
-        n_node = len(graph.nodes)
+        self.n_node = len(graph.nodes)
 
         ''' directly upload node labels to GPU '''
         node_d = to_gpu(graph.nodes[list(node_type.names)]
@@ -57,14 +57,14 @@ class OctileGraph:
         if wcol is None:
             # default label for edge weight lookup
             wcol = '!w'
+        degree_h = np.zeros(self.padded_size, dtype=np.float32)
         if wcol in graph.edges.columns:
-            degree_h = np.zeros(n_node, dtype=np.float32)
             for (i, j), w in zip(graph.edges['!ij'], graph.edges[wcol]):
                 degree_h[i] += w
                 degree_h[j] += w
         else:
             # treat as simple graph if no weights given
-            degree_h = np.ones(n_node, dtype=np.float32)
+            degree_h[:self.n_node] = 1
         degree_h /= 1.0 - stopping_probability
         degree_d = to_gpu(degree_h)
 
@@ -99,7 +99,6 @@ class OctileGraph:
         self.node_type = node_type
         self.edge_type = edge_type
 
-        self.n_node = n_node
         self.n_octile = len(octile_list)
         self.__degree = degree_d
         self.__node = node_d
