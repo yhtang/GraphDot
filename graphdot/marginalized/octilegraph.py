@@ -87,7 +87,8 @@ class OctileGraph:
 
         ''' create octiles on GPU '''
         octile_list = [Octile(upper, left, nzmask, elements)
-                       for (upper, left), (nzmask, elements) in octile_table.items()]
+                       for (upper, left), (nzmask, elements)
+                       in octile_table.items()]
 
         ''' collect octile structures into continuous buffer '''
         octile_hdr = to_gpu(np.array([x.state for x in octile_list],
@@ -119,95 +120,101 @@ class OctileGraph:
         return (self.n_node + 7) & ~7
 
 
-if __name__ == '__main__':
-
-    import pycuda.autoinit
-    import networkx as nx
-    import numpy as np
-    from pycuda.compiler import SourceModule
-    from graphdot.codegen import Template
-    from graphdot.codegen.dtype import decltype
-
-    from graphdot import Graph
-
-    class Hybrid:
-        NONE = 0
-        SP = 1
-        SP2 = 2
-        SP3 = 3
-
-    g = nx.Graph(title='H2O')
-    g.add_node('O1', hybridization=Hybrid.SP2, charge=1, conjugate=False)
-    g.add_node('H1', hybridization=Hybrid.SP3, charge=-1, conjugate=True)
-    g.add_node('H2', hybridization=Hybrid.SP, charge=2, conjugate=True)
-    # g.add_node('H2', hybridization=Hybrid.SP, charge=2, time=1)
-    g.add_edge('O1', 'H1', order=1, length=0.5)
-    g.add_edge('O1', 'H2', order=2, length=1.0)
-
-    dfg = Graph.from_networkx(g)
-    print(dfg.nodes)
-
-    og = OctileGraph(dfg, 0.5)
-
-    og_hdr = to_gpu(np.array([x.state for x in [og, og, og]], OctileGraph.dtype))
-
-    mod = SourceModule(Template(r'''
-    #include <cstdio>
-    #include <cstdint>
-
-    using bool_ = bool;
-    using int_ = long;
-    using intc = int;
-    using intp = std::size_t;
-    using uint8 = std::uint8_t;
-    using uint16 = std::uint16_t;
-    using uint32 = std::uint32_t;
-    using uint64 = std::uint64_t;
-    using int8 = std::int8_t;
-    using int16 = std::int16_t;
-    using int32 = std::int32_t;
-    using int64 = std::int64_t;
-    using float_ = double;
-    using float32 = float;
-    using float64 = double;
-
-    struct graph_t {
-        using node_t = ${node_t};
-        using edge_t = ${edge_t};
-        using octile_t = struct {
-            int upper, left;
-            edge_t * elements;
-        };
-
-        int n_node, n_octile;
-        float    * degree;
-        node_t   * node;
-        octile_t * octile;
-    };
-
-    __global__ void fun(graph_t * graph_list, const int n_graph) {
-        for(int I = 0; I < n_graph; ++I) {
-            printf("Graph %d\n", I);
-            auto & g = graph_list[I];
-            printf("n_node %d\n", g.n_node);
-            printf("n_octile %d\n", g.n_octile);
-            for(int i = 0; i < g.n_node; ++i) {
-                printf("node %d degree %f label (%ld, %ld, %d)\n", i, g.degree[i], g.node[i].hybridization, g.node[i].charge, g.node[i].conjugate);
-            }
-            for(int i = 0; i < g.n_octile; ++i) {
-                printf("octile %d: (%d, %d)\n", i, g.octile[i].upper, g.octile[i].left);
-                for(int r = 0; r < 8; ++r) {
-                    for(int c = 0; c < 8; ++c) {
-                        printf("(%ld,%.3lf) ", g.octile[i].elements[r + c * 8].order, g.octile[i].elements[r + c * 8].length);
-                    }
-                    printf("\n");
-                }
-            }
-        }
-    }
-    ''').render(node_t=decltype(rowtype(dfg.nodes)),
-                edge_t=decltype(rowtype(dfg.edges.drop(['!ij'], axis=1)))))
-
-    fun = mod.get_function('fun')
-
-    fun(og_hdr, np.int32(3), grid=(1,1,1), block=(1,1,1))
+# if __name__ == '__main__':
+#
+#     import pycuda.autoinit
+#     import networkx as nx
+#     import numpy as np
+#     from pycuda.compiler import SourceModule
+#     from graphdot.codegen import Template
+#     from graphdot.codegen.dtype import decltype
+#
+#     from graphdot import Graph
+#
+#     class Hybrid:
+#         NONE = 0
+#         SP = 1
+#         SP2 = 2
+#         SP3 = 3
+#
+#     g = nx.Graph(title='H2O')
+#     g.add_node('O1', hybridization=Hybrid.SP2, charge=1, conjugate=False)
+#     g.add_node('H1', hybridization=Hybrid.SP3, charge=-1, conjugate=True)
+#     g.add_node('H2', hybridization=Hybrid.SP, charge=2, conjugate=True)
+#     # g.add_node('H2', hybridization=Hybrid.SP, charge=2, time=1)
+#     g.add_edge('O1', 'H1', order=1, length=0.5)
+#     g.add_edge('O1', 'H2', order=2, length=1.0)
+#
+#     dfg = Graph.from_networkx(g)
+#     print(dfg.nodes)
+#
+#     og = OctileGraph(dfg, 0.5)
+#
+#     og_hdr = to_gpu(np.array([x.state for x in [og, og, og]],
+#                              OctileGraph.dtype))
+#
+#     mod = SourceModule(Template(r'''
+#     #include <cstdio>
+#     #include <cstdint>
+#
+#     using bool_ = bool;
+#     using int_ = long;
+#     using intc = int;
+#     using intp = std::size_t;
+#     using uint8 = std::uint8_t;
+#     using uint16 = std::uint16_t;
+#     using uint32 = std::uint32_t;
+#     using uint64 = std::uint64_t;
+#     using int8 = std::int8_t;
+#     using int16 = std::int16_t;
+#     using int32 = std::int32_t;
+#     using int64 = std::int64_t;
+#     using float_ = double;
+#     using float32 = float;
+#     using float64 = double;
+#
+#     struct graph_t {
+#         using node_t = ${node_t};
+#         using edge_t = ${edge_t};
+#         using octile_t = struct {
+#             int upper, left;
+#             edge_t * elements;
+#         };
+#
+#         int n_node, n_octile;
+#         float    * degree;
+#         node_t   * node;
+#         octile_t * octile;
+#     };
+#
+#     __global__ void fun(graph_t * graph_list, const int n_graph) {
+#         for(int I = 0; I < n_graph; ++I) {
+#             printf("Graph %d\n", I);
+#             auto & g = graph_list[I];
+#             printf("n_node %d\n", g.n_node);
+#             printf("n_octile %d\n", g.n_octile);
+#             for(int i = 0; i < g.n_node; ++i) {
+#                 printf("node %d degree %f label (%ld, %ld, %d)\n",
+#                 i, g.degree[i], g.node[i].hybridization,
+#                 g.node[i].charge, g.node[i].conjugate);
+#             }
+#             for(int i = 0; i < g.n_octile; ++i) {
+#                 printf("octile %d: (%d, %d)\n",
+#                        i, g.octile[i].upper, g.octile[i].left);
+#                 for(int r = 0; r < 8; ++r) {
+#                     for(int c = 0; c < 8; ++c) {
+#                         printf("(%ld,%.3lf) ",
+#                                g.octile[i].elements[r + c * 8].order,
+#                                g.octile[i].elements[r + c * 8].length);
+#                     }
+#                     printf("\n");
+#                 }
+#             }
+#         }
+#     }
+#     ''').render(node_t=decltype(rowtype(dfg.nodes)),
+#                 edge_t=decltype(rowtype(dfg.edges.drop(['!ij'], axis=1)))))
+#
+#     fun = mod.get_function('fun')
+#
+#     fun(og_hdr, np.int32(3), grid=(1, 1, 1), block=(1, 1, 1))

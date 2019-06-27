@@ -280,7 +280,10 @@ class Convolution(Kernel):
 #     for k in kernels:
 #         print(k.gencode('x', 'y'))
 #
-#     print(TensorProduct(KroneckerDelta(0.3,1.0), SquareExponential(1.0)).gencode(['a1', 'b1'], ['a2', 'b2']))
+#     print(TensorProduct(KroneckerDelta(0.3,1.0),
+#           SquareExponential(1.0)).gencode(['a1', 'b1'], ['a2', 'b2']))
 #
-#     print(Convolution(KroneckerDelta(0.3,1.0)).gencode(['a1', 'b1'], ['a2', 'b2', 'c2']))
-#     print(Convolution(SquareExponential(1.0)).gencode(['a1', 'b1'], ['a2', 'b2', 'c2']))
+#     print(Convolution(KroneckerDelta(0.3,1.0)).gencode(['a1', 'b1'],
+#                                                        ['a2', 'b2', 'c2']))
+#     print(Convolution(SquareExponential(1.0)).gencode(['a1', 'b1'],
+#                                                       ['a2', 'b2', 'c2']))

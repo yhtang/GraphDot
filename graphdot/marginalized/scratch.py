@@ -16,10 +16,10 @@ class BlockScratch:
         return self.buffer.ptr
 
 
-if __name__ == '__main__':
-
-    import pycuda.autoinit
-
-    scratch = BlockScratch(1024)
-
-    print(scratch.state)
+# if __name__ == '__main__':
+#
+#     import pycuda.autoinit
+#
+#     scratch = BlockScratch(1024)
+#
+#     print(scratch.state)
