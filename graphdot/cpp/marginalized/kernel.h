@@ -23,19 +23,19 @@ struct block_scratch {
     float * ptr;
     int stride;
 
-    block_scratch( int max_size, cuda::belt_allocator & alloc ) {
-        stride = ( ( max_size + 15 ) / 16 ) * 16;
-        ptr = ( float * ) alloc( stride * sizeof( float ) * 4 );
+    block_scratch (int max_size, cuda::belt_allocator & alloc) {
+        stride = ((max_size + 15) / 16) * 16;
+        ptr = (float *) alloc (stride * sizeof (float) * 4);
     }
 
     __host__ __device__ __inline__ constexpr float * x  () { return ptr + stride * 0; }
     __host__ __device__ __inline__ constexpr float * r  () { return ptr + stride * 1; }
     __host__ __device__ __inline__ constexpr float * p  () { return ptr + stride * 2; }
     __host__ __device__ __inline__ constexpr float * Ap () { return ptr + stride * 3; }
-    __host__ __device__ __inline__ constexpr float & x  ( int i ) { return x()[i]; }
-    __host__ __device__ __inline__ constexpr float & r  ( int i ) { return r()[i]; }
-    __host__ __device__ __inline__ constexpr float & p  ( int i ) { return p()[i]; }
-    __host__ __device__ __inline__ constexpr float & Ap ( int i ) { return Ap()[i]; }
+    __host__ __device__ __inline__ constexpr float & x  (int i) { return x()[i]; }
+    __host__ __device__ __inline__ constexpr float & r  (int i) { return r()[i]; }
+    __host__ __device__ __inline__ constexpr float & p  (int i) { return p()[i]; }
+    __host__ __device__ __inline__ constexpr float & Ap (int i) { return Ap()[i]; }
 };
 
 template<class Node, class Edge> struct graph_t {
@@ -52,23 +52,21 @@ template<class Node, class Edge> struct graph_t {
     constexpr static float eps = 1e-14;
 
     int n_node, n_octile;
-    deg_t    * degree;
-    node_t   * vertex;
+    deg_t   *  degree;
+    node_t  *  vertex;
     octile_t * octile;
 
     constexpr __inline__ __host__ __device__ int padded_size() const {
-        return ( n_node + 7 ) & ~7U;
+        return (n_node + 7) & ~7U;
     }
 };
 
 /*-----------------------------------------------------------------------------
-Block CG solver
+Block CG solver: solve the MLGK linear system using matrix-free CG where
+the matvec operations are done in 8x8 tiles.
 -----------------------------------------------------------------------------*/
-// solve the MLGK linear system using matrix-free CG
-// where the matvec operation is done in 8x8 tiles
 template<class Graph>
 struct octile_block_solver {
-
     /*  Each simple octile consists of 64 elemented put in column-major format
         =========================================
         |  0 |  8 | 16 | 24 | 32 | 40 | 48 | 56 |
@@ -98,16 +96,16 @@ struct octile_block_solver {
 
         edge_t * const _data;
 
-        constexpr static int size_bytes = octile_w * octile_h * sizeof( edge_t );
+        constexpr static int size_bytes = octile_w * octile_h * sizeof (edge_t);
 
-        constexpr __inline__ __device__ __host__ octile( void * ptr ) : _data( reinterpret_cast<edge_t *>( ptr ) ) {}
+        constexpr __inline__ __device__ __host__ octile (void * ptr) : _data (reinterpret_cast<edge_t *> (ptr)) {}
 
-        constexpr __inline__ __device__ __host__ edge_t & operator() ( int i, int j ) {
+        constexpr __inline__ __device__ __host__ edge_t & operator() (int i, int j) {
             return _data[ i + j * octile_h ];
         }
 
-        constexpr __inline__ __device__ __host__ edge_t & operator() ( int i ) {
-            return _data[ i ];
+        constexpr __inline__ __device__ __host__ edge_t & operator() (int i) {
+            return _data[i];
         }
     };
 
@@ -115,11 +113,11 @@ struct octile_block_solver {
 
         float * const _data;
 
-        constexpr static int size_bytes = octile_w * octile_w * sizeof( float );
+        constexpr static int size_bytes = octile_w * octile_w * sizeof (float);
 
-        constexpr __inline__ __device__ rhs( void * ptr ) : _data( reinterpret_cast<float *>( ptr ) ) {}
+        constexpr __inline__ __device__ rhs (void * ptr) : _data (reinterpret_cast<float *> (ptr)) {}
 
-        constexpr __inline__ __device__ float & operator() ( int j1, int j2 ) {
+        constexpr __inline__ __device__ float & operator() (int j1, int j2) {
             return _data[ j1 * octile_w + j2 ];
         }
     };
@@ -141,33 +139,31 @@ struct octile_block_solver {
         float & sum_upper,
         float & sum_lower
     ) {
-        #pragma unroll (octile_w)
-        for ( int j1 = 0; j1 < octile_w && j1 < j1_margin; ++j1 ) {
-            auto e1_upper = octile1( i1_upper, j1 );
-            auto e1_lower = octile1( i1_lower, j1 );
+#pragma unroll (octile_w)
+        for (int j1 = 0; j1 < octile_w && j1 < j1_margin; ++j1) {
+            auto e1_upper = octile1 (i1_upper, j1);
+            auto e1_lower = octile1 (i1_lower, j1);
             bool m1_upper = nzmask1 & (1ULL << (i1_upper + j1 * octile_h));
             bool m1_lower = nzmask1 & (1ULL << (i1_lower + j1 * octile_h));
-            #pragma unroll (octile_w)
-            for ( int j2 = 0; j2 < octile_w; ++j2 ) {
-                auto e2 = octile2( i2, j2 );
-                auto r  = rhs( j1, j2 );
+#pragma unroll (octile_w)
+            for (int j2 = 0; j2 < octile_w; ++j2) {
+                auto e2 = octile2 (i2, j2);
+                auto r  = rhs (j1, j2);
                 bool m2 = nzmask2 & (1ULL << (i2 + j2 * octile_h));
-                //printf("i1 %d i2 %d j1 %d j2 %d e1 (%ld,%lf) e2 (%ld,%lf) kernel %f\n", i1_upper, i2, j1, j2, e1_upper.order, e1_upper.length, e2.order, e2.length, EdgeKernel::compute( e1_upper, e2 ) * m1_upper * m2);
-                //printf("i1 %d i2 %d j1 %d j2 %d e1 (%ld,%lf) e2 (%ld,%lf) kernel %f\n", i1_lower, i2, j1, j2, e1_upper.order, e1_upper.length, e2.order, e2.length, EdgeKernel::compute( e1_upper, e2 ) * m1_lower * m2);
-                sum_upper -= ( m1_upper && m2 ) ? EdgeKernel::compute( e1_upper, e2 ) * m1_upper * m2 * r : 0;
-                sum_lower -= ( m1_lower && m2 ) ? EdgeKernel::compute( e1_lower, e2 ) * m1_lower * m2 * r : 0;
+                sum_upper -= (m1_upper && m2) ? EdgeKernel::compute (e1_upper, e2) * r : 0;
+                sum_lower -= (m1_lower && m2) ? EdgeKernel::compute (e1_lower, e2) * r : 0;
             }
         }
     }
 
     template<class NodeKernel, class EdgeKernel>
-    __inline__ __device__ static auto compute(
+    __inline__ __device__ static auto compute (
         Graph const    g1,
         Graph const    g2,
         block_scratch  scratch,
         char * const   p_shared,
         const float    s,
-        const float    q ) {
+        const float    q) {
 
         using namespace graphdot::cuda;
 
@@ -178,36 +174,36 @@ struct octile_block_solver {
         const int n2 = g2.padded_size();
         const int N  = n1 * n2;
 
-        for ( int i = threadIdx.x; i < N; i += blockDim.x ) {
+        for (int i = threadIdx.x; i < N; i += blockDim.x) {
             int i1 = i / n2;
             int i2 = i % n2;
-            float d1 = g1.degree[ i1 ];
-            float d2 = g2.degree[ i2 ];
-            scratch.x( i ) = 0;
+            float d1 = g1.degree[i1];
+            float d2 = g2.degree[i2];
+            scratch.x (i) = 0;
             //printf( "setting x[%d] <- %.7f\n", i, scratch.x( i ) );
             float r = d1 * d2 * q * q;
-            scratch.r( i ) = r;
-            scratch.p( i ) = r;
-            scratch.Ap( i ) = ( i1 < g1.n_node && i2 < g2.n_node ) ? d1 * d2 / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * r : 0.f;
+            scratch.r (i) = r;
+            scratch.p (i) = r;
+            scratch.Ap (i) = (i1 < g1.n_node && i2 < g2.n_node) ? d1 * d2 / NodeKernel::compute (g1.vertex[i1], g2.vertex[i2]) * r : 0.f;
         }
         __syncthreads();
 
-        auto rTr = block_vdotv( scratch.r(), scratch.r(), N );
+        auto rTr = block_vdotv (scratch.r(), scratch.r(), N);
 
         int k;
-        for ( k = 0; k < N; ++k ) {
+        for (k = 0; k < N; ++k) {
 
             #if 0
             __syncthreads();
-            if ( threadIdx.x == 0 ) {
-                for ( int ij = 0; ij < N; ++ij ) {
-                    printf( "iteration %d solution x[%d] = %.7f\n", k, ij, scratch.x( ij ) );
+            if (threadIdx.x == 0) {
+                for (int ij = 0; ij < N; ++ij) {
+                    printf ("iteration %d solution x[%d] = %.7f\n", k, ij, scratch.x (ij));
                 }
             }
             #endif
 
             const int i1_upper =   lane               / octile_h;
-            const int i1_lower = ( lane + warp_size ) / octile_h;
+            const int i1_lower = (lane + warp_size) / octile_h;
             const int i2       =   lane               % octile_h;
 
             // __syncthreads();
@@ -219,37 +215,37 @@ struct octile_block_solver {
             // __syncthreads();
 
             // Ap = A * p, off-diagonal part
-            for( int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local ) {
+            for (int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local) {
 
-                const int nt1 = min( g1.n_octile - O1, warp_num_local );
+                const int nt1 = min (g1.n_octile - O1, warp_num_local);
 
-                if ( warp_id_local < nt1 ) {
+                if (warp_id_local < nt1) {
                     // load the first submatrix into shared memory, stored in col-major layout
                     //if ( lane == 0 ) printf("loading left octile %d\n", O1 + warp_id_local );
                     auto o1 = g1.octile[ O1 + warp_id_local ];
                     octile octile1 { p_shared + warp_id_local * shmem_bytes_per_warp };
-                    octile1( lane             ) = o1.elements[ lane             ];
-                    octile1( lane + warp_size ) = o1.elements[ lane + warp_size ];
+                    octile1 (lane            ) = o1.elements[lane            ];
+                    octile1 (lane + warp_size) = o1.elements[lane + warp_size];
                 }
 
                 __syncthreads();
 
-                for(int O2 = 0; O2 < g2.n_octile; O2 += warp_num_local ) {
+                for (int O2 = 0; O2 < g2.n_octile; O2 += warp_num_local) {
 
-                    const int nt2 = min( g2.n_octile - O2, warp_num_local );
+                    const int nt2 = min (g2.n_octile - O2, warp_num_local);
 
-                    if ( warp_id_local < nt2 ) {
+                    if (warp_id_local < nt2) {
                         //if ( lane == 0 ) printf("loading right octile %d\n", O2 + warp_id_local );
                         auto o2 = g2.octile[ O2 + warp_id_local ];
-                        octile octile2 { p_shared + warp_id_local * shmem_bytes_per_warp + octile::size_bytes };
+                        octile octile2 {p_shared + warp_id_local * shmem_bytes_per_warp + octile::size_bytes};
                         // load the second submatrix into cache, stored in col-major layout
-                        octile2( lane             ) = o2.elements[ lane             ];
-                        octile2( lane + warp_size ) = o2.elements[ lane + warp_size ];
+                        octile2 (lane            ) = o2.elements[lane            ];
+                        octile2 (lane + warp_size) = o2.elements[lane + warp_size];
                     }
 
                     __syncthreads();
 
-                    for( int t = warp_id_local; t < nt1 * nt2; t += warp_num_local ) {
+                    for (int t = warp_id_local; t < nt1 * nt2; t += warp_num_local) {
 
                         const int p1 = t / nt2;
                         const int p2 = t % nt2;
@@ -265,23 +261,23 @@ struct octile_block_solver {
                         const int J2 = o2.left;
                         const std::uint64_t nzmask2 = o2.nzmask;
 
-                        octile octile1 { p_shared + p1 * shmem_bytes_per_warp };
-                        octile octile2 { p_shared + p2 * shmem_bytes_per_warp + octile::size_bytes };
-                        rhs    rhs     { p_shared + warp_id_local * shmem_bytes_per_warp + octile::size_bytes + octile::size_bytes };
+                        octile octile1 {p_shared + p1 * shmem_bytes_per_warp};
+                        octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octile::size_bytes};
+                        rhs    rhs     {p_shared + warp_id_local * shmem_bytes_per_warp + octile::size_bytes + octile::size_bytes};
 
                         // load RHS
                         int j1 = lane / octile_w;
                         int j2 = lane % octile_w;
-                        rhs( j1,                        j2 ) = scratch.p( ( J1 + j1                        ) * n2 + ( J2 + j2 ) );
-                        rhs( j1 + warp_size / octile_w, j2 ) = scratch.p( ( J1 + j1 + warp_size / octile_w ) * n2 + ( J2 + j2 ) );
+                        rhs (j1,                        j2) = scratch.p ((J1 + j1                       ) * n2 + (J2 + j2));
+                        rhs (j1 + warp_size / octile_w, j2) = scratch.p ((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
                         float sum_upper = 0, sum_lower = 0;
-                        mmv_octile<EdgeKernel>( i1_upper, i1_lower, i2, nzmask1, nzmask2, octile1, octile2, rhs, g1.n_node - J1, sum_upper, sum_lower );
+                        mmv_octile<EdgeKernel> (i1_upper, i1_lower, i2, nzmask1, nzmask2, octile1, octile2, rhs, g1.n_node - J1, sum_upper, sum_lower);
                         //printf("threadIdx %d sum_upper %f sum_lower %f\n", threadIdx.x, sum_upper, sum_lower);
 
 
-                        atomicAdd( &scratch.Ap( ( I1 + i1_upper ) * n2 + ( I2 + i2 ) ), sum_upper );
-                        atomicAdd( &scratch.Ap( ( I1 + i1_lower ) * n2 + ( I2 + i2 ) ), sum_lower );
+                        atomicAdd (&scratch.Ap ((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper);
+                        atomicAdd (&scratch.Ap ((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
                     }
 
                     __syncthreads();
@@ -300,32 +296,32 @@ struct octile_block_solver {
             // break;
 
             // alpha = rTr / dot( p, Ap );
-            auto pAp = block_vdotv( scratch.p(), scratch.Ap(), N );
+            auto pAp = block_vdotv (scratch.p(), scratch.Ap(), N);
             auto alpha = rTr / pAp;
 
             // x = x + alpha * p;
             // r = r - alpha * Ap;
-            for ( int i = threadIdx.x; i < N; i += blockDim.x ) {
-                scratch.x( i ) += alpha * scratch.p ( i );
-                scratch.r( i ) -= alpha * scratch.Ap( i );
+            for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                scratch.x (i) += alpha * scratch.p (i);
+                scratch.r (i) -= alpha * scratch.Ap (i);
             }
             //__syncthreads(); // not needed
 
-            auto rTr_next = block_vdotv( scratch.r(), scratch.r(), N );
+            auto rTr_next = block_vdotv (scratch.r(), scratch.r(), N);
 
-            if ( rTr_next < float( 1e-16 ) * N * N ) break;
+            if (rTr_next < float (1e-16) * N * N) break;
 
             auto beta = rTr_next / rTr;
 
             // p = r + beta * p;
-            for ( int i = threadIdx.x; i < N; i += blockDim.x ) {
-                //scratch.p(i) = scratch.r(i) + beta * scratch.p(i);
+            for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                // scratch.p(i) = scratch.r(i) + beta * scratch.p(i);
                 int i1 = i / n2;
                 int i2 = i % n2;
-                float p = scratch.r( i ) + beta * scratch.p( i );
-                scratch.p( i ) = p;
-                //scratch.Ap( i ) = g1.degree[ i1 ] * g2.degree[ i2 ] / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * p;
-                scratch.Ap( i ) = ( i1 < g1.n_node && i2 < g2.n_node ) ? g1.degree[ i1 ] * g2.degree[ i2 ] / NodeKernel::compute( g1.vertex[ i1 ], g2.vertex[ i2 ] ) * p : 0.f;
+                float p = scratch.r (i) + beta * scratch.p (i);
+                scratch.p (i) = p;
+                // scratch.Ap( i ) = g1.degree[i1] * g2.degree[i2] / NodeKernel::compute( g1.vertex[i1], g2.vertex[i2] ) * p;
+                scratch.Ap (i) = (i1 < g1.n_node && i2 < g2.n_node) ? g1.degree[i1] * g2.degree[i2] / NodeKernel::compute (g1.vertex[i1], g2.vertex[i2]) * p : 0.f;
             }
             __syncthreads();
 
@@ -333,23 +329,23 @@ struct octile_block_solver {
         }
 
         float R = 0;
-        for ( int i = threadIdx.x; i < N; i += blockDim.x ) {
-            R += s * s * scratch.x( i );
+        for (int i = threadIdx.x; i < N; i += blockDim.x) {
+            R += s * s * scratch.x (i);
         }
-        R = warp_sum( R );
+        R = warp_sum (R);
         __shared__ float block_R;
-        if ( threadIdx.x == 0 ) block_R = 0;
+        if (threadIdx.x == 0) block_R = 0;
         __syncthreads();
-        if ( laneid() == 0 ) atomicAdd( &block_R, R );
+        if (laneid() == 0) atomicAdd (&block_R, R);
         __syncthreads();
         #if 0
         __syncthreads();
-        if ( threadIdx.x == 0 ) {
-            printf( "Converged after %d iterations\n", k );
-            printf( "R(sum) = %.7f\n", block_R );
+        if (threadIdx.x == 0) {
+            printf ("Converged after %d iterations\n", k);
+            printf ("R(sum) = %.7f\n", block_R);
             #if 0
-            for ( int ij = 0; ij < N; ++ij ) {
-                printf( "solution x[%d] = %.7f\n", ij, scratch.x( ij ) );
+            for (int ij = 0; ij < N; ++ij) {
+                printf ("solution x[%d] = %.7f\n", ij, scratch.x (ij));
             }
             #endif
         }
