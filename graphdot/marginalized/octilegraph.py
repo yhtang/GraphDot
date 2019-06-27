@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from pycuda.gpuarray import to_gpu
-from graphdot.codegen.interop import cpptype
-from graphdot.codegen.dtype import rowtype
+from graphdot.codegen.typetool import cpptype, rowtype
 
 
 @cpptype([('upper', np.int32), ('left', np.int32),
@@ -20,8 +19,6 @@ class Octile:
         self.upper = upper
         self.left = left
         self.nzmask = nzmask
-        print('nzmask', np.binary_repr(nzmask, 64))
-        print(elements)
         self.__elements = to_gpu(elements)
 
     @property

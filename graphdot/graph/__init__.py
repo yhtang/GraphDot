@@ -4,7 +4,7 @@
 This package defines the Graph container class of graphdot and converts from
 popular graph libraries.
 """
-import pandas
+import pandas as pd
 
 
 class Graph:
@@ -15,14 +15,14 @@ class Graph:
         edges: dataframe
         """
         self.title = title
-        if isinstance(nodes, pandas.DataFrame):
+        if isinstance(nodes, pd.DataFrame):
             self.nodes = nodes
         else:
-            self.nodes = pandas.DataFrame(nodes)
-        if isinstance(edges, pandas.DataFrame):
+            self.nodes = pd.DataFrame(nodes)
+        if isinstance(edges, pd.DataFrame):
             self.edges = edges
         else:
-            self.edges = pandas.DataFrame(edges)
+            self.edges = pd.DataFrame(edges)
 
     def __repr__(self):
         return '<{}(nodes={}, edges={}, title={})>'.\
@@ -82,7 +82,7 @@ class Graph:
                                 'attributes {} '.format(node.keys()) +
                                 'inconsistent with {}'.format(node_attr))
 
-        node_df = pandas.DataFrame(index=range(graph.number_of_nodes()))
+        node_df = pd.DataFrame(index=range(graph.number_of_nodes()))
         for key in node_attr:
             node_df[key] = [node[key] for node in graph.nodes.values()]
 
@@ -96,7 +96,7 @@ class Graph:
                                 'attributes {} '.format(edge.keys()) +
                                 'inconsistent with {}'.format(edge_attr))
 
-        edge_df = pandas.DataFrame(index=range(graph.number_of_edges()))
+        edge_df = pd.DataFrame(index=range(graph.number_of_edges()))
         edge_df['!ij'] = list(graph.edges.keys())
         for key in edge_attr:
             edge_df[key] = [edge[key] for edge in graph.edges.values()]

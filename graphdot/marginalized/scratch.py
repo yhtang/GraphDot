@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from pycuda.gpuarray import empty
-from graphdot.codegen.interop import cpptype
+from graphdot.codegen.typetool import cpptype
 
 
 @cpptype([('ptr', np.uintp), ('capacity', np.int64)])

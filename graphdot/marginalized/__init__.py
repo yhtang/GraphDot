@@ -7,8 +7,7 @@ import pycuda.gpuarray
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import to_gpu
 from graphdot.codegen import Template
-from graphdot.codegen.dtype import decltype
-from graphdot.codegen.interop import cpptype
+from graphdot.codegen.typetool import cpptype, decltype
 from graphdot.marginalized.scratch import BlockScratch
 from graphdot.marginalized.octilegraph import OctileGraph
 import graphdot.cpp
@@ -93,8 +92,6 @@ class MarginalizedGraphKernel:
                                       node_t=decltype(node_type),
                                       edge_t=decltype(edge_type))
 
-        print('SOURCE\n', source, sep='')
-
         mod = SourceModule(source,
                            options=['-std=c++14',
                                     '-O4',
@@ -105,8 +102,6 @@ class MarginalizedGraphKernel:
                            no_extern_c=True,
                            include_dirs=graphdot.cpp.__path__)
         kernel = mod.get_function('graph_kernel_solver')
-        print('KERNEL\n', kernel)
-        print(kernel.num_regs)
 
         N = len(graph_list)
         jobs = np.array([JobIn(i, j).state
@@ -119,15 +114,18 @@ class MarginalizedGraphKernel:
         graph_list_d = to_gpu(np.array([g.state for g in graph_list],
                                        OctileGraph.dtype))
 
-        launch_block_count = self.device.MULTIPROCESSOR_COUNT * self.block_per_sm
+        launch_block_count = (self.device.MULTIPROCESSOR_COUNT
+                              * self.block_per_sm)
         shmem_bytes_per_warp = mod.get_global('shmem_bytes_per_warp')[1]
-        shmem_bytes_per_block = shmem_bytes_per_warp * self.block_size // self.device.WARP_SIZE
+        shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
+                                 // self.device.WARP_SIZE)
 
         max_graph_size = np.max([g.padded_size for g in graph_list])
-        self._allocate_scratch(launch_block_count, max_graph_size * max_graph_size)
+        self._allocate_scratch(launch_block_count, max_graph_size**2)
 
-        print("%-32s : %ld" % ("Blocks launched", launch_block_count))
-        print("%-32s : %ld" % ("Shared memory per block", shmem_bytes_per_block))
+        # print("%-32s : %ld" % ("Blocks launched", launch_block_count))
+        # print("%-32s : %ld" % ("Shared memory per block",
+        #                        shmem_bytes_per_block))
 
         kernel(graph_list_d,
                self.scratch_d,
@@ -141,7 +139,6 @@ class MarginalizedGraphKernel:
                shared=shmem_bytes_per_block)
 
         result = jobs_d.get().view(JobOut.dtype)
-        print('result\n', result, sep='')
 
         R = np.zeros((N, N))
         for (i, j), (r, iter) in zip(jobs, result):
@@ -149,17 +146,6 @@ class MarginalizedGraphKernel:
 
         return R
 
-    #     cuda::sync_and_peek( __FILE__, __LINE__ );
-    #
-    #     cudaMemcpyAsync( job_list_cpu.data(), dev_jobs, dev_jobs.size * dev_jobs.element_size, cudaMemcpyDefault );
-    #
-    #     cuda::verify( ( cudaDeviceSynchronize() ) );
-    #
-    #     std::vector<float> result;
-    #     for(auto const &j: job_list_cpu) result.push_back( j.out.r );
-    #
-    #     return result;
-    # }
 
 if __name__ == '__main__':
 
@@ -205,9 +191,6 @@ if __name__ == '__main__':
         mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel)
 
         mlgk._allocate_scratch(10, 117)
-        print(mlgk.scratch_capacity)
-        print(mlgk.scratch_d)
-        print(BlockScratch.dtype)
 
         R = mlgk.compute([Graph.from_networkx(g1), Graph.from_networkx(g2)])
         # R = mlgk.compute([Graph.from_networkx(g2)])
