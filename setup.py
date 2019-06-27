@@ -41,6 +41,8 @@ setup(
     extras_require={
         'ASE': ['ase'],
         'NetworkX': ['networkx'],
+        'docs': ['sphinx',
+                 'sphinx-materialdesign-theme-nopyc'],
     },
     cmdclass={'test': Tox},
     author_email='Tang.Maxin@gmail.com',
@@ -71,10 +73,5 @@ setup(
         'Topic :: Scientific/Engineering :: Physics',
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
-    ],
-    extras_require={
-        'docs': ['sphinx',
-                 'sphinx-materialdesign-theme-nopyc'
-                 ],
-    }
+    ]
 )
