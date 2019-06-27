@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MATH_POWER_H
-#define GRAPHDOT_CPP_MATH_POWER_H
+#ifndef GRAPHDOT_MATH_POWER_H
+#define GRAPHDOT_MATH_POWER_H
 
 namespace graphdot {
 

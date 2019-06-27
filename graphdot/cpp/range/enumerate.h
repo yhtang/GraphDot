@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_RANGE_ENUMERATE_H_
-#define GRAPHDOT_CPP_RANGE_ENUMERATE_H_
+#ifndef GRAPHDOT_RANGE_ENUMERATE_H_
+#define GRAPHDOT_RANGE_ENUMERATE_H_
 
 #include <tuple>
 #include <utility>

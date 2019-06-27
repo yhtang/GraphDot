@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MATH_DISTANCE_H_
-#define GRAPHDOT_CPP_MATH_DISTANCE_H_
+#ifndef GRAPHDOT_MATH_DISTANCE_H_
+#define GRAPHDOT_MATH_DISTANCE_H_
 
 #include <cmath>
 #include <type_traits>

@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MISC_TIMER_H_
-#define GRAPHDOT_CPP_MISC_TIMER_H_
+#ifndef GRAPHDOT_MISC_TIMER_H_
+#define GRAPHDOT_MISC_TIMER_H_
 
 #include <iostream>
 #include <iomanip>

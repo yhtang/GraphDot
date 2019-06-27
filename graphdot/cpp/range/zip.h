@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MISC_ZIP_H_
-#define GRAPHDOT_CPP_MISC_ZIP_H_
+#ifndef GRAPHDOT_MISC_ZIP_H_
+#define GRAPHDOT_MISC_ZIP_H_
 
 #include <tuple>
 #include <utility>

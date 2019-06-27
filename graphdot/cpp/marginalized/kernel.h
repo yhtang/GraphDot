@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MARGINALIZED_KERNEL_H
-#define GRAPHDOT_CPP_MARGINALIZED_KERNEL_H
+#ifndef GRAPHDOT_MARGINALIZED_KERNEL_H_
+#define GRAPHDOT_MARGINALIZED_KERNEL_H_
 
 #include <cuda/balloc.h>
 #include <cuda/util_host.h>

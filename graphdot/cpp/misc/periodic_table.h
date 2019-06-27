@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MISC_PERIODIC_TABLE_H_
-#define GRAPHDOT_CPP_MISC_PERIODIC_TABLE_H_
+#ifndef GRAPHDOT_MISC_PERIODIC_TABLE_H_
+#define GRAPHDOT_MISC_PERIODIC_TABLE_H_
 
 #include <cstdint>
 #include <cstring>
