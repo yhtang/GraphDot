@@ -17,18 +17,18 @@ pycuda.driver.init()
 
 
 @cpptype([('i', np.int32), ('j', np.int32)])
-class JobIn:
+class JobIn(object):
     def __init__(self, i, j):
         self.i = i
         self.j = j
 
 
 @cpptype([('similarity', np.float32), ('iterations', np.int32)])
-class JobOut:
+class JobOut(object):
     pass
 
 
-class MarginalizedGraphKernel:
+class MarginalizedGraphKernel(object):
 
     _template = os.path.join(os.path.dirname(__file__), 'kernel.cu')
 

@@ -15,7 +15,7 @@ __all__ = ['Constant',
 __cpp_namespace__ = 'graphdot::basekernel'
 
 
-class Kernel:
+class Kernel(object):
     """
     Parent class for all base kernels
     """

@@ -7,7 +7,7 @@ popular graph libraries.
 import pandas as pd
 
 
-class Graph:
+class Graph(object):
 
     def __init__(self, nodes, edges, title=''):
         """

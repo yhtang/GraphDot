@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import re
+import os
 
 
 class Template:
@@ -9,9 +10,9 @@ class Template:
     """
 
     def __init__(self, template):
-        try:
+        if os.path.isfile(template):
             self.template = open(template).read()
-        except OSError:
+        else:
             self.template = template
 
     def render(self, **substitutions):

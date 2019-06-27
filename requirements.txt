@@ -1,5 +1,7 @@
 numpy
 pandas
+pycuda
+six
 sphinx
 sphinx-materialdesign-theme-nopyc
 ase

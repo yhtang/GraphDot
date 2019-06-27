@@ -37,7 +37,7 @@ setup(
     license='TBD',
     author='Yu-Hang Tang',
     tests_require=['tox'],
-    install_requires=['numpy', 'pandas'],
+    install_requires=['numpy', 'pandas', 'pycuda', 'six'],
     extras_require={
         'ASE': ['ase'],
         'NetworkX': ['networkx'],

@@ -1,4 +1,4 @@
-from graphdot.codegen.dtype import decltype
+from graphdot.codegen.typetool import decltype
 import numpy
 import pytest
 

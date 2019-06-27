@@ -7,7 +7,7 @@ from graphdot.codegen.typetool import cpptype, rowtype
 
 @cpptype([('upper', np.int32), ('left', np.int32),
           ('nzmask', np.uint64), ('elements', np.uintp)])
-class Octile:
+class Octile(object):
     """
     using octile_t = struct {
         int upper, left;
@@ -28,7 +28,7 @@ class Octile:
 
 @cpptype([('n_node', np.int32), ('n_octile', np.int32),
           ('degree', np.uintp), ('node', np.uintp), ('octile', np.uintp)])
-class OctileGraph:
+class OctileGraph(object):
     """
     struct graph_t {
         int n_node, n_octile;
