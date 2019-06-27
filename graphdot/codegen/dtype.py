@@ -18,9 +18,12 @@ def decltype(type):
         return str(type.name)
 
 
-def rowtype(df):
-    order = np.argsort([df.dtypes[key].itemsize for key in df.columns])
-    packed_attributes = [df.columns[i] for i in order[-1::-1]]
+def rowtype(df, pack=True):
+    if pack is True:
+        order = np.argsort([-df.dtypes[key].itemsize for key in df.columns])
+    else:
+        order = np.arange(len(df.columns))
+    packed_attributes = [df.columns[i] for i in order]
     packed_dtype = np.dtype([(key, df.dtypes[key].newbyteorder('='))
                              for key in packed_attributes], align=True)
     return packed_dtype
