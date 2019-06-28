@@ -6,6 +6,21 @@ popular graph libraries.
 """
 import pandas as pd
 
+__all__ = ['Graph']
+
+
+def _from_dict(d):
+    if isinstance(d, pd.DataFrame):
+        return d
+    elif all([key in d for key in ['index', 'columns', 'data']]):
+        # format of pandas.DataFrame.to_dict('split')
+        return pd.DataFrame(d['data'],
+                            index=d['index'],
+                            columns=d['columns'])
+    else:
+        # format of pandas.DataFrame.to_dict('dict') i.e. the default style
+        return pd.DataFrame(d)
+
 
 class Graph(object):
 
@@ -15,51 +30,45 @@ class Graph(object):
         edges: dataframe
         """
         self.title = title
-        if isinstance(nodes, pd.DataFrame):
-            self.nodes = nodes
-        else:
-            self.nodes = pd.DataFrame(nodes)
-        if isinstance(edges, pd.DataFrame):
-            self.edges = edges
-        else:
-            self.edges = pd.DataFrame(edges)
+        self.nodes = _from_dict(nodes)
+        self.edges = _from_dict(edges)
 
     def __repr__(self):
         return '<{}(nodes={}, edges={}, title={})>'.\
             format(type(self).__name__,
-                   self.nodes.to_dict(),
-                   self.edges.to_dict(),
+                   self.nodes.to_dict('split'),
+                   self.edges.to_dict('split'),
                    repr(self.title))
 
-    @classmethod
-    def from_auto(cls, graph):
-        # import importlib
-        # graph_translator = {}
-        #
-        # if importlib.util.find_spec('ase') is not None:
-        #     ase = importlib.import_module('ase')
-        #
-        #     def ase_translator(atoms):
-        #         pass
-        #
-        #     graph_translator[ase.atoms.Atoms] = ase_translator
-        #
-        # if importlib.util.find_spec('networkx') is not None:
-        #     nx = importlib.import_module('networkx')
-        #
-        #     def networkx_graph_translator(atoms):
-        #         pass
-        #
-        #     graph_translator[nx.Graph] = networkx_graph_translator
-        pass
+    # @classmethod
+    # def from_auto(cls, graph):
+    #     # import importlib
+    #     # graph_translator = {}
+    #     #
+    #     # if importlib.util.find_spec('ase') is not None:
+    #     #     ase = importlib.import_module('ase')
+    #     #
+    #     #     def ase_translator(atoms):
+    #     #         pass
+    #     #
+    #     #     graph_translator[ase.atoms.Atoms] = ase_translator
+    #     #
+    #     # if importlib.util.find_spec('networkx') is not None:
+    #     #     nx = importlib.import_module('networkx')
+    #     #
+    #     #     def networkx_graph_translator(atoms):
+    #     #         pass
+    #     #
+    #     #     graph_translator[nx.Graph] = networkx_graph_translator
+    #     pass
 
-    @classmethod
-    def from_ase(cls, atoms):
-        pass
-
-    @classmethod
-    def from_pymatgen(cls, molecule):
-        pass
+    # @classmethod
+    # def from_ase(cls, atoms):
+    #     pass
+    #
+    # @classmethod
+    # def from_pymatgen(cls, molecule):
+    #     pass
 
     @classmethod
     def from_networkx(cls, graph):
@@ -73,9 +82,9 @@ class Graph(object):
         title = graph.graph['title'] if 'title' in graph.graph.keys() else ''
 
         ''' convert node attributes '''
-        node_attr = None
+        node_attr = []
         for index, node in graph.nodes.items():
-            if node_attr is None:
+            if index == 0:
                 node_attr = sorted(node.keys())
             elif node_attr != sorted(node.keys()):
                 raise TypeError('Node {} '.format(index) +
@@ -87,9 +96,9 @@ class Graph(object):
             node_df[key] = [node[key] for node in graph.nodes.values()]
 
         ''' convert edge attributes '''
-        edge_attr = None
-        for (i, j), edge in graph.edges.items():
-            if edge_attr is None:
+        edge_attr = []
+        for index, ((i, j), edge) in enumerate(graph.edges.items()):
+            if index == 0:
                 edge_attr = sorted(edge.keys())
             elif edge_attr != sorted(edge.keys()):
                 raise TypeError('Edge {} '.format((i, j)) +
@@ -103,34 +112,14 @@ class Graph(object):
 
         return cls(nodes=node_df, edges=edge_df, title=title)
 
-    @classmethod
-    def from_graphviz(cls, molecule):
-        pass
-
-    @classmethod
-    def from_dot(cls, molecule):
-        """
-        From the DOT graph description language
-        https://en.wikipedia.org/wiki/DOT_(graph_description_language)
-        """
-        pass
-
-
-if __name__ == '__main__':
-
-    import networkx as nx
-
-    class Hybrid:
-        NONE = 0
-        SP = 1
-        SP2 = 2
-        SP3 = 3
-
-    g = nx.Graph(title='H2O')
-    g.add_node('O1', hybridization=Hybrid.SP2, charge=1, conjugate=False)
-    g.add_node('H1', hybridization=Hybrid.SP3, charge=-1, conjugate=True)
-    g.add_node('H2', hybridization=Hybrid.SP, charge=2, conjugate=True)
-    g.add_edge('O1', 'H1', order=1, length=0.5)
-    g.add_edge('O1', 'H2', order=2, length=1.0)
-
-    print(Graph.from_networkx(g))
+    # @classmethod
+    # def from_graphviz(cls, molecule):
+    #     pass
+    #
+    # @classmethod
+    # def from_dot(cls, molecule):
+    #     """
+    #     From the DOT graph description language
+    #     https://en.wikipedia.org/wiki/DOT_(graph_description_language)
+    #     """
+    #     pass

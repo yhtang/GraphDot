@@ -4,7 +4,6 @@
 #include <cuda/balloc.h>
 #include <cuda/util_host.h>
 #include <cuda/util_device.h>
-#include <misc/hash.h>
 #include <misc/format.h>
 
 namespace graphdot {
@@ -45,7 +44,7 @@ template<class Node, class Edge> struct graph_t {
     using edge_t = Edge;
     using octile_t = struct {
         int upper, left;
-        std::uint64_t nzmask;
+        std::int64_t nzmask;
         edge_t * elements;
     };
 
@@ -130,8 +129,8 @@ struct octile_block_solver {
         const int i1_upper,
         const int i1_lower,
         const int i2,
-        const std::uint64_t nzmask1,
-        const std::uint64_t nzmask2,
+        const std::int64_t nzmask1,
+        const std::int64_t nzmask2,
         octile octile1,
         octile octile2,
         rhs rhs,
@@ -143,13 +142,13 @@ struct octile_block_solver {
         for (int j1 = 0; j1 < octile_w && j1 < j1_margin; ++j1) {
             auto e1_upper = octile1 (i1_upper, j1);
             auto e1_lower = octile1 (i1_lower, j1);
-            bool m1_upper = nzmask1 & (1ULL << (i1_upper + j1 * octile_h));
-            bool m1_lower = nzmask1 & (1ULL << (i1_lower + j1 * octile_h));
+            bool m1_upper = nzmask1 & (1LL << (i1_upper + j1 * octile_h));
+            bool m1_lower = nzmask1 & (1LL << (i1_lower + j1 * octile_h));
 #pragma unroll (octile_w)
             for (int j2 = 0; j2 < octile_w; ++j2) {
                 auto e2 = octile2 (i2, j2);
                 auto r  = rhs (j1, j2);
-                bool m2 = nzmask2 & (1ULL << (i2 + j2 * octile_h));
+                bool m2 = nzmask2 & (1LL << (i2 + j2 * octile_h));
                 sum_upper -= (m1_upper && m2) ? EdgeKernel::compute (e1_upper, e2) * r : 0;
                 sum_lower -= (m1_lower && m2) ? EdgeKernel::compute (e1_lower, e2) * r : 0;
             }
@@ -255,11 +254,11 @@ struct octile_block_solver {
                         auto o1 = g1.octile[ O1 + p1 ];
                         const int I1 = o1.upper;
                         const int J1 = o1.left;
-                        const std::uint64_t nzmask1 = o1.nzmask;
+                        const std::int64_t nzmask1 = o1.nzmask;
                         auto o2 = g2.octile[ O2 + p2 ];
                         const int I2 = o2.upper;
                         const int J2 = o2.left;
-                        const std::uint64_t nzmask2 = o2.nzmask;
+                        const std::int64_t nzmask2 = o2.nzmask;
 
                         octile octile1 {p_shared + p1 * shmem_bytes_per_warp};
                         octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octile::size_bytes};

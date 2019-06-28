@@ -3,6 +3,8 @@
 import re
 import os
 
+__all__ = ['Template']
+
 
 class Template:
     """

@@ -12,6 +12,7 @@ from graphdot.marginalized.scratch import BlockScratch
 from graphdot.marginalized.octilegraph import OctileGraph
 import graphdot.cpp
 
+__all__ = ['MarginalizedGraphKernel']
 
 pycuda.driver.init()
 
@@ -73,7 +74,7 @@ class MarginalizedGraphKernel(object):
                 return ${node_expr};
             }
         };
-        ''').render(node_expr=node_kernel.gencode('v1', 'v2'))
+        ''').render(node_expr=self.node_kernel.gencode('v1', 'v2'))
 
         edge_kernel_src = Template(r'''
         struct edge_kernel {
@@ -82,7 +83,7 @@ class MarginalizedGraphKernel(object):
                 return ${edge_expr};
             }
         };
-        ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
+        ''').render(edge_expr=self.edge_kernel.gencode('e1', 'e2'))
 
         node_type = graph_list[0].node_type
         edge_type = graph_list[0].edge_type
@@ -145,53 +146,3 @@ class MarginalizedGraphKernel(object):
             R[i, j] = R[j, i] = r
 
         return R
-
-
-if __name__ == '__main__':
-
-    if True:
-        import networkx as nx
-
-        # from graphdot.marginalized.basekernel import Constant
-        from graphdot.marginalized.basekernel import KroneckerDelta
-        from graphdot.marginalized.basekernel import SquareExponential
-        from graphdot.marginalized.basekernel import KeywordTensorProduct
-        # from graphdot.marginalized.basekernel import Convolution
-
-        from graphdot import Graph
-
-        class Hybrid:
-            NONE = 0
-            SP = 1
-            SP2 = 2
-            SP3 = 3
-
-        g1 = nx.Graph(title='H2O')
-        g1.add_node('O1', hybridization=Hybrid.SP2, charge=1, conjugate=False)
-        g1.add_node('H1', hybridization=Hybrid.SP3, charge=-1, conjugate=True)
-        g1.add_node('H2', hybridization=Hybrid.SP, charge=2, conjugate=True)
-        # g.add_node('H2', hybridization=Hybrid.SP, charge=2, time=1)
-        g1.add_edge('O1', 'H1', order=1, length=0.5)
-        g1.add_edge('O1', 'H2', order=2, length=1.0)
-
-        g2 = nx.Graph(title='H2')
-        g2.add_node('H1', hybridization=Hybrid.SP, charge=1, conjugate=True)
-        g2.add_node('H2', hybridization=Hybrid.SP, charge=1, conjugate=True)
-        g2.add_edge('H1', 'H2', order=2, length=1.0)
-
-        node_kernel = KeywordTensorProduct(
-                          hybridization=KroneckerDelta(0.3, 1.0),
-                          charge=SquareExponential(1.0),
-                          conjugate=KroneckerDelta(0.5))
-
-        edge_kernel = KeywordTensorProduct(
-                          order=KroneckerDelta(0.3, 1.0),
-                          length=SquareExponential(0.05))
-
-        mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel)
-
-        mlgk._allocate_scratch(10, 117)
-
-        R = mlgk.compute([Graph.from_networkx(g1), Graph.from_networkx(g2)])
-        # R = mlgk.compute([Graph.from_networkx(g2)])
-        print(R)

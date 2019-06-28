@@ -4,8 +4,14 @@ from six import with_metaclass
 import numpy as np
 from graphdot.codegen import Template
 
+__all__ = ['cpptype', 'decltype', 'rowtype']
+
 
 def cpptype(dtype):
+    """
+    cpptype is a class decorator that simplifies the translation of python
+    objects to corresponding C++ structures.
+    """
     dtype = np.dtype(dtype, align=True)
 
     def decor(clss):
@@ -25,9 +31,24 @@ def cpptype(dtype):
                 for key, (field, _) in Class.dtype.fields.items():
                     if field.names is not None:
                         state.append(getattr(self, key).state)
-                    else:  # fixed-length vector treated the same as scalars
-                        state.append(getattr(self, key))
+                    # elif field.subdtype is not None:
+                    #     subtype, subshape = field.subdtype
+                    #     subary = np.array(getattr(self, key), dtype=subtype)
+                    #     assert(subary.shape == subshape)
+                    #     state.append(subary.tolist())
+                    else:
+                        state.append(field.type(getattr(self, key)))
                 return tuple(state)
+
+            def __setattr__(self, name, value):
+                if name in Class.dtype.names:
+                    t = Class.dtype.fields[name][0]
+                    if np.dtype(type(value)).kind != t.kind:
+                        raise ValueError(
+                            "Cannot set attribute '{}' (C++ type {}) "
+                            "with value {} of {}".format(name, t,
+                                                         value, type(value)))
+                super().__setattr__(name, value)
 
             # TODO: need a nicer __repr__
 
@@ -59,29 +80,3 @@ def rowtype(df, pack=True):
     packed_dtype = np.dtype([(key, df.dtypes[key].newbyteorder('='))
                              for key in packed_attributes], align=True)
     return packed_dtype
-
-
-if __name__ == '__main__':
-
-    @cpptype([('A', np.int32), ('B', np.float32)])
-    class A:
-        def __init__(self):
-            self.A = 1
-            self.B = 2
-
-    print(A.dtype)
-    a = A()
-    print(a.state)
-    a.A = 4
-    print(a.state)
-
-    @cpptype([('X', np.bool_), ('Y', A.dtype)])
-    class B:
-        def __init__(self):
-            self.X = True
-            self.Y = A()
-    #
-    # print(A.dtype)
-    # print(A().state)
-    print(B.dtype)
-    print(B().state)

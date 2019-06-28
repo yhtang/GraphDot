@@ -4,7 +4,7 @@
 This module defines base kernels and composibility rules for creating vertex
 and edges kernels for the marginalized graph kernel.
 """
-import numpy
+import numpy as np
 
 __all__ = ['Constant',
            'KroneckerDelta',
@@ -153,7 +153,7 @@ class SquareExponential(Kernel):
         self.length_scale = length_scale
 
     def __call__(self, x1, x2):
-        return numpy.exp(-0.5 * numpy.sum((x1 - x2)**2) / self.length_scale**2)
+        return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
 
     def __repr__(self):
         return 'SqExp({})'.format(self.length_scale)
