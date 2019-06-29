@@ -39,8 +39,10 @@ class Kernel(object):
 
     @staticmethod
     def _op(k1, k2, op, opstr):
-        @cpptype(k1=k1.dtype, k2=k2.dtype)
-        class KernelOperator:
+        # only works with python >= 3.6
+        # @cpptype(k1=k1.dtype, k2=k2.dtype)
+        @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
+        class KernelOperator(object):
             def __init__(self, k1, k2):
                 self.k1 = copy(k1)
                 self.k2 = copy(k2)
@@ -62,8 +64,9 @@ class Kernel(object):
 
         return KernelOperator(k1, k2)
 
-
-@cpptype(constant=np.float32)
+# only works with python >= 3.6
+# @cpptype(constant=np.float32)
+@cpptype([('constant', np.float32)])
 class Constant(Kernel):
     def __init__(self, constant):
         self.constant = float(constant)
@@ -81,8 +84,9 @@ class Constant(Kernel):
     def theta(self):
         return [self.constant]
 
-
-@cpptype(lo=np.float32, hi=np.float32)
+# only works with python >= 3.6
+# @cpptype(lo=np.float32, hi=np.float32)
+@cpptype([('lo', np.float32), ('hi', np.float32)])
 class KroneckerDelta(Kernel):
 
     def __init__(self, lo, hi=1.0):
@@ -103,7 +107,9 @@ class KroneckerDelta(Kernel):
         return [self.lo, self.hi]
 
 
-@cpptype(neg_half_inv_l2=np.float32)
+# only works with python >= 3.6
+# @cpptype(neg_half_inv_l2=np.float32)
+@cpptype([('neg_half_inv_l2', np.float32)])
 class SquareExponential(Kernel):
     def __init__(self, length_scale):
         self.length_scale = length_scale

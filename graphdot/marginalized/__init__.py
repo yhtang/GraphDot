@@ -17,14 +17,18 @@ __all__ = ['MarginalizedGraphKernel']
 pycuda.driver.init()
 
 
-@cpptype(i=np.int32, j=np.int32)
+# only works with python >= 3.6
+# @cpptype(i=np.int32, j=np.int32)
+@cpptype([('i', np.int32), ('j', np.int32)])
 class JobIn(object):
     def __init__(self, i, j):
         self.i = i
         self.j = j
 
 
-@cpptype(similarity=np.float32, iterations=np.int32)
+# only works with python >= 3.6
+# @cpptype(similarity=np.float32, iterations=np.int32)
+@cpptype([('similarity', np.float32), ('iterations', np.int32)])
 class JobOut(object):
     pass
 

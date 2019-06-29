@@ -7,12 +7,15 @@ from graphdot.codegen import Template
 __all__ = ['cpptype', 'decltype', 'rowtype']
 
 
-def cpptype(dtype=[], **kwtype):
+# def cpptype(dtype=[], **kwtype):  # only works with python>=3.6
+def cpptype(dtype=[]):
     """
     cpptype is a class decorator that simplifies the translation of python
     objects to corresponding C++ structures.
     """
-    dtype = np.dtype(dtype + list(kwtype.items()), align=True)
+    # only works with python >= 3.6
+    # dtype = np.dtype(dtype + list(kwtype.items()), align=True)
+    dtype = np.dtype(dtype, align=True)
 
     def decor(clss):
         class CppType(type):
@@ -35,7 +38,10 @@ def cpptype(dtype=[], **kwtype):
             @property
             def state(self):
                 state = []
-                for key, (field, _) in Class.dtype.fields.items():
+                # break for python < 3.6 since field ordered not preserved
+                # for key, (field, _) in Class.dtype.fields.items():
+                for key in Class.dtype.names:
+                    field, _ = Class.dtype.fields[key]
                     if field.names is not None:
                         state.append(getattr(self, key).state)
                     # elif field.subdtype is not None:

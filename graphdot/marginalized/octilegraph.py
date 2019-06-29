@@ -6,8 +6,10 @@ from graphdot.codegen.typetool import cpptype, rowtype
 
 __all__ = ['OctileGraph']
 
-
-@cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
+# only works with python >= 3.6
+# @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
+@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', np.int64),
+          ('elements', np.uintp)])
 class Octile(object):
     """
     using octile_t = struct {
@@ -27,9 +29,11 @@ class Octile(object):
     def elements(self):
         return self.__elements.ptr
 
-
-@cpptype(n_node=np.int32, n_octile=np.int32, degree=np.uintp,
-         node=np.uintp, octile=np.uintp)
+# only works with python >= 3.6
+# @cpptype(n_node=np.int32, n_octile=np.int32, degree=np.uintp,
+#          node=np.uintp, octile=np.uintp)
+@cpptype([('n_node', np.int32), ('n_octile', np.int32), ('degree', np.uintp),
+          ('node', np.uintp), ('octile', np.uintp)])
 class OctileGraph(object):
     """
     struct graph_t {
