@@ -1,11 +1,9 @@
 """
 GraphDot library
 """
-
-__all__ = ['Graph', 'MarginalizedGraphKernel']
-
 from .graph import Graph
-from .marginalized import MarginalizedGraphKernel
+
+__all__ = ['Graph']
 
 __version__ = '0.1a1'
 __author__ = 'Yu-Hang "Maxin" Tang, Oguz Selvitopi, Doru Popovici'

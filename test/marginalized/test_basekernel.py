@@ -2,19 +2,19 @@
 # -*- coding: utf-8 -*-
 import random
 import copy
-import struct
 import pytest
 
 from graphdot.marginalized.basekernel import Constant
 from graphdot.marginalized.basekernel import KroneckerDelta
 from graphdot.marginalized.basekernel import SquareExponential
-from graphdot.marginalized.basekernel import Convolution
 from graphdot.marginalized.basekernel import TensorProduct
+# from graphdot.marginalized.basekernel import Convolution
 
 inf = float('inf')
 nan = float('nan')
 kernels = [
     Constant(1.0),
+    # Multiply(),
     KroneckerDelta(0.5),
     SquareExponential(1.0)
 ]
@@ -55,8 +55,9 @@ def test_constant_kernel():
     assert(kernel(None, 0) == 1)
     assert(kernel(None, None) == 1)
     assert(kernel(1.0, 'a') == 1)
-    ''' C++ counterpart layout '''
-    struct.pack(kernel._layout.strip('[]'), *kernel.theta)
+    ''' C++ code generation '''
+    assert(Constant.dtype.isalignedstruct)
+    assert(isinstance(kernel.gencode('x', 'y'), str))
 
 
 def test_kronecker_delta_kernel():
@@ -76,12 +77,14 @@ def test_kronecker_delta_kernel():
     assert(kernel(None, 0) == 0.5)
     assert(kernel(None, None) == 1)
     assert(kernel(1.0, 'a') == 0.5)
-    ''' C++ counterpart layout '''
-    struct.pack(kernel._layout.strip('[]'), *kernel.theta)
+    ''' C++ code generation '''
+    assert(KroneckerDelta.dtype.isalignedstruct)
+    assert(isinstance(kernel.gencode('x', 'y'), str))
 
 
 def test_square_exponential_kernel():
     kernel = SquareExponential(1.0)
+    assert(kernel.neg_half_inv_l2 == pytest.approx(-0.5))
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
     assert(kernel(1, 1) == 1)
@@ -89,104 +92,92 @@ def test_square_exponential_kernel():
     ''' corner cases '''
     assert(kernel(-inf, inf) == 0)
     assert(kernel(inf, -inf) == 0)
-    ''' C++ counterpart layout '''
-    struct.pack(kernel._layout.strip('[]'), *kernel.theta)
+    ''' C++ code generation '''
+    assert(SquareExponential.dtype.isalignedstruct)
+    assert(isinstance(kernel.gencode('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
 @pytest.mark.parametrize('k2', kernels)
 def test_tensor_product_2(k1, k2):
-    k = TensorProduct(k1, k2)
-    for i1, j1 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
-        for i2, j2 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
+    k = TensorProduct(x=k1, y=k2)
+    for i1, j1 in [(0, 0), (0, 1.5), (-1, 1), (-1.0, 0)]:
+        for i2, j2 in [(0, 0), (0, 1.5), (-1, 1), (-1.0, 0)]:
             ''' default and corner cases '''
-            assert(k((i1, i2), (j1, j2)) == k1(i1, j1) * k2(i2, j2))
+            assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
+                   == k1(i1, j1) * k2(i2, j2))
     for _ in range(10000):
         i1 = random.paretovariate(0.1)
         j1 = random.paretovariate(0.1)
         i2 = random.paretovariate(0.1)
         j2 = random.paretovariate(0.1)
         ''' check by definition '''
-        assert(k((i1, i2), (j1, j2)) == k1(i1, j1) * k2(i2, j2))
+        assert(k(dict(x=i1, y=j1), dict(x=i2, y=j2))
+               == k1(i1, i2) * k2(j1, j2))
     ''' hyperparameter retrieval '''
-    assert(len(k.theta) ==
-           len(k1.theta) +
-           len(k2.theta))
-    for t1, t2 in zip(k.theta, k1.theta + k2.theta):
-        assert(t1 == t2)
+    assert(k1.theta in k.theta)
+    assert(k2.theta in k.theta)
     ''' representation generation '''
     assert(len(repr(k).split('⊗')) == 2)
     assert(repr(k1) in repr(k))
     assert(repr(k2) in repr(k))
-    ''' C++ counterpart layout '''
-    assert(k1._layout in k._layout)
-    assert(k2._layout in k._layout)
-    ''' C++ counterpart type '''
-    assert(k1._decltype in k._decltype)
-    assert(k2._decltype in k._decltype)
+    ''' C++ code generation '''
+    assert(k.dtype.isalignedstruct)
+    assert(isinstance(k.gencode('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
 @pytest.mark.parametrize('k2', kernels)
 @pytest.mark.parametrize('k3', kernels)
 def test_tensor_product_3(k1, k2, k3):
-    k = TensorProduct(k1, k2, k3)
+    k = TensorProduct(x=k1, y=k2, z=k3)
     ''' default and corner cases only '''
-    for i1, j1 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
-        for i2, j2 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
-            for i3, j3 in [(0, 0), (0, 1), (-1, 1), (0, inf)]:
-                assert(k((i1, i2, i3), (j1, j2, j3)) ==
-                       k1(i1, j1) * k2(i2, j2) * k3(i3, j3))
+    for x1, y1, z1 in [(0, 0, 0), (0, 1, -1), (-1, 1, 0.5), (0, -42., 1)]:
+        for x2, y2, z2 in [(0, 0, 0), (0, 1, -1), (-1, 1, 0.5), (0, -42., 1)]:
+            ''' default and corner cases '''
+            assert(k(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2))
+                   == (k1(x1, x2)
+                   * k2(y1, y2)
+                   * k3(z1, z2)))
     ''' hyperparameter retrieval '''
-    assert(len(k.theta) ==
-           len(k1.theta) +
-           len(k2.theta) +
-           len(k3.theta))
-    for t1, t2 in zip(k.theta,
-                      k1.theta +
-                      k2.theta +
-                      k3.theta):
-        assert(t1 == t2)
+    assert(k1.theta in k.theta)
+    assert(k2.theta in k.theta)
+    assert(k3.theta in k.theta)
     ''' representation generation '''
     assert(len(repr(k).split('⊗')) == 3)
     assert(repr(k1) in repr(k))
     assert(repr(k2) in repr(k))
     assert(repr(k3) in repr(k))
-    ''' C++ counterpart layout '''
-    assert(k1._layout in k._layout)
-    assert(k2._layout in k._layout)
-    assert(k3._layout in k._layout)
-    ''' C++ counterpart type '''
-    assert(k1._decltype in k._decltype)
-    assert(k2._decltype in k._decltype)
-    assert(k3._decltype in k._decltype)
+    ''' C++ code generation '''
+    assert(k.dtype.isalignedstruct)
+    assert(isinstance(k.gencode('x', 'y'), str))
 
 
-@pytest.mark.parametrize('kernel', kernels)
-def test_convolution(kernel):
-    k = Convolution(kernel)
-    ''' length cases '''
-    assert(k([], []) == 0)
-    assert(k(tuple(), tuple()) == 0)
-    ''' check by definition '''
-    for i, j in ([0, 0], [0, inf], [0, 1]):
-        for length1 in range(10):
-            for length2 in range(10):
-                assert(k([i] * length1, [j] * length2) ==
-                       pytest.approx(kernel(i, j) * length1 * length2))
-    ''' hyperparameter retrieval '''
-    assert(len(k.theta) == len(kernel.theta))
-    for t1, t2 in zip(k.theta, kernel.theta):
-        assert(t1 == t2)
-    ''' representation generation '''
-    assert('ΣΣ' in repr(k))
-    assert(repr(kernel) in repr(k))
-    ''' C++ counterpart layout '''
-    assert(kernel._layout in k._layout)
-    ''' C++ counterpart type '''
-    assert(kernel._decltype in k._decltype)
-
-
+# # @pytest.mark.parametrize('kernel', kernels)
+# # def test_convolution(kernel):
+# #     k = Convolution(kernel)
+# #     ''' length cases '''
+# #     assert(k([], []) == 0)
+# #     assert(k(tuple(), tuple()) == 0)
+# #     ''' check by definition '''
+# #     for i, j in ([0, 0], [0, inf], [0, 1]):
+# #         for length1 in range(10):
+# #             for length2 in range(10):
+# #                 assert(k([i] * length1, [j] * length2) ==
+# #                        pytest.approx(kernel(i, j) * length1 * length2))
+# #     ''' hyperparameter retrieval '''
+# #     assert(len(k.theta) == len(kernel.theta))
+# #     for t1, t2 in zip(k.theta, kernel.theta):
+# #         assert(t1 == t2)
+# #     ''' representation generation '''
+# #     assert('ΣΣ' in repr(k))
+# #     assert(repr(kernel) in repr(k))
+# #     ''' C++ counterpart layout '''
+# #     assert(kernel._layout in k._layout)
+# #     ''' C++ counterpart type '''
+# #     assert(kernel._decltype in k._decltype)
+#
+#
 @pytest.mark.parametrize('kernel', kernels)
 def test_kernel_add_constant(kernel):
     ''' check by definition '''
@@ -197,13 +188,14 @@ def test_kernel_add_constant(kernel):
             j = random.paretovariate(0.1)
             assert(kadd(i, j) == kernel(i, j) + 1)
             assert(kadd(i, j) == kadd(j, i))
-        ''' hyperparameter retrieval '''
-        assert(len(kadd.theta) == len(kernel.theta) + 1)
-        for t in kernel.theta:
-            assert(t in kadd.theta)
         ''' representation generation '''
         assert(len(repr(kadd).split('+')) == 2)
         assert(repr(kernel) in repr(kadd))
+        ''' hyperparameter retrieval '''
+        assert(kernel.theta in kadd.theta)
+        ''' C++ code generation '''
+        assert(kadd.dtype.isalignedstruct)
+        assert(isinstance(kadd.gencode('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -217,22 +209,16 @@ def test_kernel_add_kernel(k1, k2):
         j = random.paretovariate(0.1)
         assert(kadd(i, j) == k1(i, j) + k2(i, j))
         assert(kadd(i, j) == kadd(j, i))
-        ''' hyperparameter retrieval '''
-        assert(len(kadd.theta) ==
-               len(k1.theta) +
-               len(k2.theta))
-        for t1, t2 in zip(kadd.theta, k1.theta + k2.theta):
-            assert(t1 == t2)
         ''' representation generation '''
         assert(len(repr(kadd).split('+')) == 2)
         assert(repr(k1) in repr(kadd))
         assert(repr(k2) in repr(kadd))
-        ''' C++ counterpart layout '''
-        assert(k1._layout in kadd._layout)
-        assert(k2._layout in kadd._layout)
-        ''' C++ counterpart type '''
-        assert(k1._decltype in kadd._decltype)
-        assert(k2._decltype in kadd._decltype)
+        ''' hyperparameter retrieval '''
+        assert(k1.theta in kadd.theta)
+        assert(k2.theta in kadd.theta)
+        ''' C++ code generation '''
+        assert(kadd.dtype.isalignedstruct)
+        assert(isinstance(kadd.gencode('x', 'y'), str))
 
 
 @pytest.mark.parametrize('kernel', kernels)
@@ -245,13 +231,14 @@ def test_kernel_mul_constant(kernel):
             j = random.paretovariate(0.1)
             assert(kmul(i, j) == kernel(i, j) * 2)
             assert(kmul(i, j) == kmul(j, i))
-        ''' hyperparameter retrieval '''
-        assert(len(kmul.theta) == len(kernel.theta) + 1)
-        for t in kernel.theta:
-            assert(t in kmul.theta)
         ''' representation generation '''
         assert(len(repr(kmul).split('*')) == 2)
         assert(repr(kernel) in repr(kmul))
+        ''' hyperparameter retrieval '''
+        assert(kernel.theta in kmul.theta)
+        ''' C++ code generation '''
+        assert(kmul.dtype.isalignedstruct)
+        assert(isinstance(kmul.gencode('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -265,19 +252,13 @@ def test_kernel_mul_kernel(k1, k2):
         j = random.paretovariate(0.1)
         assert(kmul(i, j) == k1(i, j) * k2(i, j))
         assert(kmul(i, j) == kmul(j, i))
-        ''' hyperparameter retrieval '''
-        assert(len(kmul.theta) ==
-               len(k1.theta) +
-               len(k2.theta))
-        for t1, t2 in zip(kmul.theta, k1.theta + k2.theta):
-            assert(t1 == t2)
         ''' representation generation '''
         assert(len(repr(kmul).split('*')) == 2)
         assert(repr(k1) in repr(kmul))
         assert(repr(k2) in repr(kmul))
-        ''' C++ counterpart layout '''
-        assert(k1._layout in kmul._layout)
-        assert(k2._layout in kmul._layout)
-        ''' C++ counterpart type '''
-        assert(k1._decltype in kmul._decltype)
-        assert(k2._decltype in kmul._decltype)
+        ''' hyperparameter retrieval '''
+        assert(k1.theta in kmul.theta)
+        assert(k2.theta in kmul.theta)
+        ''' C++ code generation '''
+        assert(kmul.dtype.isalignedstruct)
+        assert(isinstance(kmul.gencode('x', 'y'), str))

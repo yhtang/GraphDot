@@ -7,17 +7,20 @@ from graphdot.codegen import Template
 __all__ = ['cpptype', 'decltype', 'rowtype']
 
 
-def cpptype(dtype):
+def cpptype(dtype=[], **kwtype):
     """
     cpptype is a class decorator that simplifies the translation of python
     objects to corresponding C++ structures.
     """
-    dtype = np.dtype(dtype, align=True)
+    dtype = np.dtype(dtype + list(kwtype.items()), align=True)
 
     def decor(clss):
         class CppType(type):
             @property
             def dtype(cls):
+                """
+                use name 'dtype' in accordance with numpy, pandas, pycuda
+                """
                 return dtype
 
             def __repr__(cls):
@@ -25,6 +28,10 @@ def cpptype(dtype):
 
         # class Class(clss, metaclass=CppType):
         class Class(with_metaclass(CppType, clss)):
+            @property
+            def dtype(self):
+                return Class.dtype
+
             @property
             def state(self):
                 state = []

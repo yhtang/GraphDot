@@ -17,14 +17,14 @@ __all__ = ['MarginalizedGraphKernel']
 pycuda.driver.init()
 
 
-@cpptype([('i', np.int32), ('j', np.int32)])
+@cpptype(i=np.int32, j=np.int32)
 class JobIn(object):
     def __init__(self, i, j):
         self.i = i
         self.j = j
 
 
-@cpptype([('similarity', np.float32), ('iterations', np.int32)])
+@cpptype(similarity=np.float32, iterations=np.int32)
 class JobOut(object):
     pass
 
@@ -146,3 +146,21 @@ class MarginalizedGraphKernel(object):
             R[i, j] = R[j, i] = r
 
         return R
+
+# @cpptype()
+# class Multiply(Kernel):
+#     def __init__(self):
+#         pass
+#
+#     def __call__(self, i, j):
+#         return i * j
+#
+#     def __repr__(self):
+#         return '*'
+#
+#     def gencode(self, x, y):
+#         return '({} * {})'.format(x, y)
+#
+#     @property
+#     def theta(self):
+#         return []
