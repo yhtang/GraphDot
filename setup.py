@@ -37,16 +37,15 @@ setup(
     license='TBD',
     author='Yu-Hang Tang',
     tests_require=['tox'],
-    install_requires=['numpy', 'pandas', 'pycuda', 'six'],
+    install_requires=['numpy', 'pandas', 'pycuda', 'six', 'networkx'],
     extras_require={
         'ASE': ['ase'],
-        'NetworkX': ['networkx'],
         'docs': ['sphinx',
                  'sphinx-materialdesign-theme-nopyc'],
     },
     cmdclass={'test': Tox},
     author_email='Tang.Maxin@gmail.com',
-    description='GPU-accelerated graph similarity measurement library',
+    description='GPU-accelerated graph similarity algorithm library',
     long_description=long_description,
     packages=find_packages(exclude='test'),
     package_data={
@@ -56,7 +55,7 @@ setup(
     platforms='any',
     classifiers=[
         'Programming Language :: Python',
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 3 - Alpha',
         'Natural Language :: English',
         'Environment :: Console',
         'Intended Audience :: End Users/Desktop',

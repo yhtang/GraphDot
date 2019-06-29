@@ -1,5 +1,7 @@
 before_script:
   - pip install --user tox flake8
+  - export PATH=/usr/local/cuda/bin:$PATH
+  - export LD_LIBRARY_PATH=/usr/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
 stages:
   - static-analysis
