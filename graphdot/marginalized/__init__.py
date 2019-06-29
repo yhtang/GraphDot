@@ -53,9 +53,8 @@ class MarginalizedGraphKernel(object):
         self.ctx.pop()
 
     def _allocate_scratch(self, count, capacity):
-        if any([self.scratch is None,
-                len(self.scratch) < count,
-                self.scratch[0].capacity < capacity]):
+        if (self.scratch is None or len(self.scratch) < count or
+                self.scratch[0].capacity < capacity):
             self.ctx.synchronize()
             self.scratch = [BlockScratch(capacity) for _ in range(count)]
             self.scratch_d = to_gpu(np.array([s.state for s in self.scratch],

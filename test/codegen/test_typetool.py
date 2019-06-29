@@ -16,15 +16,15 @@ cpptype_cases = [
 def test_cpptype():
 
     @cpptype([])
-    class Null:
+    class Null(object):
         pass
 
     @cpptype([('x', np.int32), ('y', np.float32)])
-    class A:
+    class A(object):
         pass
 
     @cpptype([('A', A.dtype), ('B', np.bool_)])
-    class X:
+    class X(object):
         pass
 
     assert(Null().state == tuple())
@@ -66,15 +66,15 @@ def test_cpptype():
 def test_cpptype_kwtype():
 
     @cpptype()
-    class Null:
+    class Null(object):
         pass
 
     @cpptype(x=np.int32, y=np.float32)
-    class A:
+    class A(object):
         pass
 
     @cpptype(A=A.dtype, B=np.bool_)
-    class X:
+    class X(object):
         pass
 
     assert(Null().state == tuple())
