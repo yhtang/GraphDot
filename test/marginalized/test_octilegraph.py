@@ -55,6 +55,7 @@ def test_octile_graph_unweighted():
     for name in dfg.edges.drop(['!ij'], axis=1).columns:
         assert(name in og.edge_type.names)
 
+
 def test_octile_graph_weighted():
 
     assert(OctileGraph.dtype.isalignedstruct)
