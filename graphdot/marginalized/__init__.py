@@ -6,11 +6,12 @@ import pycuda.driver
 import pycuda.gpuarray
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import to_gpu
-from graphdot.codegen import Template
-from graphdot.codegen.typetool import cpptype, decltype
-from graphdot.marginalized.scratch import BlockScratch
-from graphdot.marginalized.octilegraph import OctileGraph
-import graphdot.cpp
+from .. import cpp
+from ..codegen import Template
+from ..codegen.typetool import cpptype, decltype
+from .scratch import BlockScratch
+from .octilegraph import OctileGraph
+from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
 
@@ -70,6 +71,14 @@ class MarginalizedGraphKernel(object):
         # TODO: graph registry
         graph_list = [OctileGraph(g, 0.5) for g in graph_list]
 
+        weighted = any([g.weighted for g in graph_list])
+
+        if weighted:
+            edge_kernel = TensorProduct(weight=_Multiply(),
+                                        label=self.edge_kernel)
+        else:
+            edge_kernel = self.edge_kernel
+
         node_kernel_src = Template(r'''
         struct node_kernel {
             template<class V> __device__
@@ -86,7 +95,7 @@ class MarginalizedGraphKernel(object):
                 return ${edge_expr};
             }
         };
-        ''').render(edge_expr=self.edge_kernel.gencode('e1', 'e2'))
+        ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
 
         node_type = graph_list[0].node_type
         edge_type = graph_list[0].edge_type
@@ -104,7 +113,7 @@ class MarginalizedGraphKernel(object):
                                     '-Xptxas', '-v',
                                     '--expt-relaxed-constexpr'],
                            no_extern_c=True,
-                           include_dirs=graphdot.cpp.__path__)
+                           include_dirs=cpp.__path__)
         kernel = mod.get_function('graph_kernel_solver')
 
         N = len(graph_list)
@@ -149,21 +158,3 @@ class MarginalizedGraphKernel(object):
             R[i, j] = R[j, i] = r
 
         return R
-
-# @cpptype()
-# class Multiply(Kernel):
-#     def __init__(self):
-#         pass
-#
-#     def __call__(self, i, j):
-#         return i * j
-#
-#     def __repr__(self):
-#         return '*'
-#
-#     def gencode(self, x, y):
-#         return '({} * {})'.format(x, y)
-#
-#     @property
-#     def theta(self):
-#         return []

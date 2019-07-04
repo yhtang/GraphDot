@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 import random
 import copy
+import numpy as np
 import pytest
 
 from graphdot.marginalized.basekernel import Constant
 from graphdot.marginalized.basekernel import KroneckerDelta
 from graphdot.marginalized.basekernel import SquareExponential
+from graphdot.marginalized.basekernel import _Multiply
 from graphdot.marginalized.basekernel import TensorProduct
 # from graphdot.marginalized.basekernel import Convolution
 
@@ -95,6 +97,23 @@ def test_square_exponential_kernel():
     ''' C++ code generation '''
     assert(SquareExponential.dtype.isalignedstruct)
     assert(isinstance(kernel.gencode('x', 'y'), str))
+
+
+def test_multiply_quasikernel():
+    kernel = _Multiply()
+    ''' default behavior '''
+    assert(kernel(0, 0) == 0)
+    assert(kernel(0, 1) == 0)
+    assert(kernel(1, 1) == 1)
+    ''' random cases '''
+    for r1, r2 in np.random.randn(1000, 2):
+        assert(kernel(r1, r2) == r1 * r2)
+    ''' C++ code generation '''
+    assert(_Multiply.dtype.isalignedstruct)
+    assert(isinstance(kernel.gencode('x', 'y'), str))
+    ''' representation generation '''
+    assert(isinstance(repr(kernel), str))
+    assert(kernel.theta == [])
 
 
 @pytest.mark.parametrize('k1', kernels)

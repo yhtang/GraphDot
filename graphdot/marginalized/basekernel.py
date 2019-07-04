@@ -6,7 +6,8 @@ and edges kernels for the marginalized graph kernel.
 """
 from copy import copy
 import numpy as np
-from graphdot.codegen.typetool import cpptype
+from ..codegen import Template
+from ..codegen.typetool import cpptype
 
 __all__ = ['Constant',
            'KroneckerDelta',
@@ -133,6 +134,52 @@ class SquareExponential(Kernel):
         return -0.5 / self.length_scale**2
 
 
+@cpptype([])
+class _Multiply(Kernel):
+    """
+    Direct product is technically not a valid base kernel
+    Only used internally for treating weighted edges
+    """
+
+    def __call__(self, x1, x2):
+        return x1 * x2
+
+    def __repr__(self):
+        return '_mul'
+
+    def gencode(self, x, y):
+        return '({} * {})'.format(x, y)
+
+    @property
+    def theta(self):
+        return []
+
+
+# def Product(*kernels):
+#     @cpptype([('k%d' % i, ker.dtype) for i, ker in enumerate(kernels)])
+#     class ProductKernel(Kernel):
+#         def __init__(self, *kernels):
+#             self.kernels = kernels
+#
+#         def __call__(self, object1, object2):
+#             prod = 1.0
+#             for kernel in self.kernels:
+#                 prod *= kernel(object1, object2)
+#             return prod
+#
+#         def __repr__(self):
+#             return ' * '.join([repr(k) for k in self.kernels])
+#
+#         def gencode(self, x, y):
+#             return ' * '.join([k.gencode(x, y) for k in self.kernels])
+#
+#         @property
+#         def theta(self):
+#             return [k.theta for k in self.kw_kernels.values()]
+#
+#     return ProductKernel(*kernels)
+
+
 def TensorProduct(**kw_kernels):
     @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
     class TensorProductKernel(Kernel):
@@ -150,9 +197,10 @@ def TensorProduct(**kw_kernels):
                                for kw, k in self.kw_kernels.items()])
 
         def gencode(self, x, y):
-            return ' * '.join([k.gencode('%s.%s' % (x, key),
-                                         '%s.%s' % (y, key))
-                               for key, k in self.kw_kernels.items()])
+            return Template('(${expr*})').render(
+                expr=[k.gencode('%s.%s' % (x, key),
+                                '%s.%s' % (y, key))
+                      for key, k in self.kw_kernels.items()])
 
         @property
         def theta(self):

@@ -28,6 +28,7 @@ class Graph(object):
         """
         nodes: dataframe
         edges: dataframe
+        title: str
         """
         self.title = title
         self.nodes = _from_dict(nodes)
@@ -71,9 +72,10 @@ class Graph(object):
     #     pass
 
     @classmethod
-    def from_networkx(cls, graph):
+    def from_networkx(cls, graph, weight=None):
         """
         graph: NetworkX Graph objects with nodal/edge attributes
+        weight: attribute name for edge weights
         """
         import networkx as nx
         graph = nx.relabel.convert_node_labels_to_integers(graph)
@@ -107,8 +109,11 @@ class Graph(object):
 
         edge_df = pd.DataFrame(index=range(graph.number_of_edges()))
         edge_df['!ij'] = list(graph.edges.keys())
+        if weight is not None:
+            edge_df['!w'] = [edge[weight] for edge in graph.edges.values()]
         for key in edge_attr:
-            edge_df[key] = [edge[key] for edge in graph.edges.values()]
+            if key != weight:
+                edge_df[key] = [edge[key] for edge in graph.edges.values()]
 
         return cls(nodes=node_df, edges=edge_df, title=title)
 

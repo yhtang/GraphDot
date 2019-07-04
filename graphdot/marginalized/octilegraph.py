@@ -44,34 +44,36 @@ class OctileGraph(object):
     };
     """
 
-    def __init__(self, graph, stopping_probability, wcol=None):
-        ''' extract type information '''
-        node_type = rowtype(graph.nodes)
-        edge_type = rowtype(graph.edges.drop(['!ij'], axis=1))
-
+    def __init__(self, graph, stopping_probability):
         self.n_node = len(graph.nodes)
 
-        ''' directly upload node labels to GPU '''
+        ''' directly pack node attributes '''
+        node_type = rowtype(graph.nodes)
         node_d = to_gpu(graph.nodes[list(node_type.names)]
                         .to_records(index=False)
                         .astype(node_type))
 
-        ''' node degree need to be computed from edges '''
-        if wcol is None:
-            # default label for edge weight lookup
-            wcol = '!w'
+        ''' determine edge type '''
+        edge_type = rowtype(graph.edges.drop(['!ij', '!w'],
+                            axis=1,
+                            errors='ignore'))
+
+        ''' determine whether graph is weighted and compute node degrees '''
         degree_h = np.zeros(self.padded_size, dtype=np.float32)
-        if wcol in graph.edges.columns:
-            for (i, j), w in zip(graph.edges['!ij'], graph.edges[wcol]):
+        if '!w' in graph.edges.columns:  # weighted graph
+            self.weighted = True
+            edge_type = np.dtype([('weight', np.float32),
+                                  ('label', edge_type)], align=True)
+            for (i, j), w in zip(graph.edges['!ij'], graph.edges['!w']):
                 degree_h[i] += w
                 degree_h[j] += w
         else:
-            # treat as simple graph if no weights given
+            self.weighted = False
             degree_h[:self.n_node] = 1
         degree_h /= 1.0 - stopping_probability
         degree_d = to_gpu(degree_h)
 
-        ''' collect non-zero octiles '''
+        ''' collect non-zero edge octiles '''
         uniq_oct = np.unique([(i - i % 8, j - j % 8)
                               for i, j in graph.edges['!ij']], axis=0)
         uniq_oct = np.unique(uniq_oct + uniq_oct[:, -1::-1], axis=0)
@@ -81,7 +83,11 @@ class OctileGraph(object):
 
         for index, row in graph.edges.iterrows():
             i, j = row['!ij']
-            edge = tuple(row[key] for key in edge_type.names)
+            if self.weighted:
+                edge = (row['!w'], tuple(row[key]
+                                         for key in edge_type['label'].names))
+            else:
+                edge = tuple(row[key] for key in edge_type.names)
             r = i % 8
             c = j % 8
             upper = i - r
@@ -91,12 +97,12 @@ class OctileGraph(object):
             octile_table[(left, upper)][0] |= 1 << (c + r * 8)
             octile_table[(left, upper)][1][c + r * 8] = edge
 
-        ''' create octiles on GPU '''
+        ''' create edge octiles on GPU '''
         octile_list = [Octile(upper, left, nzmask, elements)
                        for (upper, left), (nzmask, elements)
                        in octile_table.items()]
 
-        ''' collect octile structures into continuous buffer '''
+        ''' collect edge octile structures into continuous buffer '''
         octile_hdr = to_gpu(np.array([x.state for x in octile_list],
                                      Octile.dtype))
 

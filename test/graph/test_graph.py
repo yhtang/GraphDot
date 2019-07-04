@@ -62,6 +62,24 @@ def test_simple_from_networkx():
         assert(len(g.edges.columns) == 1)  # +1 for the hidden edge index
 
 
+def test_weighted_from_networkx():
+    nxg = nx.Graph(title='Simple')
+    nxg.add_node(0)
+    nxg.add_node(1)
+    nxg.add_edge(0, 1, w=1.0)
+
+    G = Graph.from_networkx(nxg, weight='w')
+
+    for g in [G, eval(repr(G).strip('><'))]:
+        assert(g.title == 'Simple')
+        assert(len(g.nodes) == 2)
+        assert(len(g.nodes.columns) == 0)
+        assert(len(g.edges) == 1)
+        assert(len(g.edges.columns) == 2)  # +2 for edge index and weight
+        assert('!ij' in g.edges.columns)
+        assert('!w' in g.edges.columns)
+
+
 def test_molecule_from_networkx():
     nxg = nx.Graph(title='H2O')
     nxg.add_node('O1', charge=1, conjugate=False, mass=8.0)
