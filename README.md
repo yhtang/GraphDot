@@ -1,8 +1,7 @@
 # The Graphdot Library
 
-[![pipeline status](https://tangshan.cosx-isinx.org/gitlab/tang/graphdot/badges/feature/pycuda/pipeline.svg)](https://tangshan.cosx-isinx.org/gitlab/tang/graphdot/commits/feature/pycuda)
-[![coverage report](https://tangshan.cosx-isinx.org/gitlab/tang/graphdot/badges/feature/pycuda/coverage.svg)](https://tangshan.cosx-isinx.org/gitlab/tang/graphdot/commits/feature/pycuda)
-
+[![pipeline status](https://gitlab.com/yhtang/graphdot/badges/feature/pycuda/pipeline.svg)](https://gitlab.com/yhtang/graphdot/commits/feature/pycuda)
+[![coverage report](https://gitlab.com/yhtang/graphdot/badges/feature/pycuda/coverage.svg)](https://gitlab.com/yhtang/graphdot/commits/feature/pycuda)
 
 
 # Copyright
