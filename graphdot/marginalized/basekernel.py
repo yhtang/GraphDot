@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 This module defines base kernels and composibility rules for creating vertex
-and edges kernels for the marginalized graph kernel.
+and edge kernels for the marginalized graph kernel.
 """
 from copy import copy
 import numpy as np
@@ -63,6 +63,11 @@ class Kernel(object):
             def theta(self):
                 return [self.k1.theta, self.k2.theta]
 
+            @theta.setter
+            def theta(self, seq):
+                self.k1.theta = seq[0]
+                self.k2.theta = seq[1]
+
         return KernelOperator(k1, k2)
 
 # only works with python >= 3.6
@@ -84,6 +89,10 @@ class Constant(Kernel):
     @property
     def theta(self):
         return [self.constant]
+
+    @theta.setter
+    def theta(self, seq):
+        self.constant = seq[0]
 
 # only works with python >= 3.6
 # @cpptype(lo=np.float32, hi=np.float32)
@@ -107,6 +116,11 @@ class KroneckerDelta(Kernel):
     def theta(self):
         return [self.lo, self.hi]
 
+    @theta.setter
+    def theta(self, seq):
+        self.lo = seq[0]
+        self.hi = seq[1]
+
 
 # only works with python >= 3.6
 # @cpptype(neg_half_inv_l2=np.float32)
@@ -126,12 +140,16 @@ class SquareExponential(Kernel):
             -0.5 / self.length_scale**2, x, y)
 
     @property
+    def neg_half_inv_l2(self):
+        return -0.5 / self.length_scale**2
+
+    @property
     def theta(self):
         return [self.length_scale]
 
-    @property
-    def neg_half_inv_l2(self):
-        return -0.5 / self.length_scale**2
+    @theta.setter
+    def theta(self, seq):
+        self.length_scale = seq[0]
 
 
 @cpptype([])
@@ -154,6 +172,9 @@ class _Multiply(Kernel):
     def theta(self):
         return []
 
+    @theta.setter
+    def theta(self, seq):
+        pass
 
 # def Product(*kernels):
 #     @cpptype([('k%d' % i, ker.dtype) for i, ker in enumerate(kernels)])
@@ -205,6 +226,11 @@ def TensorProduct(**kw_kernels):
         @property
         def theta(self):
             return [k.theta for k in self.kw_kernels.values()]
+
+        @theta.setter
+        def theta(self, seq):
+            for kernel, value in zip(self.kw_kernels.values(), seq):
+                kernel.theta = value
 
     return TensorProductKernel(**kw_kernels)
 

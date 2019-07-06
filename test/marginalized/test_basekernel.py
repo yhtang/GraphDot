@@ -41,6 +41,7 @@ def test_simple_kernel(kernel):
     ''' hyperparameter retrieval '''
     assert(isinstance(kernel.theta, list))
     assert(len(kernel.theta) > 0)
+    kernel.theta = kernel.theta
     another = copy.copy(kernel)
     for t1, t2 in zip(kernel.theta, another.theta):
         assert(t1 == t2)
@@ -114,6 +115,7 @@ def test_multiply_quasikernel():
     ''' representation generation '''
     assert(isinstance(repr(kernel), str))
     assert(kernel.theta == [])
+    kernel.theta = kernel.theta
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -136,6 +138,7 @@ def test_tensor_product_2(k1, k2):
     ''' hyperparameter retrieval '''
     assert(k1.theta in k.theta)
     assert(k2.theta in k.theta)
+    k.theta = k.theta
     ''' representation generation '''
     assert(len(repr(k).split('⊗')) == 2)
     assert(repr(k1) in repr(k))
@@ -162,6 +165,7 @@ def test_tensor_product_3(k1, k2, k3):
     assert(k1.theta in k.theta)
     assert(k2.theta in k.theta)
     assert(k3.theta in k.theta)
+    k.theta = k.theta
     ''' representation generation '''
     assert(len(repr(k).split('⊗')) == 3)
     assert(repr(k1) in repr(k))
@@ -212,6 +216,7 @@ def test_kernel_add_constant(kernel):
         assert(repr(kernel) in repr(kadd))
         ''' hyperparameter retrieval '''
         assert(kernel.theta in kadd.theta)
+        kadd.theta = kadd.theta
         ''' C++ code generation '''
         assert(kadd.dtype.isalignedstruct)
         assert(isinstance(kadd.gencode('x', 'y'), str))
@@ -235,6 +240,7 @@ def test_kernel_add_kernel(k1, k2):
         ''' hyperparameter retrieval '''
         assert(k1.theta in kadd.theta)
         assert(k2.theta in kadd.theta)
+        kadd.theta = kadd.theta
         ''' C++ code generation '''
         assert(kadd.dtype.isalignedstruct)
         assert(isinstance(kadd.gencode('x', 'y'), str))
@@ -255,6 +261,7 @@ def test_kernel_mul_constant(kernel):
         assert(repr(kernel) in repr(kmul))
         ''' hyperparameter retrieval '''
         assert(kernel.theta in kmul.theta)
+        kmul.theta = kmul.theta
         ''' C++ code generation '''
         assert(kmul.dtype.isalignedstruct)
         assert(isinstance(kmul.gencode('x', 'y'), str))
@@ -278,6 +285,7 @@ def test_kernel_mul_kernel(k1, k2):
         ''' hyperparameter retrieval '''
         assert(k1.theta in kmul.theta)
         assert(k2.theta in kmul.theta)
+        kmul.theta = kmul.theta
         ''' C++ code generation '''
         assert(kmul.dtype.isalignedstruct)
         assert(isinstance(kmul.gencode('x', 'y'), str))
