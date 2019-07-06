@@ -14,8 +14,6 @@ __all__ = ['Constant',
            'SquareExponential',
            'TensorProduct']
 
-__cpp_namespace__ = 'graphdot::basekernel'
-
 
 class Kernel(object):
     """
@@ -51,8 +49,14 @@ class Kernel(object):
             def __call__(self, i, j):
                 return op(self.k1(i, j), self.k2(i, j))
 
+            def __str__(self):
+                return '({} {} {})'.format(str(self.k1), opstr, str(self.k2))
+
             def __repr__(self):
-                return '({} {} {})'.format(repr(self.k1), opstr, repr(self.k2))
+                return '{k1} {o} {k2}'.format(
+                    k1=repr(k1),
+                    o=opstr,
+                    k2=repr(k2))
 
             def gencode(self, x, y):
                 return '({k1} {op} {k2})'.format(k1=self.k1.gencode(x, y),
@@ -80,8 +84,11 @@ class Constant(Kernel):
     def __call__(self, i, j):
         return self.constant
 
-    def __repr__(self):
+    def __str__(self):
         return '{}'.format(self.constant)
+
+    def __repr__(self):
+        return 'Constant({})'.format(self.constant)
 
     def gencode(self, x, y):
         return '{:f}f'.format(self.constant)
@@ -106,8 +113,11 @@ class KroneckerDelta(Kernel):
     def __call__(self, i, j):
         return self.hi if i == j else self.lo
 
-    def __repr__(self):
+    def __str__(self):
         return 'δ({}, {})'.format(self.hi, self.lo)
+
+    def __repr__(self):
+        return 'KroneckerDelta({}, {})'.format(self.lo, self.hi)
 
     def gencode(self, x, y):
         return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.hi, self.lo)
@@ -132,8 +142,11 @@ class SquareExponential(Kernel):
     def __call__(self, x1, x2):
         return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
 
-    def __repr__(self):
+    def __str__(self):
         return 'SqExp({})'.format(self.length_scale)
+
+    def __repr__(self):
+        return 'SquareExponential({})'.format(self.length_scale)
 
     def gencode(self, x, y):
         return 'expf({:f}f * power({} - {}, 2))'.format(
@@ -162,8 +175,11 @@ class _Multiply(Kernel):
     def __call__(self, x1, x2):
         return x1 * x2
 
-    def __repr__(self):
+    def __str__(self):
         return '_mul'
+
+    def __repr__(self):
+        return '_Multiply()'
 
     def gencode(self, x, y):
         return '({} * {})'.format(x, y)
@@ -213,9 +229,14 @@ def TensorProduct(**kw_kernels):
                 prod *= kernel(object1[key], object2[key])
             return prod
 
-        def __repr__(self):
-            return ' ⊗ '.join([kw + ':' + repr(k)
+        def __str__(self):
+            return ' ⊗ '.join([kw + ':' + str(k)
                                for kw, k in self.kw_kernels.items()])
+
+        def __repr__(self):
+            return Template('TensorProduct(${kwexpr, })').render(
+                kwexpr=['{}={}'.format(kw, repr(k))
+                        for kw, k in self.kw_kernels.items()])
 
         def gencode(self, x, y):
             return Template('(${expr*})').render(
