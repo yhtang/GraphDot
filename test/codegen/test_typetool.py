@@ -128,13 +128,13 @@ decltype_cases = [
 @pytest.mark.parametrize('case', decltype_cases)
 def test_decltype(case):
     dtype, typestring = case
-    assert(decltype(dtype) == typestring)
+    assert(decltype(dtype).strip() == typestring)
 
 
 def test_decltype_compose():
     assert(decltype(np.float32) in decltype(comp1))
     assert(decltype(np.int16) in decltype(comp1))
-    assert(decltype(comp1) in decltype(comp2))
+    assert(decltype(comp1, 'x') in decltype(comp2))
 
 
 rowtype_cases = [

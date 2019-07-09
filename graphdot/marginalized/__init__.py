@@ -102,8 +102,8 @@ class MarginalizedGraphKernel(object):
 
         source = self.template.render(node_kernel=node_kernel_src,
                                       edge_kernel=edge_kernel_src,
-                                      node_t=decltype(node_type, 'node_t'),
-                                      edge_t=decltype(edge_type, 'edge_t'))
+                                      node_t=decltype(node_type),
+                                      edge_t=decltype(edge_type))
 
         mod = SourceModule(source,
                            options=['-std=c++14',
