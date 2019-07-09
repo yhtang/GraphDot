@@ -7,9 +7,9 @@ using namespace numpy_type;
 
 ${node_kernel}
 ${edge_kernel}
+${node_t};
+${edge_t};
 
-using node_t = ${node_t};
-using edge_t = ${edge_t};
 using graph_t   = graphdot::marginalized::graph_t<node_t, edge_t>;
 using scratch_t = graphdot::marginalized::block_scratch;
 using job_t     = graphdot::marginalized::job_t;

@@ -5,6 +5,7 @@
 namespace graphdot {
 
 namespace numpy_type {
+    using _empty = struct {};
     using bool_ = bool;
     using int_ = long;
     using intc = int;

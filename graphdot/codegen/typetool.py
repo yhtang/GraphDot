@@ -72,18 +72,22 @@ def cpptype(dtype=[]):
     return decor
 
 
-def decltype(type):
+def decltype(type, name=''):
     type = np.dtype(type, align=True)  # convert np.float32 etc. to dtype
     if type.names is not None:
-        return Template(r'''struct{${members;};}''').render(
-            members=['{} {}'.format(decltype(t), v)
-                     for v, (t, offset) in type.fields.items()])
+        if len(type.names):
+            return Template(r'''struct ${name} {${members;};}''').render(
+                name=name,
+                members=[decltype(t, v)
+                         for v, (t, offset) in type.fields.items()])
+        else:
+            return 'constexpr static numpy_type::_empty {} {{}}'.format(name)
     # elif type.subdtype is not None:
     #     return Template(r'''${type} ${name}${dim}''').render(
     #         type=type.name, name=
     #     )
     else:
-        return str(type.name)
+        return '{} {}'.format(str(type.name), name)
 
 
 def rowtype(df, pack=True):
