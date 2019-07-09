@@ -49,7 +49,7 @@ setup(
     long_description=long_description,
     packages=find_packages(exclude='test'),
     package_data={
-        'graphdot': ['*/*.h', '*/*/*.h', '*/*.cu'],
+        'graphdot': ['*/*.h', '*/*/*.h', '*/*/*.cu'],
     },
     # include_package_data=True,
     platforms='any',
