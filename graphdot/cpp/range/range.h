@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_RANGE_RANGE_H_
-#define GRAPHDOT_CPP_RANGE_RANGE_H_
+#ifndef GRAPHDOT_RANGE_RANGE_H_
+#define GRAPHDOT_RANGE_RANGE_H_
 
 #include "index.h"
 #include "zip.h"

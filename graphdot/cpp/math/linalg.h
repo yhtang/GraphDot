@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MATH_LINALG_H_
-#define GRAPHDOT_CPP_MATH_LINALG_H_
+#ifndef GRAPHDOT_MATH_LINALG_H_
+#define GRAPHDOT_MATH_LINALG_H_
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>

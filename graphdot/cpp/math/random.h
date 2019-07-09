@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MATH_RANDOM_H_
-#define GRAPHDOT_CPP_MATH_RANDOM_H_
+#ifndef GRAPHDOT_MATH_RANDOM_H_
+#define GRAPHDOT_MATH_RANDOM_H_
 
 #include <random>
 #include <vector>

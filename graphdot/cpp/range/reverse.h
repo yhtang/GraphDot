@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_RANGE_REVERSE_H_
-#define GRAPHDOT_CPP_RANGE_REVERSE_H_
+#ifndef GRAPHDOT_RANGE_REVERSE_H_
+#define GRAPHDOT_RANGE_REVERSE_H_
 
 #include <iterator>
 

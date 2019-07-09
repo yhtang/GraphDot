@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MISC_METADBG_H_
-#define GRAPHDOT_CPP_MISC_METADBG_H_
+#ifndef GRAPHDOT_MISC_METADBG_H_
+#define GRAPHDOT_MISC_METADBG_H_
 
 template<class...>   struct DISPLAY_TYPE_;
 template<int>        struct DISPLAY_INT_;

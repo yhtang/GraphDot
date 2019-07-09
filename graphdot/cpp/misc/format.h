@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MISC_FORMAT_H_
-#define GRAPHDOT_CPP_MISC_FORMAT_H_
+#ifndef GRAPHDOT_MISC_FORMAT_H_
+#define GRAPHDOT_MISC_FORMAT_H_
 
 #include <string>
 

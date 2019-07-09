@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_CACHE_VOLATILE_H_
-#define GRAPHDOT_CPP_CACHE_VOLATILE_H_
+#ifndef GRAPHDOT_CACHE_MEMOIZE_H_
+#define GRAPHDOT_CACHE_MEMOIZE_H_
 
 #include <iostream>
 #include <csignal>
