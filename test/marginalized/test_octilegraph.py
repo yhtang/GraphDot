@@ -29,7 +29,7 @@ def test_octile_graph_unweighted():
                        'data': [[(0, 1), 0.5, 1], [(0, 2), 1.0, 2]]},
                 title='H2O')
 
-    og = OctileGraph(dfg, 0.5)
+    og = OctileGraph(dfg)
     assert(og.n_node == len(dfg.nodes))
     assert(og.padded_size >= og.n_node and og.padded_size % 8 == 0)
     assert(og.n_octile == (og.padded_size // 8)**2)
@@ -67,7 +67,7 @@ def test_octile_graph_weighted():
                        'data': [[(0, 1), 0.5, 1.0], [(0, 2), 1.0, 2.0]]},
                 title='H2O')
 
-    og = OctileGraph(dfg, 0.5)
+    og = OctileGraph(dfg)
     assert(og.n_node == len(dfg.nodes))
     assert(og.padded_size >= og.n_node and og.padded_size % 8 == 0)
     assert(og.n_octile == (og.padded_size // 8)**2)
