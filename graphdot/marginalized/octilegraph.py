@@ -23,9 +23,7 @@ class Octile(object):
         self.upper = upper
         self.left = left
         self.nzmask = nzmask
-        print('elements\n', elements, sep='')
         self.__elements = to_gpu(elements)
-        print('__elements\n', self.__elements, sep='')
 
     @property
     def elements(self):
@@ -89,7 +87,6 @@ class OctileGraph(object):
             if self.weighted:
                 edge = (row['!w'], tuple(row[key]
                                          for key in edge_type['label'].names))
-                print('making edge', edge)
             else:
                 edge = tuple(row[key] for key in edge_type.names)
             r = i % 8

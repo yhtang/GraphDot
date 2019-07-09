@@ -105,10 +105,6 @@ class MarginalizedGraphKernel(object):
                                       node_t=decltype(node_type, 'node_t'),
                                       edge_t=decltype(edge_type, 'edge_t'))
 
-        import os, sys
-        os.system('echo "{}" | astyle'.format(source))
-        sys.stdout.flush()
-
         mod = SourceModule(source,
                            options=['-std=c++14',
                                     '-O4',

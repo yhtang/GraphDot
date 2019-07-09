@@ -149,17 +149,8 @@ struct octile_block_solver {
                 auto e2 = octile2 (i2, j2);
                 auto r  = rhs (j1, j2);
                 bool m2 = nzmask2 & (1LL << (i2 + j2 * octile_h));
-                // if (m1_upper && m2) sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                // if (m1_lower && m2) sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
-                if (m1_upper && m2) {
-                    //printf("sizeof(edge_t) %d\n", sizeof(edge_t));
-                    //printf("KE((%d,%d),(%d,%d)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_upper, j1, i2, j2, EdgeKernel::compute(e1_upper, e2), r, e1_upper.weight, e2.weight);
-                    sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                }
-                if (m1_lower && m2) {
-                    //printf("KE((%d,%d),(%d,%d)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_lower, j1, i2, j2, EdgeKernel::compute(e1_lower, e2), r, e1_upper.weight, e2.weight);
-                    sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
-                }
+                if (m1_upper && m2) sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                if (m1_lower && m2) sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
             }
         }
     }
@@ -189,7 +180,7 @@ struct octile_block_solver {
             float d2 = g2.degree[i2] / (1 - q);
             scratch.x (i) = 0;
             float r = d1 * d2 * q * q;
-            printf("r[%d] = %f, D[%d] = %f\n", i, r, i, d1 * d2);
+            //printf("r[%d] = %f, D[%d] = %f\n", i, r, i, d1 * d2);
             scratch.r (i) = r;
             scratch.p (i) = r;
             scratch.Ap (i) = (i1 < g1.n_node && i2 < g2.n_node) ? d1 * d2 / NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * r : 0.f;
@@ -203,7 +194,7 @@ struct octile_block_solver {
 
             #if 0
             __syncthreads();
-            if (threadIdx.x == 0 && blockIdx.x == 0) {
+            if (threadIdx.x == 0) {
                 for (int ij = 0; ij < N; ++ij) {
                     printf ("iteration %d solution x[%d] = %.7f\n", k, ij, scratch.x (ij));
                 }
@@ -214,15 +205,13 @@ struct octile_block_solver {
             const int i1_lower = (lane + warp_size) / octile_h;
             const int i2       =  lane              % octile_h;
 
-            #if 0
-            __syncthreads();
-            if ( threadIdx.x == 0 ) {
-                for ( int ij = 0; ij < N; ++ij ) {
-                    printf( "line %d iteration %d Ap[%d] = %.7f\n", __LINE__, k, ij, scratch.Ap( ij ) );
-                }
-            }
-            __syncthreads();
-            #endif
+            // __syncthreads();
+            // if ( threadIdx.x == 0 ) {
+            //     for ( int ij = 0; ij < N; ++ij ) {
+            //         printf( "line %d iteration %d Ap[%d] = %.7f\n", __LINE__, k, ij, scratch.Ap( ij ) );
+            //     }
+            // }
+            // __syncthreads();
 
             // Ap = A * p, off-diagonal part
             for (int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local) {
@@ -295,7 +284,6 @@ struct octile_block_solver {
             }
 
             __syncthreads();
-            // break;
 
             // __syncthreads();
             // if ( threadIdx.x == 0 ) {
@@ -350,12 +338,12 @@ struct octile_block_solver {
         __syncthreads();
         if (laneid() == 0) atomicAdd (&block_R, R);
         __syncthreads();
-        #if 1
+        #if 0
         __syncthreads();
         if (threadIdx.x == 0) {
             printf ("Converged after %d iterations\n", k);
             printf ("R(sum) = %.7f\n", block_R);
-            #if 1
+            #if 0
             for (int ij = 0; ij < N; ++ij) {
                 printf ("solution x[%d] = %.7f\n", ij, scratch.x (ij));
             }
