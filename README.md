@@ -1,4 +1,4 @@
-# The Graphdot Library
+# The GraphDot Library
 
 [![pipeline status](https://gitlab.com/yhtang/graphdot/badges/feature/pycuda/pipeline.svg)](https://gitlab.com/yhtang/graphdot/commits/feature/pycuda)
 [![coverage report](https://gitlab.com/yhtang/graphdot/badges/feature/pycuda/coverage.svg)](https://gitlab.com/yhtang/graphdot/commits/feature/pycuda)
