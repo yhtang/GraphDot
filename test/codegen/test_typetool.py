@@ -137,6 +137,11 @@ def test_decltype_compose():
     assert(decltype(comp1, 'x') in decltype(comp2))
 
 
+def test_decltype_empty():
+    assert('empty' in decltype([]))
+    # TODO: use cppyy to verify that empty fields have zero sizes
+
+
 rowtype_cases = [
     # empty dataframe
     (pd.DataFrame([]), np.dtype([], align=True)),
