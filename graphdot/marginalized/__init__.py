@@ -45,7 +45,7 @@ class MarginalizedGraphKernel(object):
         self.scratch = None
         self.scratch_capacity = 0
 
-        self.q = kwargs.pop('q', 0.05)
+        self.q = kwargs.pop('q', 0.01)
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -69,7 +69,7 @@ class MarginalizedGraphKernel(object):
 
     def compute(self, graph_list):
         # TODO: graph registry
-        graph_list = [OctileGraph(g, 0.5) for g in graph_list]
+        graph_list = [OctileGraph(g) for g in graph_list]
 
         weighted = any([g.weighted for g in graph_list])
 
@@ -102,8 +102,12 @@ class MarginalizedGraphKernel(object):
 
         source = self.template.render(node_kernel=node_kernel_src,
                                       edge_kernel=edge_kernel_src,
-                                      node_t=decltype(node_type),
-                                      edge_t=decltype(edge_type))
+                                      node_t=decltype(node_type, 'node_t'),
+                                      edge_t=decltype(edge_type, 'edge_t'))
+
+        import os, sys
+        os.system('echo "{}" | astyle'.format(source))
+        sys.stdout.flush()
 
         mod = SourceModule(source,
                            options=['-std=c++14',

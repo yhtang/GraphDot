@@ -23,7 +23,9 @@ class Octile(object):
         self.upper = upper
         self.left = left
         self.nzmask = nzmask
+        print('elements\n', elements, sep='')
         self.__elements = to_gpu(elements)
+        print('__elements\n', self.__elements, sep='')
 
     @property
     def elements(self):
@@ -44,33 +46,34 @@ class OctileGraph(object):
     };
     """
 
-    def __init__(self, graph, stopping_probability):
+    def __init__(self, graph):
         self.n_node = len(graph.nodes)
 
-        ''' directly pack node attributes '''
+        ''' determine node type '''
         node_type = rowtype(graph.nodes)
         node_d = to_gpu(graph.nodes[list(node_type.names)]
                         .to_records(index=False)
                         .astype(node_type))
 
-        ''' determine edge type '''
-        edge_type = rowtype(graph.edges.drop(['!ij', '!w'],
-                            axis=1,
-                            errors='ignore'))
-
-        ''' determine whether graph is weighted and compute node degrees '''
+        ''' determine whether graph is weighted, determine edge type,
+            and compute node degrees '''
         degree_h = np.zeros(self.padded_size, dtype=np.float32)
+        edge_label_type = rowtype(graph.edges.drop(['!ij', '!w'],
+                                  axis=1,
+                                  errors='ignore'))
         if '!w' in graph.edges.columns:  # weighted graph
             self.weighted = True
             edge_type = np.dtype([('weight', np.float32),
-                                  ('label', edge_type)], align=True)
+                                  ('label', edge_label_type)], align=True)
             for (i, j), w in zip(graph.edges['!ij'], graph.edges['!w']):
                 degree_h[i] += w
                 degree_h[j] += w
         else:
             self.weighted = False
-            degree_h[:self.n_node] = 1
-        degree_h /= 1.0 - stopping_probability
+            edge_type = edge_label_type
+            for i, j in graph.edges['!ij']:
+                degree_h[i] += 1.0
+                degree_h[j] += 1.0
         degree_d = to_gpu(degree_h)
 
         ''' collect non-zero edge octiles '''
@@ -86,6 +89,7 @@ class OctileGraph(object):
             if self.weighted:
                 edge = (row['!w'], tuple(row[key]
                                          for key in edge_type['label'].names))
+                print('making edge', edge)
             else:
                 edge = tuple(row[key] for key in edge_type.names)
             r = i % 8
