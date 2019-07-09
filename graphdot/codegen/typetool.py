@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from six import with_metaclass
 import numpy as np
-from . import Template
+from graphdot.codegen import Template
 
 __all__ = ['cpptype', 'decltype', 'rowtype']
 

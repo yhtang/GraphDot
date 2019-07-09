@@ -6,9 +6,9 @@ import pycuda.driver
 import pycuda.gpuarray
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import to_gpu
-from .. import cpp
-from ..codegen import Template
-from ..codegen.typetool import cpptype, decltype
+from graphdot import cpp
+from graphdot.codegen import Template
+from graphdot.codegen.typetool import cpptype, decltype
 from .scratch import BlockScratch
 from .octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply

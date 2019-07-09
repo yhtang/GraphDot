@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from pycuda import gpuarray
-from ..codegen.typetool import cpptype
+from graphdot.codegen.typetool import cpptype
 
 
 # only works with python >= 3.6

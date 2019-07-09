@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from pycuda.gpuarray import to_gpu
-from ..codegen.typetool import cpptype, rowtype
+from graphdot.codegen.typetool import cpptype, rowtype
 
 __all__ = ['OctileGraph']
 

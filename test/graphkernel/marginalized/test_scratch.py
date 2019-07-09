@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 import pycuda.autoinit
-from graphdot.marginalized.scratch import BlockScratch
+from graphdot.graphkernel.marginalized.scratch import BlockScratch
 
 
 def test_scratch():

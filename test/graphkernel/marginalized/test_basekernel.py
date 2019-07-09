@@ -5,11 +5,11 @@ import copy
 import numpy as np
 import pytest
 
-from graphdot.marginalized.basekernel import Constant
-from graphdot.marginalized.basekernel import KroneckerDelta
-from graphdot.marginalized.basekernel import SquareExponential
-from graphdot.marginalized.basekernel import _Multiply
-from graphdot.marginalized.basekernel import TensorProduct
+from graphdot.graphkernel.marginalized.basekernel import Constant
+from graphdot.graphkernel.marginalized.basekernel import KroneckerDelta
+from graphdot.graphkernel.marginalized.basekernel import SquareExponential
+from graphdot.graphkernel.marginalized.basekernel import _Multiply
+from graphdot.graphkernel.marginalized.basekernel import TensorProduct
 # from graphdot.marginalized.basekernel import Convolution
 
 inf = float('inf')

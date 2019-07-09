@@ -6,8 +6,8 @@ and edge kernels for the marginalized graph kernel.
 """
 from copy import copy
 import numpy as np
-from ..codegen import Template
-from ..codegen.typetool import cpptype
+from graphdot.codegen import Template
+from graphdot.codegen.typetool import cpptype
 
 __all__ = ['Constant',
            'KroneckerDelta',

@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 import networkx as nx
 from graphdot import Graph
-from graphdot.marginalized import MarginalizedGraphKernel
-from graphdot.marginalized.basekernel import Constant
-from graphdot.marginalized.basekernel import KroneckerDelta
-from graphdot.marginalized.basekernel import SquareExponential
-from graphdot.marginalized.basekernel import TensorProduct
+from graphdot.graphkernel.marginalized import MarginalizedGraphKernel
+from graphdot.graphkernel.marginalized.basekernel import Constant
+from graphdot.graphkernel.marginalized.basekernel import KroneckerDelta
+from graphdot.graphkernel.marginalized.basekernel import SquareExponential
+from graphdot.graphkernel.marginalized.basekernel import TensorProduct
 
 
 # g1 = nx.Graph(title='A')
