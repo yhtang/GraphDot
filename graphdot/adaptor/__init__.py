@@ -1,2 +1,0 @@
-class GraphRegistry:
-    pass

@@ -1,48 +1,27 @@
-import os, sysconfig
-import cppyy
+"""
+GraphDot Copyright (c) 2019, The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of any
+required approvals from the U.S. Dept. of Energy).  All rights reserved.
 
-rc = dict()
-rc['nvcc'] = 'nvcc'
-rc['nvcc_option'] = ['-std=c++14',
-                      '-O4',
-                      '--expt-relaxed-constexpr',
-                      '--use_fast_math',
-                      '--maxrregcount 64',
-                      '-Xptxas -v',
-                      '-Xcompiler -fPIC',
-                      '-shared' ]
-rc['lib'    ] = [ '-lcudart', '-lrt' ]
-rc['arch'   ] = [ 'compute_30', 'compute_50', 'compute_60', 'compute_70' ]
-rc['code'   ] = [ 'sm_30', 'sm_50', 'sm_60', 'sm_70' ]
-rc['include'] = [ sysconfig.get_path('include'),
-                  sysconfig.get_path('platinclude'),
-                  os.path.join( os.path.dirname( os.path.abspath( __file__ ) ), 'cpp' ) ]  
-rc['suffix' ] = sysconfig.get_config_var('EXT_SUFFIX')
-rc['cpp'    ] = os.path.join( os.path.dirname( os.path.abspath( __file__ ) ), 'cpp' )  
+If you have questions about your rights to use or distribute this software,
+please contact Berkeley Lab's Intellectual Property Office at
+IPO@lbl.gov.
 
-try:
-    import pybind11
-    rc['include'].append( pybind11.get_include() )
-    rc['include'].append( pybind11.get_include(True) )
-except:
-    import logging
-    logging.warning( 'pybind11 not available, runtime compilation may fail' )
+NOTICE.  This Software was developed under funding from the U.S. Department
+of Energy and the U.S. Government consequently retains certain rights.  As
+such, the U.S. Government has been granted for itself and others acting on
+its behalf a paid-up, nonexclusive, irrevocable, worldwide license in the
+Software to reproduce, distribute copies to the public, prepare derivative
+works, and perform publicly and display publicly, and to permit other to do
+so.
+"""
+from .graph import Graph
 
+__all__ = ['Graph']
 
-def compilation_command( input, output ):
-    line = '{nvcc} {include} {option} {input} {lib} {gencode} -o {output}'.format(
-        nvcc    = rc['nvcc'],
-        include = ' '.join( [ '-I%s' % dir for dir in rc['include'] ] ),
-        option  = ' '.join( rc['nvcc_option'] ),
-        input   = input,
-        lib     = ' '.join( rc['lib'] ),
-        gencode = ' '.join( [ '--generate-code arch=%s,code=%s' % (arch,code) for arch, code in zip( rc['arch'], rc['code'] ) ] ),
-        output  = output+rc['suffix']
-    )
-    return line
-
-cppyy.add_include_path( rc['cpp'] )
-cppyy.include( os.path.join( rc['cpp'], 'cuda/balloc.h' ) )
-cppyy.include( os.path.join( rc['cpp'], 'kernel/elementary.h' ) )
-
-BeltAllocator = cppyy.gbl.graphdot.cuda.belt_allocator
+__version__ = '0.1a1'
+__author__ = 'Yu-Hang "Maxin" Tang, Oguz Selvitopi, Doru Popovici'
+__copyright__ = 'Copyright 2019'
+__maintainer__ = 'Yu-Hang "Maxin" Tang'
+__email__ = 'Tang.Maxin@gmail.com'
+__license__ = 'see LICENSE file'

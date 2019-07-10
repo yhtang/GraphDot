@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MATH_DOT_H_
-#define GRAPHDOT_CPP_MATH_DOT_H_
+#ifndef GRAPHDOT_MATH_DOT_H_
+#define GRAPHDOT_MATH_DOT_H_
 
 #include <cmath>
 #include <type_traits>

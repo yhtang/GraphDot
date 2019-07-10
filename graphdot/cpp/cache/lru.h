@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_CACHE_LRU_H_
-#define GRAPHDOT_CPP_CACHE_LRU_H_
+#ifndef GRAPHDOT_CACHE_LRU_H_
+#define GRAPHDOT_CACHE_LRU_H_
 
 #include <unordered_map>
 #include <list>

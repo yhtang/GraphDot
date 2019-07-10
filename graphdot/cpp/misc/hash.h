@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_MISC_HASH_H_
-#define GRAPHDOT_CPP_MISC_HASH_H_
+#ifndef GRAPHDOT_MISC_HASH_H_
+#define GRAPHDOT_MISC_HASH_H_
 
 #include <functional>
 #include <Eigen/Core>

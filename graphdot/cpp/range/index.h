@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_RANGE_INDEX_H_
-#define GRAPHDOT_CPP_RANGE_INDEX_H_
+#ifndef GRAPHDOT_RANGE_INDEX_H_
+#define GRAPHDOT_RANGE_INDEX_H_
 
 namespace graphdot {
 

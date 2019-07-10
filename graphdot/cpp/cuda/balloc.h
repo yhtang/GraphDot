@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_CUDA_BALLOC_H_
-#define GRAPHDOT_CPP_CUDA_BALLOC_H_
+#ifndef GRAPHDOT_CUDA_BALLOC_H_
+#define GRAPHDOT_CUDA_BALLOC_H_
 
 #include <iostream>
 #include <vector>

@@ -1,5 +1,5 @@
-#ifndef GRAPHDOT_CPP_CUDA_UTIL_HOST_H_
-#define GRAPHDOT_CPP_CUDA_UTIL_HOST_H_
+#ifndef GRAPHDOT_CUDA_UTIL_HOST_H_
+#define GRAPHDOT_CUDA_UTIL_HOST_H_
 
 #include <cstdio>
 #include <csignal>
