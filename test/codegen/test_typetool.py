@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sys
+from re import search
 from copy import copy
 import numpy as np
 import pandas as pd
 import pytest
+import exrex
 from graphdot.codegen.typetool import cpptype, decltype, rowtype
 
 
@@ -140,6 +141,29 @@ def test_decltype_compose():
 def test_decltype_empty():
     assert('empty' in decltype([]))
     # TODO: use cppyy to verify that empty fields have zero sizes
+
+
+def test_decltype_order():
+    ''' ensure output member order is the same as that in dtype '''
+    np.random.seed(0)
+    type_list = [np.bool_, np.int8, np.int16, np.int32, np.int64,
+                 np.uint8, np.uint16, np.uint32, np.uint64,
+                 np.float32, np.float64]
+    for _ in range(1024):
+        length = np.random.randint(1, 16)
+        member_types = np.random.choice(type_list, length)
+        member_names = []
+        while len(member_names) < length:
+            name = exrex.getone('[_a-zA-Z][_0-9a-zA-Z]*', 16)
+            if name not in member_names:
+                member_names.append(name)
+        type = np.dtype(zip(member_names, member_types))
+        cstr = decltype(type)
+        for prev, next in zip(type.names[:-1], type.names[1:]):
+            cprev = '%s;' % decltype(type.fields[prev][0], prev)
+            cnext = '%s;' % decltype(type.fields[next][0], next)
+            assert(search(cprev, cstr).start() <=
+                   search(cnext, cstr).start())
 
 
 rowtype_cases = [

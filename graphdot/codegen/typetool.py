@@ -79,8 +79,7 @@ def decltype(type, name=''):
             return Template(r'struct ${cls}{${members;};}${name}').render(
                 cls=name,
                 name=name,
-                members=[decltype(t, v)
-                         for v, (t, offset) in type.fields.items()])
+                members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
             return 'constexpr static numpy_type::_empty {} {{}}'.format(name)
     # elif type.subdtype is not None:
