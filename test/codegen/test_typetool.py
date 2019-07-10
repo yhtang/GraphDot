@@ -157,7 +157,7 @@ def test_decltype_order():
             name = exrex.getone('[_a-zA-Z][_0-9a-zA-Z]*', 16)
             if name not in member_names:
                 member_names.append(name)
-        type = np.dtype(zip(member_names, member_types))
+        type = np.dtype(list(zip(member_names, member_types)))
         cstr = decltype(type)
         for prev, next in zip(type.names[:-1], type.names[1:]):
             cprev = '%s;' % decltype(type.fields[prev][0], prev)
