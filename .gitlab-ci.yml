@@ -1,5 +1,5 @@
 before_script:
-  - pip install --user tox flake8
+  - pip install --user tox flake8 pandas
   - export PATH=/usr/local/cuda/bin:$PATH
   - export LD_LIBRARY_PATH=/usr/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
