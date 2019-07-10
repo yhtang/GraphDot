@@ -100,15 +100,6 @@ class MarginalizedGraphKernel(object):
         node_type = graph_list[0].node_type
         edge_type = graph_list[0].edge_type
 
-        print('-->')
-        print(np.__version__)
-        print(np.__path__)
-        print(edge_type)
-        print(edge_type.names)
-        print(edge_type.fields)
-        print(decltype(edge_type))
-        print('<--')
-
         source = self.template.render(node_kernel=node_kernel_src,
                                       edge_kernel=edge_kernel_src,
                                       node_t=decltype(node_type),

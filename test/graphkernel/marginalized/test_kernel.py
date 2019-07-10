@@ -46,7 +46,7 @@ def MLGK(G, knode, kedge, q):
             A[i, j] = 1.0
             A[j, i] = 1.0
 
-    Dx = np.kron(D / (1 - q), D / (1 - q))
+    Dx = np.kron(D / (1.0 - q), D / (1.0 - q))
     Ax = np.kron(A, A)
 
     rhs = Dx * np.ones(N * N) * q * q
@@ -140,11 +140,11 @@ def test_mlgk_weighted():
 
     edge_kernel = TensorProduct(order=KroneckerDelta(0.3, 1.0),
                                 length=SquareExponential(0.05))
-
     q = 0.1
     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
 
     G = [Graph.from_networkx(g, weight='w') for g in [g1, g2]]
+
     R = mlgk.compute(G)
 
     assert(R.shape == (2, 2))

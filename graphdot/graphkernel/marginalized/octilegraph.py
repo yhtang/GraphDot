@@ -24,7 +24,6 @@ class Octile(object):
         self.left = left
         self.nzmask = nzmask
         self.__elements = to_gpu(elements)
-        print('__elements\n', self.__elements)
 
     @property
     def elements(self):
@@ -111,16 +110,11 @@ class OctileGraph(object):
         self.node_type = node_type
         self.edge_type = edge_type
 
-        print('node_type', node_type)
-        print('edge_type', edge_type)
-
         self.n_octile = len(octile_list)
         self.degree_d = degree_d
         self.node_d = node_d
         self.octile_hdr_d = octile_hdr
         self.octile_list = octile_list  # prevent automatic deconstruction
-
-        print('degree_d\n', degree_d)
 
     @property
     def octile(self):
