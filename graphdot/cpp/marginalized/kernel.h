@@ -149,8 +149,15 @@ struct octile_block_solver {
                 auto e2 = octile2 (i2, j2);
                 auto r  = rhs (j1, j2);
                 bool m2 = nzmask2 & (1LL << (i2 + j2 * octile_h));
-                if (m1_upper && m2) sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                if (m1_lower && m2) sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                if (m1_upper && m2) {
+                    //printf("KE((%d,%d),(%d,%d)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_upper, j1, i2, j2, EdgeKernel::compute(e1_upper, e2), r, e1_upper.weight, e2.weight);
+                    printf("KE((%d,%d)=>(%lf,%ld),(%d,%d)=>(%lf,%ld)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_upper, j1, e1_upper.label.length, e1_upper.label.order, i2, j2, e2.label.length, e2.label.order, EdgeKernel::compute(e1_upper, e2), r, e1_upper.weight, e2.weight);
+                    sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                }
+                if (m1_lower && m2) {
+                    // printf("KE((%d,%d),(%d,%d)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_lower, j1, i2, j2, EdgeKernel::compute(e1_lower, e2), r, e1_upper.weight, e2.weight);
+                    printf("KE((%d,%d)=>(%lf,%ld),(%d,%d)=>(%lf,%ld)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_lower, j1, e1_lower.label.length, e1_lower.label.order, i2, j2, e2.label.length, e2.label.order, EdgeKernel::compute(e1_lower, e2), r, e1_lower.weight, e2.weight);                    sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                }
             }
         }
     }
@@ -180,10 +187,13 @@ struct octile_block_solver {
             float d2 = g2.degree[i2] / (1 - q);
             scratch.x (i) = 0;
             float r = d1 * d2 * q * q;
-            //printf("r[%d] = %f, D[%d] = %f\n", i, r, i, d1 * d2);
+            //printf("r[%d] = %f, D[%d] = %f, deg[%d] = %f, deg[%d] = %f\n", i, r, i, d1 * d2, i1, g1.degree[i1], i2, g2.degree[i2]);
             scratch.r (i) = r;
             scratch.p (i) = r;
             scratch.Ap (i) = (i1 < g1.n_node && i2 < g2.n_node) ? d1 * d2 / NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * r : 0.f;
+            if (i1 < g1.n_node && i2 < g2.n_node) {
+                printf("Kv([%ld,%ld], [%ld,%ld]]) = %f\n", g1.vertex[i1].hybridization, g1.vertex[i1].charge, g2.vertex[i2].hybridization, g2.vertex[i2].charge, NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]));
+            }
         }
         __syncthreads();
 
@@ -192,11 +202,14 @@ struct octile_block_solver {
         int k;
         for (k = 0; k < N; ++k) {
 
-            #if 0
+            #if 1
             __syncthreads();
             if (threadIdx.x == 0) {
                 for (int ij = 0; ij < N; ++ij) {
-                    printf ("iteration %d solution x[%d] = %.7f\n", k, ij, scratch.x (ij));
+                    int i1 = ij / n2;
+                    int i2 = ij % n2;
+                    if (i1 < g1.n_node && i2 < g2.n_node)
+                        printf ("iteration %d begin solution x[%d, %d] = %.7f, Ap[%d, %d] = %.7f\n", k, i1, i2, scratch.x(ij), i1, i2, scratch.Ap(ij));
                 }
             }
             #endif
