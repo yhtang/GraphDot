@@ -64,11 +64,11 @@ class Graph(object):
     #     pass
 
     # @classmethod
-    # def from_ase(cls, atoms):
-    #     pass
-    #
-    # @classmethod
     # def from_pymatgen(cls, molecule):
+    #     pass
+
+    # @classmethod
+    # def from_smiles(cls, smiles):
     #     pass
 
     @classmethod
