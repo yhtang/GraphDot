@@ -71,11 +71,50 @@ class MarginalizedGraphKernel(object):
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
-    def compute(self, graph_list):
-        # TODO: graph registry
-        graph_list = [OctileGraph(g) for g in graph_list]
+    def clone_with_theta():
+        pass
 
-        weighted = any([g.weighted for g in graph_list])
+    def _assert_homegeneous(self, X):
+        for x1, x2 in zip(X[:-1], X[1:]):
+            try:
+                x1.weighted == x2.weighted
+                x1.node_type == x2.node_type
+                x1.edge_type == x2.edge_type
+            except AssertionError as e:
+                raise TypeError('All graphs must be of the same type: %s' %
+                                str(e))
+
+    def __call__(self, X, Y=None):
+        """
+        pairwise kernel computation
+        """
+
+        ''' transfer grahs to GPU '''
+        X = [OctileGraph(x) for x in X]
+        Y = [OctileGraph(y) for y in Y] if Y is not None else []
+        self._assert_homegeneous(X + Y)
+        graph_list_d = to_gpu(np.array([g.state for g in X + Y],
+                                       OctileGraph.dtype))
+
+        ''' prepare pairwise work item list '''
+        N = len(X)
+        M = len(Y)
+        if len(Y):
+            jobs = np.array([JobIn(i, N + j).state
+                             for i in range(N)
+                             for j in range(M)], JobIn.dtype)
+        else:
+            jobs = np.array([JobIn(i, j).state
+                             for i in range(N)
+                             for j in range(i, N)], JobIn.dtype)
+        jobs_d = to_gpu(jobs)
+        i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
+
+        ''' prepare GPU kernel launch '''
+        x = next(iter(X))
+        weighted = x.weighted
+        node_type = x.node_type
+        edge_type = x.edge_type
 
         if weighted:
             edge_kernel = TensorProduct(weight=_Multiply(),
@@ -101,9 +140,6 @@ class MarginalizedGraphKernel(object):
         };
         ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
 
-        node_type = graph_list[0].node_type
-        edge_type = graph_list[0].edge_type
-
         source = self.template.render(node_kernel=node_kernel_src,
                                       edge_kernel=edge_kernel_src,
                                       node_t=decltype(node_type),
@@ -120,24 +156,13 @@ class MarginalizedGraphKernel(object):
                            include_dirs=cpp.__path__)
         kernel = mod.get_function('graph_kernel_solver')
 
-        N = len(graph_list)
-        jobs = np.array([JobIn(i, j).state
-                         for i in range(N)
-                         for j in range(i, N)], JobIn.dtype)
-        jobs_d = to_gpu(jobs)
-
-        i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
-
-        graph_list_d = to_gpu(np.array([g.state for g in graph_list],
-                                       OctileGraph.dtype))
-
         launch_block_count = (self.device.MULTIPROCESSOR_COUNT
                               * self.block_per_sm)
         shmem_bytes_per_warp = mod.get_global('shmem_bytes_per_warp')[1]
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
-        max_graph_size = np.max([g.padded_size for g in graph_list])
+        max_graph_size = np.max([g.padded_size for g in X + Y])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
 
         # print("%-32s : %ld" % ("Blocks launched", launch_block_count))
@@ -155,10 +180,16 @@ class MarginalizedGraphKernel(object):
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
 
+        ''' collect result '''
         result = jobs_d.get().view(JobOut.dtype)
 
-        R = np.zeros((N, N))
-        for (i, j), (r, iter) in zip(jobs, result):
-            R[i, j] = R[j, i] = r
+        if len(Y):
+            R = np.zeros((N, M))
+            for (i, j), (r, iteration) in zip(jobs, result):
+                R[i, j - N] = r
+        else:
+            R = np.zeros((N, N))
+            for (i, j), (r, iteration) in zip(jobs, result):
+                R[i, j] = R[j, i] = r
 
         return R
