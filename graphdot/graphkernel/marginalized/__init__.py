@@ -39,7 +39,7 @@ class JobOut(object):
 
 class MarginalizedGraphKernel(object):
 
-    _template = os.path.join(os.path.dirname(__file__), 'kernel.cu')
+    _template = os.path.join(os.path.dirname(__file__), 'template.cu')
 
     def __init__(self, node_kernel, edge_kernel, **kwargs):
         self.node_kernel = node_kernel
