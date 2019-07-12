@@ -34,7 +34,7 @@ setup(
     name='graphdot',
     version=graphdot.__version__,
     url='https://gitlab.com/yhtang/graphdot',
-    license='TBD',
+    license='BSD',
     author='Yu-Hang Tang',
     tests_require=['tox'],
     install_requires=['numpy', 'pandas', 'pycuda', 'six', 'networkx'],
