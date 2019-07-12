@@ -69,7 +69,7 @@ def test_mlgk_vanilla():
 
     q = 0.5
     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
-    dot = mlgk.compute([dfg])
+    dot = mlgk([dfg])
 
     gold = MLGK(dfg, node_kernel, edge_kernel, q)
 
@@ -107,7 +107,7 @@ def test_mlgk():
     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
 
     G = [Graph.from_networkx(g) for g in [g1, g2]]
-    R = mlgk.compute(G)
+    R = mlgk(G)
 
     assert(R.shape == (2, 2))
     assert(np.count_nonzero(R - R.T) == 0)
@@ -145,7 +145,7 @@ def test_mlgk_weighted():
 
     G = [Graph.from_networkx(g, weight='w') for g in [g1, g2]]
 
-    R = mlgk.compute(G)
+    R = mlgk(G)
 
     assert(R.shape == (2, 2))
     assert(np.count_nonzero(R - R.T) == 0)
