@@ -77,9 +77,9 @@ class MarginalizedGraphKernel(object):
     def _assert_homegeneous(self, X):
         for x1, x2 in zip(X[:-1], X[1:]):
             try:
-                x1.weighted == x2.weighted
-                x1.node_type == x2.node_type
-                x1.edge_type == x2.edge_type
+                assert(x1.weighted == x2.weighted)
+                assert(x1.node_type == x2.node_type)
+                assert(x1.edge_type == x2.edge_type)
             except AssertionError as e:
                 raise TypeError('All graphs must be of the same type: %s' %
                                 str(e))

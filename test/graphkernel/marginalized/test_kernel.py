@@ -10,6 +10,43 @@ from graphdot.graphkernel.marginalized.basekernel import KroneckerDelta
 from graphdot.graphkernel.marginalized.basekernel import SquareExponential
 from graphdot.graphkernel.marginalized.basekernel import TensorProduct
 
+vanilla_graph = nx.Graph(title='vanilla')
+vanilla_graph.add_node('a', type=0)
+vanilla_graph.add_node('b', type=0)
+vanilla_graph.add_edge('a', 'b', weight=1.0)
+
+
+class Hybrid:
+    NONE = 0
+    SP = 1
+    SP2 = 2
+    SP3 = 3
+
+
+labeled_graph1 = nx.Graph(title='H2O')
+labeled_graph1.add_node('O1', hybridization=Hybrid.SP2, charge=1)
+labeled_graph1.add_node('H1', hybridization=Hybrid.SP3, charge=-1)
+labeled_graph1.add_node('H2', hybridization=Hybrid.SP, charge=2)
+labeled_graph1.add_edge('O1', 'H1', order=1, length=0.5)
+labeled_graph1.add_edge('O1', 'H2', order=2, length=1.0)
+
+labeled_graph2 = nx.Graph(title='H2')
+labeled_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
+labeled_graph2.add_node('H2', hybridization=Hybrid.SP, charge=1)
+labeled_graph2.add_edge('H1', 'H2', order=2, length=1.0)
+
+weighted_graph1 = nx.Graph(title='H2O')
+weighted_graph1.add_node('O1', hybridization=Hybrid.SP2, charge=1)
+weighted_graph1.add_node('H1', hybridization=Hybrid.SP3, charge=-1)
+weighted_graph1.add_node('H2', hybridization=Hybrid.SP, charge=2)
+weighted_graph1.add_edge('O1', 'H1', order=1, length=0.5, w=1.0)
+weighted_graph1.add_edge('O1', 'H2', order=2, length=1.0, w=2.0)
+
+weighted_graph2 = nx.Graph(title='H2')
+weighted_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
+weighted_graph2.add_node('H2', hybridization=Hybrid.SP, charge=1)
+weighted_graph2.add_edge('H1', 'H2', order=2, length=1.0, w=3.0)
+
 
 def MLGK(G, knode, kedge, q):
     N = len(G.nodes)
@@ -56,57 +93,53 @@ def MLGK(G, knode, kedge, q):
     return solution.sum()
 
 
-def test_mlgk_vanilla():
-
-    g = nx.Graph(title='A')
-    g.add_node('a', type=0)
-    g.add_node('b', type=0)
-    g.add_edge('a', 'b', weight=1.0)
-    dfg = Graph.from_networkx(g, weight='weight')
-
-    node_kernel = TensorProduct(type=KroneckerDelta(1.0, 1.0))
+def test_mlgk_typecheck():
+    node_kernel = Constant(1.0)
     edge_kernel = Constant(1.0)
+    mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=0.5)
+    G = [Graph.from_networkx(vanilla_graph),
+         Graph.from_networkx(labeled_graph1),
+         Graph.from_networkx(weighted_graph1, weight='w')]
+
+    with pytest.raises(TypeError):
+        mlgk([G[0], G[1]])
+    with pytest.raises(TypeError):
+        mlgk([G[0], G[2]])
+    with pytest.raises(TypeError):
+        mlgk([G[1], G[2]])
+    with pytest.raises(TypeError):
+        mlgk([G[1], G[0]])
+    with pytest.raises(TypeError):
+        mlgk([G[2], G[0]])
+    with pytest.raises(TypeError):
+        mlgk([G[2], G[1]])
+
+
+def test_mlgk_vanilla():
+    dfg = Graph.from_networkx(vanilla_graph, weight='weight')
 
     q = 0.5
+    node_kernel = TensorProduct(type=KroneckerDelta(1.0, 1.0))
+    edge_kernel = Constant(1.0)
     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
-    dot = mlgk([dfg])
 
+    dot = mlgk([dfg])
     gold = MLGK(dfg, node_kernel, edge_kernel, q)
 
     assert(dot.shape == (1, 1))
-    assert(np.asscalar(dot) == pytest.approx(gold))
+    assert(dot.item() == pytest.approx(gold))
 
 
-def test_mlgk():
+def test_mlgk_labeled():
+    G = [Graph.from_networkx(g) for g in [labeled_graph1, labeled_graph2]]
 
-    class Hybrid:
-        NONE = np.int32(0)
-        SP = np.int32(1)
-        SP2 = np.int32(2)
-        SP3 = np.int32(3)
-
-    g1 = nx.Graph(title='H2O')
-    g1.add_node('O1', hybridization=Hybrid.SP2, charge=np.int32(1))
-    g1.add_node('H1', hybridization=Hybrid.SP3, charge=np.int32(-1))
-    g1.add_node('H2', hybridization=Hybrid.SP, charge=np.int32(2))
-    g1.add_edge('O1', 'H1', order=np.int32(1), length=np.float32(0.5))
-    g1.add_edge('O1', 'H2', order=np.int32(2), length=np.float32(1.0))
-
-    g2 = nx.Graph(title='H2')
-    g2.add_node('H1', hybridization=Hybrid.SP, charge=np.int32(1))
-    g2.add_node('H2', hybridization=Hybrid.SP, charge=np.int32(1))
-    g2.add_edge('H1', 'H2', order=np.int32(2), length=np.float32(1.0))
-
+    q = 0.1
     node_kernel = TensorProduct(hybridization=KroneckerDelta(0.3, 1.0),
                                 charge=SquareExponential(1.0))
 
     edge_kernel = TensorProduct(order=KroneckerDelta(0.3, 1.0),
                                 length=SquareExponential(0.05))
-
-    q = 0.1
     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
-
-    G = [Graph.from_networkx(g) for g in [g1, g2]]
     R = mlgk(G)
 
     assert(R.shape == (2, 2))
@@ -116,34 +149,16 @@ def test_mlgk():
 
 
 def test_mlgk_weighted():
+    G = [Graph.from_networkx(g, weight='w') for g in [weighted_graph1,
+                                                      weighted_graph2]]
 
-    class Hybrid:
-        NONE = np.int32(0)
-        SP = np.int32(1)
-        SP2 = np.int32(2)
-        SP3 = np.int32(3)
-
-    g1 = nx.Graph(title='H2O')
-    g1.add_node('O1', hybridization=Hybrid.SP2, charge=np.int32(1))
-    g1.add_node('H1', hybridization=Hybrid.SP3, charge=np.int32(-1))
-    g1.add_node('H2', hybridization=Hybrid.SP, charge=np.int32(2))
-    g1.add_edge('O1', 'H1', order=np.int32(1), length=np.float32(0.5), w=1.0)
-    g1.add_edge('O1', 'H2', order=np.int32(2), length=np.float32(1.0), w=2.0)
-
-    g2 = nx.Graph(title='H2')
-    g2.add_node('H1', hybridization=Hybrid.SP, charge=np.int32(1))
-    g2.add_node('H2', hybridization=Hybrid.SP, charge=np.int32(1))
-    g2.add_edge('H1', 'H2', order=np.int32(2), length=np.float32(1.0), w=3.0)
-
+    q = 0.1
     node_kernel = TensorProduct(hybridization=KroneckerDelta(0.3, 1.0),
                                 charge=SquareExponential(1.0))
 
     edge_kernel = TensorProduct(order=KroneckerDelta(0.3, 1.0),
                                 length=SquareExponential(0.05))
-    q = 0.1
     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
-
-    G = [Graph.from_networkx(g, weight='w') for g in [g1, g2]]
 
     R = mlgk(G)
 
