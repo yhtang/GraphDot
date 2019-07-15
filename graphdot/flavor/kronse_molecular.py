@@ -4,10 +4,10 @@ import uuid
 import numpy as np
 import pandas as pd
 from graphdot import Graph
-from graphdot.graphkernel.marginalized import MarginalizedGraphKernel
-from graphdot.graphkernel.marginalized.basekernel import KroneckerDelta
-from graphdot.graphkernel.marginalized.basekernel import SquareExponential
-from graphdot.graphkernel.marginalized.basekernel import TensorProduct
+from graphdot.kernel.marginalized import MarginalizedGraphKernel
+from graphdot.kernel.marginalized.basekernel import KroneckerDelta
+from graphdot.kernel.marginalized.basekernel import SquareExponential
+from graphdot.kernel.marginalized.basekernel import TensorProduct
 
 
 def add_classmethod(cls):
