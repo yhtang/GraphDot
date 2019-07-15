@@ -166,3 +166,43 @@ def test_mlgk_weighted():
     assert(np.count_nonzero(R - R.T) == 0)
     assert(R[0, 0] == pytest.approx(MLGK(G[0], node_kernel, edge_kernel, q)))
     assert(R[1, 1] == pytest.approx(MLGK(G[1], node_kernel, edge_kernel, q)))
+
+
+def test_mlgk_large():
+    g = nx.Graph()
+    n = 32
+    for i, row in enumerate(np.random.randint(0, 2, (n, n))):
+        g.add_node(i, type=0)
+        for j, pred in enumerate(row[:i]):
+            if pred:
+                g.add_edge(i, j, weight=1)
+
+    dfg = Graph.from_networkx(g)
+
+    q = 0.5
+    node_kernel = TensorProduct(type=KroneckerDelta(1.0, 1.0))
+    edge_kernel = Constant(1.0)
+    mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
+
+    dot = mlgk([dfg])
+    gold = MLGK(dfg, node_kernel, edge_kernel, q)
+
+    assert(dot.shape == (1, 1))
+    assert(dot.item() == pytest.approx(gold))
+
+    #
+    #
+    # q = 0.1
+    # node_kernel = TensorProduct(hybridization=KroneckerDelta(0.3, 1.0),
+    #                             charge=SquareExponential(1.0))
+    #
+    # edge_kernel = TensorProduct(order=KroneckerDelta(0.3, 1.0),
+    #                             length=SquareExponential(0.05))
+    # mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
+    #
+    # R = mlgk(G)
+    #
+    # assert(R.shape == (2, 2))
+    # assert(np.count_nonzero(R - R.T) == 0)
+    # assert(R[0, 0] == pytest.approx(MLGK(G[0], node_kernel, edge_kernel, q)))
+    # assert(R[1, 1] == pytest.approx(MLGK(G[1], node_kernel, edge_kernel, q)))

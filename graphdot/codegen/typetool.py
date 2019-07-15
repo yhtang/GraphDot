@@ -7,6 +7,21 @@ from graphdot.codegen import Template
 __all__ = ['cpptype', 'decltype', 'rowtype']
 
 
+_convertible = {
+    'b': 'biuf',
+    'i': 'biuf',
+    'u': 'biuf',
+    'f': 'biuf',
+    'c': 'c',
+    'm': 'm',
+    'M': 'M',
+    'O': 'O',
+    'S': 'S',
+    'U': 'U',
+    'V': 'V'
+}
+
+
 # def cpptype(dtype=[], **kwtype):  # only works with python>=3.6
 def cpptype(dtype=[]):
     """
@@ -56,7 +71,7 @@ def cpptype(dtype=[]):
             def __setattr__(self, name, value):
                 if name in Class.dtype.names:
                     t = Class.dtype.fields[name][0]
-                    if np.dtype(type(value)).kind != t.kind:
+                    if np.dtype(type(value)).kind not in _convertible[t.kind]:
                         raise ValueError(
                             "Cannot set attribute '{}' (C++ type {}) "
                             "with value {} of {}".format(name, t,

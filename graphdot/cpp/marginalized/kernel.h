@@ -44,7 +44,7 @@ template<class Node, class Edge> struct graph_t {
     using edge_t = Edge;
     using octile_t = struct {
         int upper, left;
-        std::int64_t nzmask;
+        std::uint64_t nzmask;
         edge_t * elements;
     };
 
@@ -129,8 +129,8 @@ struct octile_block_solver {
         const int i1_upper,
         const int i1_lower,
         const int i2,
-        const std::int64_t nzmask1,
-        const std::int64_t nzmask2,
+        const std::uint64_t nzmask1,
+        const std::uint64_t nzmask2,
         octile octile1,
         octile octile2,
         rhs rhs,
@@ -256,11 +256,11 @@ struct octile_block_solver {
                         auto o1 = g1.octile[ O1 + p1 ];
                         const int I1 = o1.upper;
                         const int J1 = o1.left;
-                        const std::int64_t nzmask1 = o1.nzmask;
+                        const std::uint64_t nzmask1 = o1.nzmask;
                         auto o2 = g2.octile[ O2 + p2 ];
                         const int I2 = o2.upper;
                         const int J2 = o2.left;
-                        const std::int64_t nzmask2 = o2.nzmask;
+                        const std::uint64_t nzmask2 = o2.nzmask;
 
                         octile octile1 {p_shared + p1 * shmem_bytes_per_warp};
                         octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octile::size_bytes};
