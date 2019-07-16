@@ -24,12 +24,13 @@ Features
 Installation
 ============
 
-- Installation using pip
+Installation using pip
+
 ```
 pip install graphdot
 ```
 
-- Manual installation from source
+Manual installation from source
 
 ```
 git clone https://gitlab.com/yhtang/graphdot
