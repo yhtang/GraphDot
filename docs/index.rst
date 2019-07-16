@@ -10,6 +10,21 @@ Welcome to GraphDot's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+.. image:: https://gitlab.com/yhtang/graphdot/badges/master/pipeline.svg
+   :target: https://gitlab.com/yhtang/graphdot/commits/master
+
+.. image:: https://gitlab.com/yhtang/graphdot/badges/master/coverage.svg
+   :target: https://gitlab.com/yhtang/graphdot/commits/master
+
+.. image:: https://img.shields.io/badge/License-BSD%203--Clause-blue.svg
+   :TARGET: https://opensource.org/licenses/BSD-3-Clause
+
+.. image:: https://badge.fury.io/py/graphdot.svg
+   :target: https://badge.fury.io/py/graphdot
+
+.. image:: https://readthedocs.org/projects/pip/badge/?version=latest&style=flat
+   :target: https://graphdot.readthedocs.org/
+
 The GraphDot library implements a fully-featured and GPU-accelerated Marginalized Graph Kernel
 algorithm for computing the similarity between labeled and weighted graphs. The graphs does not have to contain the same
 number of nodes and/or edges.
