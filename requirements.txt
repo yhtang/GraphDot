@@ -1,6 +1,6 @@
+six
 numpy
 pandas
-pycuda
-six
-ase
 networkx
+pycuda
+ase
