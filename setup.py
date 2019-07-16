@@ -47,6 +47,7 @@ setup(
     author_email='Tang.Maxin@gmail.com',
     description='GPU-accelerated graph similarity algorithm library',
     long_description=long_description,
+    long_description_content_type="text/markdown",
     packages=find_packages(exclude='test'),
     package_data={
         'graphdot': ['*/*.h', '*/*/*.h', '*/*/*.cu'],
