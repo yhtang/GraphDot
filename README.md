@@ -1,4 +1,14 @@
-# The GraphDot Library [![pipeline status](https://gitlab.com/yhtang/graphdot/badges/master/pipeline.svg)](https://gitlab.com/yhtang/graphdot/commits/master) [![coverage report](https://gitlab.com/yhtang/graphdot/badges/master/coverage.svg)](https://gitlab.com/yhtang/graphdot/commits/master)
+# The GraphDot Library
+
+[![pipeline status](https://gitlab.com/yhtang/graphdot/badges/master/pipeline.svg)](https://gitlab.com/yhtang/graphdot/commits/master)
+[![coverage report](https://gitlab.com/yhtang/graphdot/badges/master/coverage.svg)](https://gitlab.com/yhtang/graphdot/commits/master)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![PyPI version](https://badge.fury.io/py/graphdot.svg)](https://badge.fury.io/py/graphdot)
+[![docs](https://readthedocs.org/projects/pip/badge/?version=latest&style=flat)](https://readthedocs.org/projects/pip/badge/?version=latest&style=flat)
+
+# Documentation
+
+[Read it here.](https://graphdot.readthedocs.io/)
 
 # Copyright
 
