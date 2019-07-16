@@ -16,7 +16,7 @@ API Reference
 .. toctree::
    :maxdepth: 1
 
-   api/graphdot
+   _api/graphdot
 
 
 Indices and tables
