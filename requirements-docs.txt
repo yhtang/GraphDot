@@ -1,0 +1,7 @@
+numpy
+pandas
+six
+sphinx
+sphinx-rtd-theme
+ase
+networkx
