@@ -1,5 +1,5 @@
 .. GraphDot documentation master file, created by
-   sphinx-quickstart on Tue Jun 11 10:04:26 2019.
+   sphinx-quickstart on Mon Jul 15 23:21:24 2019.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
@@ -10,15 +10,61 @@ Welcome to GraphDot's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   installation
-   quickstart
+.. image:: https://gitlab.com/yhtang/graphdot/badges/master/pipeline.svg
+   :target: https://gitlab.com/yhtang/graphdot/commits/master
+
+.. image:: https://gitlab.com/yhtang/graphdot/badges/master/coverage.svg
+   :target: https://gitlab.com/yhtang/graphdot/commits/master
+
+.. image:: https://img.shields.io/badge/License-BSD%203--Clause-blue.svg
+   :TARGET: https://opensource.org/licenses/BSD-3-Clause
+
+.. image:: https://badge.fury.io/py/graphdot.svg
+   :target: https://badge.fury.io/py/graphdot
+
+.. image:: https://readthedocs.org/projects/pip/badge/?version=latest&style=flat
+   :target: https://graphdot.readthedocs.org/
+
+The GraphDot library implements a fully-featured and GPU-accelerated Marginalized Graph Kernel
+algorithm for computing the similarity between labeled and weighted graphs. The graphs does not have to contain the same
+number of nodes and/or edges.
+
+Features
+========
+
+- Custom similarity functions on individual nodes and edges
+- Highly efficient CUDA acceleration
+- Major graph library formats such as NetworkX
+
+Installation
+============
+
+Installation using pip
+
+```
+pip install graphdot
+```
+
+Manual installation from source
+
+```
+git clone https://gitlab.com/yhtang/graphdot
+cd graphdot
+python setup.py install
+```
+
+User Guide
+==========
+
+TBD
 
 API Reference
 =============
 .. toctree::
    :maxdepth: 1
 
-   graphdot
+   _api/graphdot
+
 
 Indices and tables
 ==================

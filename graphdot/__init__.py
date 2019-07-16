@@ -1,4 +1,16 @@
 """
+The GraphDot library for graph similarity comparison
+"""
+from .graph import Graph
+
+__all__ = ['Graph']
+
+__version__ = '0.1a3'
+__author__ = 'Yu-Hang "Maxin" Tang, Oguz Selvitopi, Doru Popovici'
+__maintainer__ = 'Yu-Hang "Maxin" Tang'
+__email__ = 'Tang.Maxin@gmail.com'
+__license__ = 'see LICENSE file'
+__copyright__ = '''
 GraphDot Copyright (c) 2019, The Regents of the University of California,
 through Lawrence Berkeley National Laboratory (subject to receipt of any
 required approvals from the U.S. Dept. of Energy).  All rights reserved.
@@ -14,14 +26,4 @@ its behalf a paid-up, nonexclusive, irrevocable, worldwide license in the
 Software to reproduce, distribute copies to the public, prepare derivative
 works, and perform publicly and display publicly, and to permit other to do
 so.
-"""
-from .graph import Graph
-
-__all__ = ['Graph']
-
-__version__ = '0.1a1'
-__author__ = 'Yu-Hang "Maxin" Tang, Oguz Selvitopi, Doru Popovici'
-__copyright__ = 'Copyright 2019'
-__maintainer__ = 'Yu-Hang "Maxin" Tang'
-__email__ = 'Tang.Maxin@gmail.com'
-__license__ = 'see LICENSE file'
+'''

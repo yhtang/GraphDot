@@ -15,7 +15,10 @@ from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
 
-pycuda.driver.init()
+try:
+    pycuda.driver.init()
+except Exception as e:
+    raise RuntimeWarning('PyCUDA initialization failed, message: ' + str(e))
 
 
 # only works with python >= 3.6

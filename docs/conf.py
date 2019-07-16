@@ -12,21 +12,55 @@
 #
 import os
 import sys
+sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('..'))
 import graphdot
+
+
+# Automatically call apidoc
+# See https://github.com/rtfd/readthedocs.org/issues/1139
+def run_apidoc(_):
+
+    current_dir = os.path.abspath(os.path.dirname(__file__))
+    module = os.path.join(current_dir, "..", "graphdot")
+
+    api = os.path.join(current_dir, "_api")
+    argv = [
+        "--force",
+        "--module-first",
+        "--no-toc",
+        "--separate",
+        "-o", api,
+        module
+    ]
+
+    try:
+        # Sphinx 1.7+
+        from sphinx.ext import apidoc
+        apidoc.main(argv)
+    except ImportError:
+        # Sphinx 1.6 (and earlier)
+        from sphinx import apidoc
+        argv.insert(0, apidoc.__file__)
+        apidoc.main(argv)
+
+
+def setup(app):
+    app.connect('builder-inited', run_apidoc)
 
 # -- Project information -----------------------------------------------------
 
 project = 'GraphDot'
-copyright = '2019, Yu-Hang Tang'
-author = 'Yu-Hang Tang'
+copyright = '2019, Yu-Hang "Maxin" Tang'
+author = 'Yu-Hang "Maxin" Tang'
 
 # The full version, including alpha/beta/rc tags
-#release = 'TBD'
 release = graphdot.__version__
 
 
 # -- General configuration ---------------------------------------------------
+
+master_doc = 'index'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -35,7 +69,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',
-    'sphinx.ext.todo',
+    'sphinx.ext.mathjax',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -59,17 +93,13 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_materialdesign_theme'
+# html_theme = 'sphinx_materialdesign_theme'
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = []
 
 
 # -- Extension configuration -------------------------------------------------
-
-# -- Options for todo extension ----------------------------------------------
-
-# If true, `todo` and `todoList` produce output, else they produce nothing.
-todo_include_todos = True
