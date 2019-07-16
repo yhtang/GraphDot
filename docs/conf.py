@@ -15,6 +15,38 @@ import sys
 sys.path.insert(0, os.path.abspath('..'))
 import graphdot
 
+
+# Automatically call apidoc
+# See https://github.com/rtfd/readthedocs.org/issues/1139
+def run_apidoc(_):
+
+    current_dir = os.path.abspath(os.path.dirname(__file__))
+    module = os.path.join(current_dir, "..", "graphdot")
+
+    api = os.path.join(current_dir, "_api")
+    argv = [
+        "--force",
+        "--module-first",
+        "--no-toc",
+        "--separate",
+        "-o", api,
+        module
+    ]
+
+    try:
+        # Sphinx 1.7+
+        from sphinx.ext import apidoc
+        apidoc.main(argv)
+    except ImportError:
+        # Sphinx 1.6 (and earlier)
+        from sphinx import apidoc
+        argv.insert(0, apidoc.__file__)
+        apidoc.main(argv)
+
+
+def setup(app):
+    app.connect('builder-inited', run_apidoc)
+
 # -- Project information -----------------------------------------------------
 
 project = 'GraphDot'
