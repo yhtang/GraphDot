@@ -2,7 +2,6 @@ six
 numpy
 pandas
 networkx
-pycuda
 ase
 sphinx
 sphinx-rtd-theme
