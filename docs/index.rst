@@ -11,6 +11,13 @@ Welcome to GraphDot's documentation!
    :caption: Contents:
 
 
+API Reference
+=============
+.. toctree::
+   :maxdepth: 1
+
+   api/graphdot
+
 
 Indices and tables
 ==================
