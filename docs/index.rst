@@ -32,7 +32,9 @@ pip install graphdot
 - Manual installation from source
 
 ```
-TBD
+git clone https://gitlab.com/yhtang/graphdot
+cd graphdot
+python setup.py install
 ```
 
 User Guide
