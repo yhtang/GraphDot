@@ -3,6 +3,6 @@ pandas
 pycuda
 six
 sphinx
-sphinx-materialdesign-theme-nopyc
+sphinx-rtd-theme
 ase
 networkx
