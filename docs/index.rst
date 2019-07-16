@@ -10,6 +10,35 @@ Welcome to GraphDot's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+The GraphDot library implements a fully-featured and GPU-accelerated Marginalized Graph Kernel
+algorithm for computing the similarity between labeled and weighted graphs. The graphs does not have to contain the same
+number of nodes and/or edges.
+
+Features
+========
+
+- Custom similarity functions on individual nodes and edges
+- Highly efficient CUDA acceleration
+- Major graph library formats such as NetworkX
+
+Installation
+============
+
+- Installation using pip
+```
+pip install graphdot
+```
+
+- Manual installation from source
+
+```
+TBD
+```
+
+User Guide
+==========
+
+TBD
 
 API Reference
 =============
