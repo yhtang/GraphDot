@@ -5,7 +5,7 @@ from .graph import Graph
 
 __all__ = ['Graph']
 
-__version__ = '0.1a1'
+__version__ = '0.1a3'
 __author__ = 'Yu-Hang "Maxin" Tang, Oguz Selvitopi, Doru Popovici'
 __maintainer__ = 'Yu-Hang "Maxin" Tang'
 __email__ = 'Tang.Maxin@gmail.com'
