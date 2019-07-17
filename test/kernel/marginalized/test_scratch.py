@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 import pycuda.autoinit
-from graphdot.kernel.marginalized.scratch import BlockScratch
+from graphdot.kernel.marginalized._scratch import BlockScratch
 
 
 def test_scratch():
@@ -27,5 +27,5 @@ def test_scratch_allocation(size):
     assert(scratch.state)
     with pytest.raises(AttributeError):
         scratch.ptr = np.uint64(0)
-    with pytest.raises(ValueError):
+    with pytest.raises(AttributeError):
         scratch.ptr = 0

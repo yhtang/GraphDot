@@ -9,8 +9,8 @@ from pycuda.gpuarray import to_gpu
 from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype, decltype
-from .scratch import BlockScratch
-from .octilegraph import OctileGraph
+from ._scratch import BlockScratch
+from ._octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
