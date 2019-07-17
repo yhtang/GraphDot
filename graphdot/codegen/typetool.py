@@ -8,10 +8,11 @@ __all__ = ['cpptype', 'decltype', 'rowtype']
 
 
 _convertible = {
-    'b': 'biuf',
-    'i': 'biuf',
-    'u': 'biuf',
-    'f': 'biuf',
+    # lvalue : rvalue
+    'b': 'b',
+    'i': 'iu',
+    'u': 'iu',
+    'f': 'f',
     'c': 'c',
     'm': 'm',
     'M': 'M',
