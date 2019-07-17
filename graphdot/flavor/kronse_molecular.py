@@ -4,21 +4,13 @@ import itertools
 import uuid
 import numpy as np
 import pandas as pd
-from graphdot import Graph
+from graphdot.graph import Graph
+from graphdot.util import add_classmethod
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
 from graphdot.kernel.marginalized.basekernel import KroneckerDelta
 from graphdot.kernel.marginalized.basekernel import SquareExponential
 from graphdot.kernel.marginalized.basekernel import TensorProduct
 from graphdot.graph.adjacency.euclidean import Tent
-
-
-def add_classmethod(cls):
-    def decorate(func):
-        if hasattr(cls, func.__name__):
-            raise RuntimeWarning(' '.join(['Overriding', repr(cls),
-                                           'existing method', repr(func)]))
-        setattr(cls, func.__name__, classmethod(func))
-    return decorate
 
 
 class SimpleTentAtomicAdjacency:
