@@ -5,18 +5,15 @@ from graphdot.graph.adjacency.euclidean import Tent
 
 
 class SimpleTentAtomicAdjacency:
-    def __init__(self, h=1.0, order=1):
+    def __init__(self, h=1.0, order=1, images=None):
         self.adj = Tent(h * 3, order)
+        self.images = images if images is not None else np.zeros((1, 3))
 
-    def __call__(self, atom1, atom2, images, cell):
+    def __call__(self, atom1, atom2):
         dx = atom1.position - atom2.position
-        rmin = np.linalg.norm(dx)
-        for ix, iy, iz in images:
-            d = dx + cell[0] * ix + cell[1] * iy + cell[2] * iz
-            r = np.linalg.norm(d)
-            if r < rmin:
-                rmin = r
-        return self.adj(np.linalg.norm(rmin)), rmin
+        dr = np.linalg.norm(dx + self.images, axis=1)
+        imin = np.argmin(dr)
+        return self.adj(np.linalg.norm(dr[imin])), dr[imin]
 
     @property
     def cutoff(self):
