@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import itertools
 import uuid
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ from graphdot.kernel.marginalized import MarginalizedGraphKernel
 from graphdot.kernel.marginalized.basekernel import KroneckerDelta
 from graphdot.kernel.marginalized.basekernel import SquareExponential
 from graphdot.kernel.marginalized.basekernel import TensorProduct
+from graphdot.graph.adjacency.euclidean import Tent
 
 
 def add_classmethod(cls):
@@ -19,31 +21,50 @@ def add_classmethod(cls):
     return decorate
 
 
-@add_classmethod(Graph)
-def from_ase(cls, atoms, adjacency='tent', bonding_distance='default',
-             bonding_zoom=5.0):
+class SimpleTentAtomicAdjacency:
+    def __init__(self, h=1.0, order=1):
+        self.adj = Tent(h * 3, order)
 
-    from graphdot.graph.adjacency.euclidean import Tent
+    def __call__(self, atom1, atom2, images, cell):
+        dx = atom1.position - atom2.position
+        rmin = np.linalg.norm(dx)
+        for ix, iy, iz in images:
+            d = dx + cell[0] * ix + cell[1] * iy + cell[2] * iz
+            r = np.linalg.norm(d)
+            if r < rmin:
+                rmin = r
+        return self.adj(np.linalg.norm(rmin)), rmin
+
+    @property
+    def cutoff(self):
+        return self.adj.h * 3
+
+
+@add_classmethod(Graph)
+def from_ase(cls, atoms, use_pbc=True, adjacency='default'):
 
     nodes = pd.DataFrame()
     nodes['element'] = atoms.get_atomic_numbers().astype(np.int8)
 
-    n = len(atoms)
-    adj = Tent(bonding_zoom, 2)
-    x = atoms.get_positions()
-    ij, weight, length = [], [], []
-    for i in range(n):
-        for j in range(i+1, n):
-            w = adj(x[i], x[j])
-            if w > 0:
-                ij.append((i, j))
-                weight.append(w)
-                length.append(np.linalg.norm(x[i] - x[j]))
+    if adjacency == 'default':
+        adj = SimpleTentAtomicAdjacency(h=1.0, order=1)
+    else:
+        adj = adjacency
 
-    edges = pd.DataFrame()
-    edges['!ij'] = ij
-    edges['!w'] = np.array(weight).astype(np.float32)
-    edges['length'] = length
+    images = list(itertools.product(*tuple([-1, 0, 1] if p else [0]
+                                           for p in np.logical_and(atoms.pbc,
+                                                                   use_pbc))))
+
+    edge_data = []
+    for atom1 in atoms:
+        for atom2 in atoms:
+            if atom2.index <= atom1.index:
+                continue
+            w, r = adj(atom1, atom2, images, atoms.cell)
+            if w > 0:
+                edge_data.append(((atom1.index, atom2.index), w, r))
+
+    edges = pd.DataFrame(edge_data, columns=['!ij', '!w', 'length'])
 
     return cls(nodes, edges, title='ASE Atoms {formula} {id}'.format(
                formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
@@ -71,15 +92,25 @@ class Tang2019MolecularKernel(object):
 if __name__ == '__main__':
 
     from ase.build import molecule
+    from ase import Atoms
 
-    molecules = [molecule('H2'), molecule('O2'), molecule('H2O'), molecule('CH4'), molecule('CH3OH')]
-    for m in molecules:
-        print(m)
+    # molecules = [molecule('H2'), molecule('O2'), molecule('H2O'), molecule('CH4'), molecule('CH3OH')]
+    # for m in molecules:
+    #     print(m)
 
-    G = [Graph.from_ase(m) for m in molecules]
+    m = Atoms('H3', [[0, 0, 0], [1, 0, 0], [2, 0, 0]])
+    m.pbc = [True, False, False]
+    m.cell = np.array([[3.0, 0, 0], [0, 0, 0], [0, 0, 0]])
 
-    kernel = Tang2019MolecularKernel(element_prior=0.5)
-    np.set_printoptions(precision=4, suppress=True)
-    K = kernel(G)
-    D = np.diag(np.diag(K)**-0.5)
-    print(D.dot(K).dot(D))
+    g = Graph.from_ase(m, use_pbc=True)
+    print(g.edges)
+
+
+
+    # G = [Graph.from_ase(m) for m in molecules]
+    #
+    # kernel = Tang2019MolecularKernel(element_prior=0.5)
+    # np.set_printoptions(precision=4, suppress=True)
+    # K = kernel(G)
+    # D = np.diag(np.diag(K)**-0.5)
+    # print(D.dot(K).dot(D))
