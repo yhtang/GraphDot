@@ -29,9 +29,9 @@ class Tang2019MolecularKernel(object):
 
     def __init__(self, stopping_probability=0.01, element_prior=0.2,
                  edge_length_scale=0.05):
-        self.stopping_probability = kwargs.pop('stopping_probability', 0.01)
-        self.element_prior = kwargs.pop('element_prior', 0.2)
-        self.edge_length_scale = kwargs.pop('edge_length_scale', 0.05)
+        self.stopping_probability = stopping_probability
+        self.element_prior = element_prior
+        self.edge_length_scale = edge_length_scale
         self._makekernel()
 
     def _makekernel(self):
