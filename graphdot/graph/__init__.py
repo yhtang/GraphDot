@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-This package defines the Graph container class of graphdot and converts from
-popular graph libraries.
+"""GraphDot's native graph container class
+
+This module defines the class ``Graph`` that are used to store graphs across
+this library, and provides conversion and importing methods from popular
+graph formats.
 """
 import pandas as pd
 
@@ -23,13 +25,20 @@ def _from_dict(d):
 
 
 class Graph(object):
+    """
+    This is the class that stores a graph in GraphDot.
+
+    Parameters
+    ----------
+    nodes: dataframe
+        each row represent a node
+    edges: dataframe
+        each row represent an edge
+    title: str
+        a unique identifier of the graph
+    """
 
     def __init__(self, nodes, edges, title=''):
-        """
-        nodes: dataframe
-        edges: dataframe
-        title: str
-        """
         self.title = title
         self.nodes = _from_dict(nodes)
         self.edges = _from_dict(edges)
@@ -73,9 +82,20 @@ class Graph(object):
 
     @classmethod
     def from_networkx(cls, graph, weight=None):
-        """
-        graph: NetworkX Graph objects with nodal/edge attributes
-        weight: attribute name for edge weights
+        """Convert from NetworkX ``Graph``
+
+        Parameters
+        ----------
+        graph: a NetworkX ``Graph`` instance
+            an undirected graph with homogeneous node and edge attributes, i.e.
+            carrying same attributes.
+        weight: str
+            name of the attribute that encode edge weights
+
+        Returns
+        -------
+        graphdot.graph.Graph
+            the converted graph
         """
         import networkx as nx
         graph = nx.relabel.convert_node_labels_to_integers(graph)

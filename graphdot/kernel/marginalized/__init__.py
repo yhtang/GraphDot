@@ -38,6 +38,25 @@ class JobOut(object):
 
 
 class MarginalizedGraphKernel(object):
+    """Implements the random walk-based graph similarity kernel as proposed in:
+    Kashima, H., Tsuda, K., & Inokuchi, A. (2003).
+    Marginalized kernels between labeled graphs. *In Proceedings of the 20th
+    international conference on machine learning (ICML-03)* (pp. 321-328).
+
+    Parameters
+    ----------
+    node_kernel: base kernel or composition of base kernels
+        A kernelet that computes the similarity between individual nodes
+    edge_kernel: base kernel or composition of base kernels
+        A kernelet that computes the similarity between individual edge
+    kwargs: optional arguments
+        q: float in (0, 1)
+            The probability for the random walk to stop during each step
+        block_per_sm: int
+            Tunes the GPU kernel
+        block_size: int
+            Tunes the GPU kernel
+    """
 
     _template = os.path.join(os.path.dirname(__file__), 'template.cu')
 
@@ -72,6 +91,7 @@ class MarginalizedGraphKernel(object):
             self.ctx.synchronize()
 
     def clone_with_theta():
+        """scikit-learn compatibility method"""
         pass
 
     def _assert_homegeneous(self, X):
@@ -85,8 +105,21 @@ class MarginalizedGraphKernel(object):
                                 str(e))
 
     def __call__(self, X, Y=None):
-        """
-        pairwise kernel computation
+        """Compute pairwise similarity matrix between graphs
+
+        Parameters
+        ----------
+        X: list of N graphs
+            The graphs must all have same node and edge attributes.
+        Y: None or list of M graphs
+            The graphs must all have same node and edge attributes.
+
+        Returns
+        -------
+        numpy.array
+            if Y is None, return a N-by-N matrix containing pairwise
+            similarities between the graphs in X; otherwise, returns a N-by-M
+            matrix containing similarities across graphs in X and Y.
         """
 
         ''' transfer grahs to GPU '''
