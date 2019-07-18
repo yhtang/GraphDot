@@ -76,8 +76,7 @@ def decltype(type, name=''):
     type = np.dtype(type, align=True)  # convert np.float32 etc. to dtype
     if type.names is not None:
         if len(type.names):
-            return Template(r'struct ${cls}{${members;};}${name}').render(
-                cls=name,
+            return Template(r'struct{${members;};}${name}').render(
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
