@@ -37,7 +37,7 @@ setup(
     license='BSD',
     author='Yu-Hang Tang',
     tests_require=['tox'],
-    install_requires=['numpy', 'pandas', 'pycuda', 'six', 'networkx'],
+    install_requires=['numpy', 'pandas', 'pycuda', 'networkx'],
     extras_require={
         'molecular': ['ase', 'pymatgen'],
     },

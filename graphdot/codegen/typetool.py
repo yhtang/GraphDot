@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from six import with_metaclass
 import numpy as np
 from graphdot.codegen import Template
 
@@ -45,8 +44,7 @@ def cpptype(dtype=[]):
             def __repr__(cls):
                 return '@cpptype({})\n{}'.format(repr(dtype), repr(clss))
 
-        # class Class(clss, metaclass=CppType):
-        class Class(with_metaclass(CppType, clss)):
+        class Class(clss, metaclass=CppType):
             @property
             def dtype(self):
                 return Class.dtype

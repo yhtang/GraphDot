@@ -6,7 +6,7 @@ from graphdot.kernel.marginalized.basekernel import SquareExponential
 from graphdot.kernel.marginalized.basekernel import TensorProduct
 
 
-class Tang2019MolecularKernel(object):
+class Tang2019MolecularKernel:
     """A margianlized graph kernel for **3D molecular structures** as in:
     Tang, Y. H., & de Jong, W. A. (2019). Prediction of atomization energy
     using graph kernel and active learning. *The Journal of chemical physics*,

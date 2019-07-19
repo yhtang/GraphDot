@@ -24,7 +24,7 @@ except Exception as e:
 # only works with python >= 3.6
 # @cpptype(i=np.int32, j=np.int32)
 @cpptype([('i', np.int32), ('j', np.int32)])
-class JobIn(object):
+class JobIn:
     def __init__(self, i, j):
         self.i = i
         self.j = j
@@ -33,11 +33,11 @@ class JobIn(object):
 # only works with python >= 3.6
 # @cpptype(similarity=np.float32, iterations=np.int32)
 @cpptype([('similarity', np.float32), ('iterations', np.int32)])
-class JobOut(object):
+class JobOut:
     pass
 
 
-class MarginalizedGraphKernel(object):
+class MarginalizedGraphKernel:
     """Implements the random walk-based graph similarity kernel as proposed in:
     Kashima, H., Tsuda, K., & Inokuchi, A. (2003).
     Marginalized kernels between labeled graphs. *In Proceedings of the 20th

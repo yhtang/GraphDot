@@ -24,7 +24,7 @@ def _from_dict(d):
         return pd.DataFrame(d)
 
 
-class Graph(object):
+class Graph:
     """
     This is the class that stores a graph in GraphDot.
 
