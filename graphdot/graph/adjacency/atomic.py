@@ -6,6 +6,7 @@ from graphdot.graph.adjacency.euclidean import Tent
 
 class SimpleTentAtomicAdjacency:
     def __init__(self, h=1.0, order=1, images=None):
+        self.h = h
         self.adj = Tent(h * 3, order)
         self.images = images if images is not None else np.zeros((1, 3))
 
@@ -17,4 +18,4 @@ class SimpleTentAtomicAdjacency:
 
     @property
     def cutoff(self):
-        return self.adj.h * 3
+        return self.h * 3
