@@ -39,9 +39,7 @@ setup(
     tests_require=['tox'],
     install_requires=['numpy', 'pandas', 'pycuda', 'six', 'networkx'],
     extras_require={
-        'ASE': ['ase'],
-        'docs': ['sphinx',
-                 'sphinx-materialdesign-theme-nopyc'],
+        'molecular': ['ase', 'pymatgen'],
     },
     cmdclass={'test': Tox},
     author_email='Tang.Maxin@gmail.com',
