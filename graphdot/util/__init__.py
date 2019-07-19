@@ -9,5 +9,8 @@ def add_classmethod(cls):
             warnings.warn(' '.join(['Overriding', repr(cls),
                                     'existing method', repr(func)]),
                           category=RuntimeWarning)
-        setattr(cls, func.__name__, classmethod(func))
+        clsm = classmethod(func)
+        clsm.__doc__ = "Add-on classmethod of %s\n\n%s" % (cls, func.__doc__)
+        setattr(cls, func.__name__, clsm)
+        return clsm
     return decorate
