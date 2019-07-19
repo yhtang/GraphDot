@@ -137,6 +137,28 @@ class Graph(object):
 
         return cls(nodes=node_df, edges=edge_df, title=title)
 
+    @classmethod
+    def from_molecule(cls, molecule, use_pbc=True, adjacency='default'):
+        """Convert molecules to graphs
+
+        Parameters
+        ----------
+        atoms: an ASE Atoms or pymatgen Molecule object
+            A molecule as represented by a collection of atoms in 3D space.
+        usb_pbc: boolean or list of 3 booleans
+            Whether to use the periodic boundary condition as specified in the
+            atoms object to create edges between atoms.
+        adjacency: 'default' or object
+            A functor that implements the rule for making edges between atoms.
+
+        Returns
+        -------
+        Graph:
+            a molecular graph where atoms become nodes while edges resemble
+            short-range interatomic interactions.
+        """
+        raise RuntimeError('To convert from molecules, import graph.molecular')
+
     # @classmethod
     # def from_graphviz(cls, molecule):
     #     pass

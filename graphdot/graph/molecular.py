@@ -12,26 +12,9 @@ from graphdot.graph.adjacency.atomic import SimpleTentAtomicAdjacency
 from graphdot.util import add_classmethod
 
 
-@add_classmethod(Graph)
+@add_classmethod(Graph, override=True)
 def from_molecule(cls, molecule, use_pbc=True, adjacency='default'):
-    """Convert molecules to graphs
-
-    Parameters
-    ----------
-    atoms: an ASE Atoms or pymatgen Molecule object
-        A molecule as represented by a collection of atoms in 3D space.
-    usb_pbc: boolean or list of 3 booleans
-        Whether to use the periodic boundary condition as specified in the
-        atoms object to create edges between atoms.
-    adjacency: 'default' or object
-        A functor that implements the rule for creating edges between atoms.
-
-    Returns
-    -------
-    Graph:
-        a molecular graph where atoms become nodes while edges resemble short-
-        range interatomic interactions.
-    """
+    """Actual definition of :meth:`graphdot.Graph.from_molecule`"""
     if isinstance(molecule, ase.Atoms):
         atoms = molecule
     elif isinstance(molecule, pymatgen.Molecule):
