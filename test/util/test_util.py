@@ -15,12 +15,16 @@ def test_add_classmethod():
         return True
 
     assert(hasattr(Class, 'fun'))
-    assert(Class.fun() == fun(Class))
+    assert(isinstance(fun, classmethod))
 
     with pytest.raises(RuntimeError):
         @add_classmethod(Class)
         def fun(cls):
             return False
+
+    @add_classmethod(Class, override=True)
+    def fun(cls):
+        return False
 
     assert(hasattr(Class, 'fun'))
     assert(not Class.fun())
