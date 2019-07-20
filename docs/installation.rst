@@ -18,13 +18,11 @@ Installation using pip
 Installation from source
 --------------------------------------------------------------------------------
 
-Ubuntu
+Ubuntu/Fedora
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 .. code-block:: bash
 
-    apt update
-    apt install python3-pip
     git clone https://gitlab.com/yhtang/graphdot
     cd graphdot
     pip3 install -r requirements.txt

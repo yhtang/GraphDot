@@ -32,9 +32,10 @@ Features
 - Interoperable with scikit-learn.
 - Built-in specialization for chemistry and material science applications.
 
+Contents
+--------
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    installation
    quickstart
