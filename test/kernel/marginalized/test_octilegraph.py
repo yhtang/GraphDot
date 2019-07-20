@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 import pycuda.autoinit
-from graphdot.graphkernel.marginalized.octilegraph import OctileGraph, Octile
+from graphdot.kernel.marginalized._octilegraph import OctileGraph, Octile
 from graphdot import Graph
 
 

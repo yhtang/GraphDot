@@ -1,6 +1,6 @@
-six
 numpy
 pandas
 networkx
 pycuda
 ase
+pymatgen

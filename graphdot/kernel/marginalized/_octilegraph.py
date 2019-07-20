@@ -8,13 +8,13 @@ __all__ = ['OctileGraph']
 
 # only works with python >= 3.6
 # @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
-@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', np.int64),
+@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', np.uint64),
           ('elements', np.uintp)])
 class Octile(object):
     """
     using octile_t = struct {
         int upper, left;
-        std::int64_t nzmask;
+        std::uint64_t nzmask;
         edge_t * elements;
     };
     """
@@ -77,9 +77,9 @@ class OctileGraph(object):
         ''' collect non-zero edge octiles '''
         uniq_oct = np.unique([(i - i % 8, j - j % 8)
                               for i, j in graph.edges['!ij']], axis=0)
-        uniq_oct = np.unique(uniq_oct + uniq_oct[:, -1::-1], axis=0)
-
-        octile_table = {(upper, left): [0, np.zeros(64, dtype=edge_type)]
+        uniq_oct = np.unique(np.vstack((uniq_oct, uniq_oct[:, -1::-1])),
+                             axis=0)
+        octile_table = {(upper, left): [np.uint64(), np.zeros(64, edge_type)]
                         for upper, left in uniq_oct}
 
         for index, row in graph.edges.iterrows():
@@ -93,9 +93,9 @@ class OctileGraph(object):
             c = j % 8
             upper = i - r
             left = j - c
-            octile_table[(upper, left)][0] |= 1 << (r + c * 8)
+            octile_table[(upper, left)][0] |= np.uint64(1 << (r + c * 8))
             octile_table[(upper, left)][1][r + c * 8] = edge
-            octile_table[(left, upper)][0] |= 1 << (c + r * 8)
+            octile_table[(left, upper)][0] |= np.uint64(1 << (c + r * 8))
             octile_table[(left, upper)][1][c + r * 8] = edge
 
         ''' create edge octiles on GPU '''

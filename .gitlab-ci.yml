@@ -9,10 +9,23 @@ stages:
   - coverage-analysis
   - documentation
 
-Python2.7:
+Lint:
+  stage: static-analysis
+  script:
+    - flake8 --max-line-length=80 graphdot/
+    - flake8 --max-line-length=80
+      --ignore=E121,E123,E126,E226,E24,E704,F401,W503,W504
+      test/
+
+Python3.5:
   stage: unit-test
   script:
-    - tox -e py27
+    - tox -e py35
+
+Python3.6:
+  stage: unit-test
+  script:
+    - tox -e py36
 
 Python3.7:
   stage: unit-test
@@ -24,14 +37,6 @@ Coverage:
   script:
     - tox -e coverage
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
-
-Lint:
-  stage: static-analysis
-  script:
-    - flake8 --max-line-length=80 graphdot/
-    - flake8 --max-line-length=80
-      --ignore=E121,E123,E126,E226,E24,E704,F401,W503,W504
-      test/
 
 Docs:
   stage: documentation

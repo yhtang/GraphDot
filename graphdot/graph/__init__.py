@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-This package defines the Graph container class of graphdot and converts from
-popular graph libraries.
+"""GraphDot's native graph container class
+
+This module defines the class ``Graph`` that are used to store graphs across
+this library, and provides conversion and importing methods from popular
+graph formats.
 """
 import pandas as pd
 
@@ -22,14 +24,21 @@ def _from_dict(d):
         return pd.DataFrame(d)
 
 
-class Graph(object):
+class Graph:
+    """
+    This is the class that stores a graph in GraphDot.
+
+    Parameters
+    ----------
+    nodes: dataframe
+        each row represent a node
+    edges: dataframe
+        each row represent an edge
+    title: str
+        a unique identifier of the graph
+    """
 
     def __init__(self, nodes, edges, title=''):
-        """
-        nodes: dataframe
-        edges: dataframe
-        title: str
-        """
         self.title = title
         self.nodes = _from_dict(nodes)
         self.edges = _from_dict(edges)
@@ -64,18 +73,29 @@ class Graph(object):
     #     pass
 
     # @classmethod
-    # def from_ase(cls, atoms):
-    #     pass
-    #
-    # @classmethod
     # def from_pymatgen(cls, molecule):
+    #     pass
+
+    # @classmethod
+    # def from_smiles(cls, smiles):
     #     pass
 
     @classmethod
     def from_networkx(cls, graph, weight=None):
-        """
-        graph: NetworkX Graph objects with nodal/edge attributes
-        weight: attribute name for edge weights
+        """Convert from NetworkX ``Graph``
+
+        Parameters
+        ----------
+        graph: a NetworkX ``Graph`` instance
+            an undirected graph with homogeneous node and edge attributes, i.e.
+            carrying same attributes.
+        weight: str
+            name of the attribute that encode edge weights
+
+        Returns
+        -------
+        graphdot.graph.Graph
+            the converted graph
         """
         import networkx as nx
         graph = nx.relabel.convert_node_labels_to_integers(graph)
@@ -116,6 +136,28 @@ class Graph(object):
                 edge_df[key] = [edge[key] for edge in graph.edges.values()]
 
         return cls(nodes=node_df, edges=edge_df, title=title)
+
+    @classmethod
+    def from_molecule(cls, molecule, use_pbc=True, adjacency='default'):
+        """Convert molecules to graphs
+
+        Parameters
+        ----------
+        atoms: an ASE Atoms or pymatgen Molecule object
+            A molecule as represented by a collection of atoms in 3D space.
+        usb_pbc: boolean or list of 3 booleans
+            Whether to use the periodic boundary condition as specified in the
+            atoms object to create edges between atoms.
+        adjacency: 'default' or object
+            A functor that implements the rule for making edges between atoms.
+
+        Returns
+        -------
+        Graph:
+            a molecular graph where atoms become nodes while edges resemble
+            short-range interatomic interactions.
+        """
+        raise RuntimeError('To convert from molecules, import graph.molecular')
 
     # @classmethod
     # def from_graphviz(cls, molecule):
