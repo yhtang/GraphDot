@@ -8,7 +8,7 @@
 
 # Documentation
 
-[Read it here.](https://graphdot.readthedocs.io/)
+[Latest Documentation on Readthedocs](https://graphdot.readthedocs.io/)
 
 # Copyright
 
