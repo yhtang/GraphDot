@@ -5,5 +5,4 @@ formats: all
 python:
   version: 3.7
   install:
-    - requirements: requirements/common.txt
     - requirements: requirements/docs.txt
