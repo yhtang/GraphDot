@@ -7,4 +7,3 @@ python:
   install:
     - requirements: requirements/common.txt
     - requirements: requirements/docs.txt
-    - method: pip
