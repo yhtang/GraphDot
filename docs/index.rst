@@ -6,10 +6,6 @@
 Welcome to GraphDot's documentation!
 ====================================
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
 .. image:: https://gitlab.com/yhtang/graphdot/badges/master/pipeline.svg
    :target: https://gitlab.com/yhtang/graphdot/commits/master
 
@@ -25,50 +21,64 @@ Welcome to GraphDot's documentation!
 .. image:: https://readthedocs.org/projects/pip/badge/?version=latest&style=flat
    :target: https://graphdot.readthedocs.org/
 
-The GraphDot library implements a fully-featured and GPU-accelerated Marginalized Graph Kernel
-algorithm for computing the similarity between labeled and weighted graphs. The graphs does not have to contain the same
-number of nodes and/or edges.
+GraphDot is a library for similarity comparison between labeled and weighted graphs. Currently, it implements the Marginalized Graph Kernel algorithm. It is GPU-accelerated and supports versatile customization through just-in-time code generation and compilation.
 
 Features
-========
+--------
+- Compares graph with different number of nodes and/or edges.
+- Allows user to define arbitrary attributes and custom similarity functions on individual nodes and edges.
+- Fast, memory-efficient GPU algorithms for CUDA.
+- Compatible with major graph libraries such as NetworkX and graphviz.
+- Interoperable with scikit-learn.
+- Built-in specialization for chemistry and material science applications.
 
-- Custom similarity functions on individual nodes and edges
-- Highly efficient CUDA acceleration
-- Major graph library formats such as NetworkX
-
-Installation
-============
-
-Installation using pip
-
-```
-pip install graphdot
-```
-
-Manual installation from source
-
-```
-git clone https://gitlab.com/yhtang/graphdot
-cd graphdot
-python setup.py install
-```
-
-User Guide
-==========
-
-TBD
-
-API Reference
-=============
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
+   :caption: Contents:
 
-   _api/graphdot
+   installation
+   quickstart
+   example
+   userguide
+   api
+
+
+Citation
+--------
+
+Like the package? Please cite:
+
+Tang, Y. H., & de Jong, W. A. (2019). Prediction of atomization energy using graph kernel and active learning. *The Journal of chemical physics*, 150(4), 044107. https://doi.org/10.1063/1.5078640
 
 
 Indices and tables
-==================
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+Copyright
+---------
+
+GraphDot Copyright (c) 2019, The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of any
+required approvals from the U.S. Dept. of Energy).  All rights reserved.
+
+If you have questions about your rights to use or distribute this software,
+please contact Berkeley Lab's Intellectual Property Office at
+IPO@lbl.gov.
+
+NOTICE.  This Software was developed under funding from the U.S. Department
+of Energy and the U.S. Government consequently retains certain rights.  As
+such, the U.S. Government has been granted for itself and others acting on
+its behalf a paid-up, nonexclusive, irrevocable, worldwide license in the
+Software to reproduce, distribute copies to the public, prepare derivative
+works, and perform publicly and display publicly, and to permit other to do
+so.
+
+Funding Acknowledgment
+--------------------------------------------------------------------------------
+
+This work was supported by the Luis W. Alvarez Postdoctoral Fellowship at Lawrence Berkeley National Laboratory. This work is also supported in part by the Applied Mathematics program of the DOE Office of Advanced Scientific Computing Research under Contract No. DE-AC02-05CH11231, and in part by the Exascale Computing Project (17-SC-20-SC), a collaborative effort of the U.S. Department of Energy Office of Science and the National Nuclear Security Administration.
