@@ -6,6 +6,7 @@ This module defines the class ``Graph`` that are used to store graphs across
 this library, and provides conversion and importing methods from popular
 graph formats.
 """
+import numpy as np
 import pandas as pd
 
 __all__ = ['Graph']
