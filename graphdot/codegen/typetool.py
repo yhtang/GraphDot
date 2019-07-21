@@ -1,10 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from six import with_metaclass
 import numpy as np
 from graphdot.codegen import Template
 
 __all__ = ['cpptype', 'decltype', 'rowtype']
+
+
+_convertible = {
+    # lvalue : rvalue
+    'b': 'b',
+    'i': 'iu',
+    'u': 'iu',
+    'f': 'f',
+    'c': 'c',
+    'm': 'm',
+    'M': 'M',
+    'O': 'O',
+    'S': 'S',
+    'U': 'U',
+    'V': 'V'
+}
 
 
 # def cpptype(dtype=[], **kwtype):  # only works with python>=3.6
@@ -29,8 +44,7 @@ def cpptype(dtype=[]):
             def __repr__(cls):
                 return '@cpptype({})\n{}'.format(repr(dtype), repr(clss))
 
-        # class Class(clss, metaclass=CppType):
-        class Class(with_metaclass(CppType, clss)):
+        class Class(clss, metaclass=CppType):
             @property
             def dtype(self):
                 return Class.dtype
@@ -56,7 +70,7 @@ def cpptype(dtype=[]):
             def __setattr__(self, name, value):
                 if name in Class.dtype.names:
                     t = Class.dtype.fields[name][0]
-                    if np.dtype(type(value)).kind != t.kind:
+                    if np.dtype(type(value)).kind not in _convertible[t.kind]:
                         raise ValueError(
                             "Cannot set attribute '{}' (C++ type {}) "
                             "with value {} of {}".format(name, t,
@@ -76,8 +90,7 @@ def decltype(type, name=''):
     type = np.dtype(type, align=True)  # convert np.float32 etc. to dtype
     if type.names is not None:
         if len(type.names):
-            return Template(r'struct ${cls}{${members;};}${name}').render(
-                cls=name,
+            return Template(r'struct{${members;};}${name}').render(
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:

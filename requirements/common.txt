@@ -1,0 +1,7 @@
+setuptools
+numpy
+pandas
+networkx
+ase
+pymatgen
+pycuda

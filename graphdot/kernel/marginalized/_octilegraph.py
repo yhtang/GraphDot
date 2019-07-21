@@ -8,13 +8,13 @@ __all__ = ['OctileGraph']
 
 # only works with python >= 3.6
 # @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
-@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', np.int64),
+@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', np.uint64),
           ('elements', np.uintp)])
 class Octile(object):
     """
     using octile_t = struct {
         int upper, left;
-        std::int64_t nzmask;
+        std::uint64_t nzmask;
         edge_t * elements;
     };
     """
@@ -45,44 +45,54 @@ class OctileGraph(object):
     """
 
     def __init__(self, graph):
-        self.n_node = len(graph.nodes)
+
+        nodes = graph.nodes
+        edges = graph.edges
+        self.n_node = len(nodes)
+
+        ''' add phantom label if none exists to facilitate C++ interop '''
+        if len(nodes.columns) == 0:
+            nodes = nodes.assign(labeled=lambda _: False)
+
+        if len(edges.drop(['!ij'], axis=1).columns) == 0:
+            edges = edges.assign(labeled=lambda _: False)
 
         ''' determine node type '''
-        node_type = rowtype(graph.nodes)
-        node_d = to_gpu(graph.nodes[list(node_type.names)]
+        node_type = rowtype(nodes)
+        node_d = to_gpu(nodes[list(node_type.names)]
                         .to_records(index=False)
                         .astype(node_type))
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
         degree_h = np.zeros(self.padded_size, dtype=np.float32)
-        edge_label_type = rowtype(graph.edges.drop(['!ij', '!w'],
+        edge_label_type = rowtype(edges.drop(['!ij', '!w'],
                                   axis=1,
                                   errors='ignore'))
-        if '!w' in graph.edges.columns:  # weighted graph
+        if '!w' in edges.columns:  # weighted graph
             self.weighted = True
             edge_type = np.dtype([('weight', np.float32),
                                   ('label', edge_label_type)], align=True)
-            for (i, j), w in zip(graph.edges['!ij'], graph.edges['!w']):
+            for (i, j), w in zip(edges['!ij'], edges['!w']):
                 degree_h[i] += w
                 degree_h[j] += w
         else:
             self.weighted = False
             edge_type = edge_label_type
-            for i, j in graph.edges['!ij']:
+            for i, j in edges['!ij']:
                 degree_h[i] += 1.0
                 degree_h[j] += 1.0
         degree_d = to_gpu(degree_h)
 
         ''' collect non-zero edge octiles '''
         uniq_oct = np.unique([(i - i % 8, j - j % 8)
-                              for i, j in graph.edges['!ij']], axis=0)
-        uniq_oct = np.unique(uniq_oct + uniq_oct[:, -1::-1], axis=0)
+                              for i, j in edges['!ij']], axis=0)
+        uniq_oct = np.unique(np.vstack((uniq_oct, uniq_oct[:, -1::-1])),
+                             axis=0)
+        octile_dict = {(upper, left): [np.uint64(), np.zeros(64, edge_type)]
+                       for upper, left in uniq_oct}
 
-        octile_table = {(upper, left): [0, np.zeros(64, dtype=edge_type)]
-                        for upper, left in uniq_oct}
-
-        for index, row in graph.edges.iterrows():
+        for index, row in edges.iterrows():
             i, j = row['!ij']
             if self.weighted:
                 edge = (row['!w'], tuple(row[key]
@@ -93,15 +103,15 @@ class OctileGraph(object):
             c = j % 8
             upper = i - r
             left = j - c
-            octile_table[(upper, left)][0] |= 1 << (r + c * 8)
-            octile_table[(upper, left)][1][r + c * 8] = edge
-            octile_table[(left, upper)][0] |= 1 << (c + r * 8)
-            octile_table[(left, upper)][1][c + r * 8] = edge
+            octile_dict[(upper, left)][0] |= np.uint64(1 << (r + c * 8))
+            octile_dict[(upper, left)][1][r + c * 8] = edge
+            octile_dict[(left, upper)][0] |= np.uint64(1 << (c + r * 8))
+            octile_dict[(left, upper)][1][c + r * 8] = edge
 
         ''' create edge octiles on GPU '''
         octile_list = [Octile(upper, left, nzmask, elements)
                        for (upper, left), (nzmask, elements)
-                       in octile_table.items()]
+                       in octile_dict.items()]
 
         ''' collect edge octile structures into continuous buffer '''
         octile_hdr = to_gpu(np.array([x.state for x in octile_list],

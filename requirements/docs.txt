@@ -1,7 +1,8 @@
-six
+setuptools
 numpy
 pandas
 networkx
 ase
+pymatgen
 sphinx
 sphinx-rtd-theme

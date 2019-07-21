@@ -12,6 +12,8 @@
 #
 import os
 import sys
+# os.environ['SPHINX_APIDOC_OPTIONS'] = '''members,undoc-members,special-members,\
+# inherited-members,show-inheritance'''
 sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('..'))
 import graphdot
@@ -24,13 +26,13 @@ def run_apidoc(_):
     current_dir = os.path.abspath(os.path.dirname(__file__))
     module = os.path.join(current_dir, "..", "graphdot")
 
-    api = os.path.join(current_dir, "_api")
+    apidir = os.path.join(current_dir, "apidoc")
     argv = [
         "--force",
         "--module-first",
         "--no-toc",
-        "--separate",
-        "-o", api,
+        # "--separate",
+        "-o", apidir,
         module
     ]
 
@@ -45,8 +47,18 @@ def run_apidoc(_):
         apidoc.main(argv)
 
 
+# -- enable documentation of __call__
+def keep_call(app, what, name, obj, would_skip, options):
+    if name == "__call__":
+        return False
+    else:
+        return would_skip
+
+
+# -- connect all the features
 def setup(app):
     app.connect('builder-inited', run_apidoc)
+    app.connect("autodoc-skip-member", keep_call)
 
 # -- Project information -----------------------------------------------------
 
@@ -70,6 +82,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',
     'sphinx.ext.mathjax',
+    'sphinx.ext.napoleon',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

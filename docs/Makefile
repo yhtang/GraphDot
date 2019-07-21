@@ -20,4 +20,4 @@ help:
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 clean:
-	rm -rf _api/ _build/ _static/ _templates/
+	rm -rf apidoc/ _build/ _static/ _templates/

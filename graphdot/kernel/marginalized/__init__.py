@@ -9,8 +9,8 @@ from pycuda.gpuarray import to_gpu
 from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype, decltype
-from .scratch import BlockScratch
-from .octilegraph import OctileGraph
+from ._scratch import BlockScratch
+from ._octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
@@ -24,7 +24,7 @@ except Exception as e:
 # only works with python >= 3.6
 # @cpptype(i=np.int32, j=np.int32)
 @cpptype([('i', np.int32), ('j', np.int32)])
-class JobIn(object):
+class JobIn:
     def __init__(self, i, j):
         self.i = i
         self.j = j
@@ -33,13 +33,32 @@ class JobIn(object):
 # only works with python >= 3.6
 # @cpptype(similarity=np.float32, iterations=np.int32)
 @cpptype([('similarity', np.float32), ('iterations', np.int32)])
-class JobOut(object):
+class JobOut:
     pass
 
 
-class MarginalizedGraphKernel(object):
+class MarginalizedGraphKernel:
+    """Implements the random walk-based graph similarity kernel as proposed in:
+    Kashima, H., Tsuda, K., & Inokuchi, A. (2003).
+    Marginalized kernels between labeled graphs. *In Proceedings of the 20th
+    international conference on machine learning (ICML-03)* (pp. 321-328).
 
-    _template = os.path.join(os.path.dirname(__file__), 'kernel.cu')
+    Parameters
+    ----------
+    node_kernel: base kernel or composition of base kernels
+        A kernelet that computes the similarity between individual nodes
+    edge_kernel: base kernel or composition of base kernels
+        A kernelet that computes the similarity between individual edge
+    kwargs: optional arguments
+        q: float in (0, 1)
+            The probability for the random walk to stop during each step
+        block_per_sm: int
+            Tunes the GPU kernel
+        block_size: int
+            Tunes the GPU kernel
+    """
+
+    _template = os.path.join(os.path.dirname(__file__), 'template.cu')
 
     def __init__(self, node_kernel, edge_kernel, **kwargs):
         self.node_kernel = node_kernel
@@ -71,11 +90,64 @@ class MarginalizedGraphKernel(object):
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
-    def compute(self, graph_list):
-        # TODO: graph registry
-        graph_list = [OctileGraph(g) for g in graph_list]
+    def clone_with_theta():
+        """scikit-learn compatibility method"""
+        pass
 
-        weighted = any([g.weighted for g in graph_list])
+    def _assert_homegeneous(self, X):
+        for x1, x2 in zip(X[:-1], X[1:]):
+            try:
+                assert(x1.weighted == x2.weighted)
+                assert(x1.node_type == x2.node_type)
+                assert(x1.edge_type == x2.edge_type)
+            except AssertionError as e:
+                raise TypeError('All graphs must be of the same type: %s' %
+                                str(e))
+
+    def __call__(self, X, Y=None):
+        """Compute pairwise similarity matrix between graphs
+
+        Parameters
+        ----------
+        X: list of N graphs
+            The graphs must all have same node and edge attributes.
+        Y: None or list of M graphs
+            The graphs must all have same node and edge attributes.
+
+        Returns
+        -------
+        numpy.array
+            if Y is None, return a N-by-N matrix containing pairwise
+            similarities between the graphs in X; otherwise, returns a N-by-M
+            matrix containing similarities across graphs in X and Y.
+        """
+
+        ''' transfer grahs to GPU '''
+        X = [OctileGraph(x) for x in X]
+        Y = [OctileGraph(y) for y in Y] if Y is not None else []
+        self._assert_homegeneous(X + Y)
+        graph_list_d = to_gpu(np.array([g.state for g in X + Y],
+                                       OctileGraph.dtype))
+
+        ''' prepare pairwise work item list '''
+        N = len(X)
+        M = len(Y)
+        if len(Y):
+            jobs = np.array([JobIn(i, N + j).state
+                             for i in range(N)
+                             for j in range(M)], JobIn.dtype)
+        else:
+            jobs = np.array([JobIn(i, j).state
+                             for i in range(N)
+                             for j in range(i, N)], JobIn.dtype)
+        jobs_d = to_gpu(jobs)
+        i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
+
+        ''' prepare GPU kernel launch '''
+        x = next(iter(X))
+        weighted = x.weighted
+        node_type = x.node_type
+        edge_type = x.edge_type
 
         if weighted:
             edge_kernel = TensorProduct(weight=_Multiply(),
@@ -101,9 +173,6 @@ class MarginalizedGraphKernel(object):
         };
         ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
 
-        node_type = graph_list[0].node_type
-        edge_type = graph_list[0].edge_type
-
         source = self.template.render(node_kernel=node_kernel_src,
                                       edge_kernel=edge_kernel_src,
                                       node_t=decltype(node_type),
@@ -120,24 +189,13 @@ class MarginalizedGraphKernel(object):
                            include_dirs=cpp.__path__)
         kernel = mod.get_function('graph_kernel_solver')
 
-        N = len(graph_list)
-        jobs = np.array([JobIn(i, j).state
-                         for i in range(N)
-                         for j in range(i, N)], JobIn.dtype)
-        jobs_d = to_gpu(jobs)
-
-        i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
-
-        graph_list_d = to_gpu(np.array([g.state for g in graph_list],
-                                       OctileGraph.dtype))
-
         launch_block_count = (self.device.MULTIPROCESSOR_COUNT
                               * self.block_per_sm)
         shmem_bytes_per_warp = mod.get_global('shmem_bytes_per_warp')[1]
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
-        max_graph_size = np.max([g.padded_size for g in graph_list])
+        max_graph_size = np.max([g.padded_size for g in X + Y])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
 
         # print("%-32s : %ld" % ("Blocks launched", launch_block_count))
@@ -155,10 +213,16 @@ class MarginalizedGraphKernel(object):
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
 
+        ''' collect result '''
         result = jobs_d.get().view(JobOut.dtype)
 
-        R = np.zeros((N, N))
-        for (i, j), (r, iter) in zip(jobs, result):
-            R[i, j] = R[j, i] = r
+        if len(Y):
+            R = np.zeros((N, M))
+            for (i, j), (r, iteration) in zip(jobs, result):
+                R[i, j - N] = r
+        else:
+            R = np.zeros((N, N))
+            for (i, j), (r, iteration) in zip(jobs, result):
+                R[i, j] = R[j, i] = r
 
         return R
