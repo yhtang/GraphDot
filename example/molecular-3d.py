@@ -3,14 +3,13 @@
 import numpy as np
 from ase.build import molecule
 from graphdot import Graph
-import graphdot.graph.molecular
 from graphdot.kernel.molecular import Tang2019MolecularKernel
 
 # build sample molecules
 molecules = [molecule('H2'), molecule('H2O'), molecule('CH4')]
 
 # convert to molecular graphs
-graphs = [Graph.from_molecule(m) for m in molecules]
+graphs = [Graph.from_ase(m) for m in molecules]
 
 # use pre-defined molecular kernel
 kernel = Tang2019MolecularKernel()

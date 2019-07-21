@@ -4,7 +4,6 @@ import pytest
 import numpy as np
 from ase.build import molecule
 from graphdot import Graph
-import graphdot.graph.molecular
 from graphdot.kernel.molecular import Tang2019MolecularKernel
 
 
