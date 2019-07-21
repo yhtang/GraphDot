@@ -1,6 +1,4 @@
-"""
-The GraphDot library for graph similarity comparison
-"""
+""" The GraphDot library for graph similarity comparison """
 from .graph import Graph
 
 __all__ = ['Graph']

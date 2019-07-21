@@ -26,13 +26,13 @@ def run_apidoc(_):
     current_dir = os.path.abspath(os.path.dirname(__file__))
     module = os.path.join(current_dir, "..", "graphdot")
 
-    api = os.path.join(current_dir, "_api")
+    apidir = os.path.join(current_dir, "apidoc")
     argv = [
         "--force",
         "--module-first",
         "--no-toc",
         # "--separate",
-        "-o", api,
+        "-o", apidir,
         module
     ]
 

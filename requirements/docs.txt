@@ -1,4 +1,4 @@
-six
+setuptools
 numpy
 pandas
 networkx

@@ -1,6 +1,7 @@
+setuptools
 numpy
 pandas
 networkx
-pycuda
 ase
 pymatgen
+pycuda
