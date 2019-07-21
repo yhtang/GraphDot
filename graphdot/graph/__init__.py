@@ -193,7 +193,7 @@ class Graph:
 
         Parameters
         ----------
-        atoms: pymatgen Molecule object
+        molecule: pymatgen Molecule object
             A molecule as represented by a collection of atoms in 3D space.
         usb_pbc: boolean or list of 3 booleans
             Whether to use the periodic boundary condition as specified in the
@@ -207,6 +207,7 @@ class Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
+        import pymatgen.io
         atoms = pymatgen.io.ase.AseAtomsAdaptor.get_atoms(molecule)
         return cls.from_ase(atoms, use_pbc, adjacency)
 
