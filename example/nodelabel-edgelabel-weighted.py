@@ -32,7 +32,7 @@ knode = TensorProduct(radius=SquareExponential(1.0),
 
 kedge = TensorProduct(length=SquareExponential(2.0))
 
-# compose the marginalized graph kernel
+# compose the marginalized graph kernel and compute pairwise similarity
 mlgk = MarginalizedGraphKernel(knode, kedge, q=0.05)
 
 R = mlgk([Graph.from_networkx(g, weight='weight') for g in [g1, g2, g3]])
