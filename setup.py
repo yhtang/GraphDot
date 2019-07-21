@@ -1,9 +1,11 @@
 import io
 import sys
+import re
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
-import graphdot
 
+with open('graphdot/__init__.py') as fd:
+    __version__ = re.search("__version__ = '(.*)'", fd.read()).group(1)
 
 def read(*filenames, **kwargs):
     encoding = kwargs.get('encoding', 'utf-8')
@@ -32,7 +34,7 @@ class Tox(TestCommand):
 
 setup(
     name='graphdot',
-    version=graphdot.__version__,
+    version=__version__,
     url='https://gitlab.com/yhtang/graphdot',
     license='BSD',
     author='Yu-Hang Tang',
@@ -40,6 +42,7 @@ setup(
     install_requires=['numpy', 'pandas', 'pycuda', 'networkx'],
     extras_require={
         'molecular': ['ase', 'pymatgen'],
+        'docs': ['sphinx', 'sphinx-rtd-theme'],
     },
     cmdclass={'test': Tox},
     author_email='Tang.Maxin@gmail.com',
