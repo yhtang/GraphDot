@@ -41,7 +41,7 @@ setup(
     tests_require=['tox'],
     install_requires=['numpy', 'pandas', 'pycuda', 'networkx'],
     extras_require={
-        'molecular': ['ase', 'pymatgen'],
+        'molecular': ['ase', 'pymatgen', 'pysmiles', 'mendeleev'],
         'docs': ['sphinx', 'sphinx-rtd-theme'],
     },
     cmdclass={'test': Tox},

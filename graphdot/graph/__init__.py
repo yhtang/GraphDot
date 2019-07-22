@@ -10,7 +10,7 @@ import uuid
 from itertools import product
 import numpy as np
 import pandas as pd
-from .adjacency.atomic import SimpleTentAtomicAdjacency
+from graphdot.graph.adjacency.atomic import SimpleTentAtomicAdjacency
 
 __all__ = ['Graph']
 
@@ -74,14 +74,6 @@ class Graph:
     #     #         pass
     #     #
     #     #     graph_translator[nx.Graph] = networkx_graph_translator
-    #     pass
-
-    # @classmethod
-    # def from_pymatgen(cls, molecule):
-    #     pass
-
-    # @classmethod
-    # def from_smiles(cls, smiles):
     #     pass
 
     @classmethod
@@ -157,7 +149,7 @@ class Graph:
 
         Returns
         -------
-        Graph:
+        graphdot.Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
@@ -166,7 +158,7 @@ class Graph:
             *tuple([-1, 0, 1] if p else [0] for p in pbc))]
 
         if adjacency == 'default':
-            adj = SimpleTentAtomicAdjacency(h=1.0, order=1, images=images)
+            adj = SimpleTentAtomicAdjacency(h=1.5, order=1, images=images)
         else:
             adj = adjacency
 
@@ -203,13 +195,36 @@ class Graph:
 
         Returns
         -------
-        Graph:
+        graphdot.Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
         import pymatgen.io
         atoms = pymatgen.io.ase.AseAtomsAdaptor.get_atoms(molecule)
         return cls.from_ase(atoms, use_pbc, adjacency)
+
+    @classmethod
+    def from_smiles(cls, smiles):
+        """ Convert from a SMILES string to molecular graph
+
+        Parameters
+        ----------
+        smiles: str
+            A string encoding a molecule using the OpenSMILES format
+
+        Returns
+        -------
+        graphdot.Graph:
+            A molecular graph where atoms becomes nodes with the 'aromatic',
+            'charge', 'element', 'hcount' attributes, and bonds become edges
+            with the 'order' attribute.
+        """
+        import pysmiles.read_smiles
+        from mendeleev import element
+        m = pysmiles.read_smiles(smiles)
+        for _, n in m.nodes.items():
+            n['element'] = element(n['element']).atomic_number
+        return cls.from_networkx(m)
 
     # @classmethod
     # def from_graphviz(cls, molecule):
