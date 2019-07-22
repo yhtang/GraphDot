@@ -9,31 +9,38 @@ import numpy as np
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
 
-__all__ = ['Constant',
+__all__ = ['Kernel',
+           'Constant',
            'KroneckerDelta',
            'SquareExponential',
            'TensorProduct']
 
 
-class Kernel(object):
+class Kernel:
     """
     Parent class for all base kernels
     """
 
-    def __add__(self, b):
-        return Kernel._op(self, b if isinstance(b, Kernel) else Constant(b),
+    def __add__(self, k):
+        r"""Implements the additive kernel composition semantics, i.e.
+        expression ``k1 + k2`` creates
+        :math:`k_+(a, b) = k_1(a, b) + k_2(a, b)`"""
+        return Kernel._op(self, k if isinstance(k, Kernel) else Constant(k),
                           lambda x, y: x + y, '+')
 
-    def __radd__(self, b):
-        return Kernel._op(b if isinstance(b, Kernel) else Constant(b), self,
+    def __radd__(self, k):
+        return Kernel._op(k if isinstance(k, Kernel) else Constant(k), self,
                           lambda x, y: x + y, '+')
 
-    def __mul__(self, b):
-        return Kernel._op(self, b if isinstance(b, Kernel) else Constant(b),
+    def __mul__(self, k):
+        r"""Implements the multiplicative kernel composition semantics, i.e.
+        expression ``k1 * k2`` creates
+        :math:`k_\times(a, b) = k_1(a, b) \times k_2(a, b)`"""
+        return Kernel._op(self, k if isinstance(k, Kernel) else Constant(k),
                           lambda x, y: x * y, '*')
 
-    def __rmul__(self, b):
-        return Kernel._op(b if isinstance(b, Kernel) else Constant(b), self,
+    def __rmul__(self, k):
+        return Kernel._op(k if isinstance(k, Kernel) else Constant(k), self,
                           lambda x, y: x * y, '*')
 
     @staticmethod
@@ -74,95 +81,155 @@ class Kernel(object):
 
         return KernelOperator(k1, k2)
 
-# only works with python >= 3.6
-# @cpptype(constant=np.float32)
-@cpptype([('constant', np.float32)])
-class Constant(Kernel):
-    def __init__(self, constant):
-        self.constant = float(constant)
 
-    def __call__(self, i, j):
-        return self.constant
+def Constant(constant):
+    r"""Creates a no-op kernel that returns a constant value which often is 1,
+    i.e. :math:`k_\mathrm{c}(\cdot, \cdot) \equiv constant`
 
-    def __str__(self):
-        return '{}'.format(self.constant)
+    Parameters
+    ----------
+    constant: float in (0, 1)
+        The value of the kernel
 
-    def __repr__(self):
-        return 'Constant({})'.format(self.constant)
+    Returns
+    -------
+    Kernel
+        A `Kernel` instance implementing the kernel behavior
+    """
 
-    def gencode(self, x, y):
-        return '{:f}f'.format(self.constant)
+    # only works with python >= 3.6
+    # @cpptype(constant=np.float32)
+    @cpptype([('constant', np.float32)])
+    class ConstantKernel:
+        def __init__(self, constant):
+            self.constant = float(constant)
 
-    @property
-    def theta(self):
-        return [self.constant]
+        def __call__(self, i, j):
+            return self.constant
 
-    @theta.setter
-    def theta(self, seq):
-        self.constant = seq[0]
+        def __str__(self):
+            return '{}'.format(self.constant)
 
-# only works with python >= 3.6
-# @cpptype(lo=np.float32, hi=np.float32)
-@cpptype([('lo', np.float32), ('hi', np.float32)])
-class KroneckerDelta(Kernel):
+        def __repr__(self):
+            return 'Constant({})'.format(self.constant)
 
-    def __init__(self, lo, hi=1.0):
-        self.lo = float(lo)
-        self.hi = float(hi)
+        def gencode(self, x, y):
+            return '{:f}f'.format(self.constant)
 
-    def __call__(self, i, j):
-        return self.hi if i == j else self.lo
+        @property
+        def theta(self):
+            return [self.constant]
 
-    def __str__(self):
-        return 'δ({}, {})'.format(self.hi, self.lo)
+        @theta.setter
+        def theta(self, seq):
+            self.constant = seq[0]
 
-    def __repr__(self):
-        return 'KroneckerDelta({}, {})'.format(self.lo, self.hi)
-
-    def gencode(self, x, y):
-        return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.hi, self.lo)
-
-    @property
-    def theta(self):
-        return [self.lo, self.hi]
-
-    @theta.setter
-    def theta(self, seq):
-        self.lo = seq[0]
-        self.hi = seq[1]
+    return ConstantKernel(constant)
 
 
-# only works with python >= 3.6
-# @cpptype(neg_half_inv_l2=np.float32)
-@cpptype([('neg_half_inv_l2', np.float32)])
-class SquareExponential(Kernel):
-    def __init__(self, length_scale):
-        self.length_scale = length_scale
+def KroneckerDelta(h0, h1=1.0):
+    r"""Creates a Kronecker delta kernel that returns one of [h0, h1] depending
+    on whether two objects compare equal, i.e. :math:`k_\delta(i, j) =
+    \begin{cases} h1, i = j \\ h0, otherwise \end{cases}`
 
-    def __call__(self, x1, x2):
-        return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
+    Parameters
+    ----------
+    h0: float in (0, 1)
+        The value of the kernel when two objects do not compare equal
+    h1: float in (0, 1)
+        The value of the kernel when two objects compare equal
 
-    def __str__(self):
-        return 'SqExp({})'.format(self.length_scale)
+    Returns
+    -------
+    Kernel
+        A `Kernel` instance implementing the kernel behavior
+    """
 
-    def __repr__(self):
-        return 'SquareExponential({})'.format(self.length_scale)
+    # only works with python >= 3.6
+    # @cpptype(lo=np.float32, hi=np.float32)
+    @cpptype([('h0', np.float32), ('h1', np.float32)])
+    class KroneckerDeltaKernel(Kernel):
 
-    def gencode(self, x, y):
-        return 'expf({:f}f * power({} - {}, 2))'.format(
-            -0.5 / self.length_scale**2, x, y)
+        def __init__(self, h0, h1):
+            self.h0 = float(h0)
+            self.h1 = float(h1)
 
-    @property
-    def neg_half_inv_l2(self):
-        return -0.5 / self.length_scale**2
+        def __call__(self, i, j):
+            return self.h1 if i == j else self.h0
 
-    @property
-    def theta(self):
-        return [self.length_scale]
+        def __str__(self):
+            return 'δ({}, {})'.format(self.h1, self.h0)
 
-    @theta.setter
-    def theta(self, seq):
-        self.length_scale = seq[0]
+        def __repr__(self):
+            return 'KroneckerDelta({}, {})'.format(self.h0, self.h1)
+
+        def gencode(self, x, y):
+            return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.h1, self.h0)
+
+        @property
+        def theta(self):
+            return [self.h0, self.h1]
+
+        @theta.setter
+        def theta(self, seq):
+            self.h0 = seq[0]
+            self.h1 = seq[1]
+
+    return KroneckerDeltaKernel(h0, h1)
+
+
+def SquareExponential(length_scale):
+    r"""Creates a square exponential kernel that smoothly transitions from 1 to
+    0 as the distance between two vectors increases from zero to infinity, i.e.
+    :math:`k_\mathrm{se}(\mathbf{x}_1, \mathbf{x}_2) = \exp(-\frac{1}{2}
+    \frac{\lVert \mathbf{x}_1 - \mathbf{x}_2 \rVert^2}{\sigma^2})`
+
+    Parameters
+    ----------
+    length_scale: float > 0
+        Determines how quickly should the kernel decay to zero. The kernel has
+        a value of approx. 0.606 at one length scale, 0.135 at two length
+        scales, and 0.011 at three length scales.
+
+    Returns
+    -------
+    Kernel
+        A `Kernel` instance implementing the kernel behavior
+    """
+
+    # only works with python >= 3.6
+    # @cpptype(neg_half_inv_l2=np.float32)
+    @cpptype([('neg_half_inv_l2', np.float32)])
+    class SquareExponentialKernel(Kernel):
+        def __init__(self, length_scale):
+            self.length_scale = length_scale
+
+        def __call__(self, x1, x2):
+            return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
+
+        def __str__(self):
+            return 'SqExp({})'.format(self.length_scale)
+
+        def __repr__(self):
+            return 'SquareExponential({})'.format(self.length_scale)
+
+        def gencode(self, x, y):
+            return 'expf({:f}f * power({} - {}, 2))'.format(
+                -0.5 / self.length_scale**2, x, y)
+
+        @property
+        def neg_half_inv_l2(self):
+            return -0.5 / self.length_scale**2
+
+        @property
+        def theta(self):
+            return [self.length_scale]
+
+        @theta.setter
+        def theta(self, seq):
+            self.length_scale = seq[0]
+
+    return SquareExponentialKernel(length_scale)
 
 
 @cpptype([])
@@ -218,6 +285,19 @@ class _Multiply(Kernel):
 
 
 def TensorProduct(**kw_kernels):
+    r"""Creates a tensor product kernel, i.e. a product of multiple kernels
+    where each kernel is associated with a keyword-indexed 'attribute'.
+    :math:`k_\otimes(X, Y) = \prod_{a \in \mathrm{attributes}} k_a(X_a, Y_a)`
+
+    Parameters
+    ----------
+    kwargs: dict of attribute=kernel pairs
+        The kernels can be any base kernels and their compositions as defined
+        in this module, while attributes should be strings that represent
+        valid Python/C++ identifiers.
+    """
+
+
     @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
     class TensorProductKernel(Kernel):
         def __init__(self, **kw_kernels):

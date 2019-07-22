@@ -60,6 +60,11 @@ Indices and tables
 * :ref:`search`
 
 
+Contributors
+------------
+
+Yu-Hang "Maxin" Tang, Oguz Selvitopi, Doru Popovici, Yin-Jia Zhang
+
 Copyright
 ---------
 
