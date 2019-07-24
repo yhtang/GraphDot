@@ -10,6 +10,22 @@ from graphdot.kernel.marginalized.basekernel import KroneckerDelta
 from graphdot.kernel.marginalized.basekernel import SquareExponential
 from graphdot.kernel.marginalized.basekernel import TensorProduct
 
+
+unlabeled_graph1 = nx.Graph(title='U1')
+unlabeled_graph1.add_node(0)
+unlabeled_graph1.add_node(1)
+unlabeled_graph1.add_node(2)
+unlabeled_graph1.add_edge(0, 1)
+unlabeled_graph1.add_edge(0, 2)
+
+unlabeled_graph2 = nx.Graph(title='U2')
+unlabeled_graph2.add_node(0)
+unlabeled_graph2.add_node(1)
+unlabeled_graph2.add_node(2)
+unlabeled_graph2.add_edge(0, 1)
+unlabeled_graph2.add_edge(0, 2)
+unlabeled_graph2.add_edge(1, 2)
+
 vanilla_graph = nx.Graph(title='vanilla')
 vanilla_graph.add_node('a', type=0)
 vanilla_graph.add_node('b', type=0)
@@ -21,7 +37,6 @@ class Hybrid:
     SP = 1
     SP2 = 2
     SP3 = 3
-
 
 labeled_graph1 = nx.Graph(title='H2O')
 labeled_graph1.add_node('O1', hybridization=Hybrid.SP2, charge=1)
@@ -113,6 +128,24 @@ def test_mlgk_typecheck():
         mlgk([G[2], G[0]])
     with pytest.raises(TypeError):
         mlgk([G[2], G[1]])
+
+
+def test_mlgk_unlabeled():
+    u1 = Graph.from_networkx(unlabeled_graph1)
+    u2 = Graph.from_networkx(unlabeled_graph1)
+
+    q = 0.5
+    node_kernel = Constant(1.0)
+    edge_kernel = Constant(1.0)
+    mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
+
+    dot = mlgk([u1, u2])
+    d = np.diag(dot)**-0.5
+    dot = np.diag(d).dot(dot).dot(np.diag(d))
+
+    assert(dot.shape == (2, 2))
+    for d in dot.ravel():
+        assert(d == pytest.approx(1, 1e-7))
 
 
 def test_mlgk_vanilla():
