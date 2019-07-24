@@ -65,7 +65,7 @@ class Graph:
     #     #     def ase_translator(atoms):
     #     #         pass
     #     #
-    #     #     graph_translator[ase.atoms.Atoms] = ase_translator
+    #     #     graph_translator[ase.atomsatoms.Atoms] = ase_translator
     #     #
     #     # if importlib.util.find_spec('networkx') is not None:
     #     #     nx = importlib.import_module('networkx')
@@ -160,7 +160,7 @@ class Graph:
         if adjacency == 'default':
             adj = SimpleTentAtomicAdjacency(h=1.5, order=1, images=images)
         else:
-            adj = adjacency
+            adj = SimpleTentAtomicAdjacency(**adjacency, images=images)
 
         nodes = pd.DataFrame()
         nodes['element'] = atoms.get_atomic_numbers().astype(np.int8)
