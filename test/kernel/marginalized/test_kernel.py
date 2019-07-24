@@ -204,7 +204,7 @@ def test_mlgk_weighted():
 
 def test_mlgk_large():
     g = nx.Graph()
-    n = 32
+    n = 24
     for i, row in enumerate(np.random.randint(0, 2, (n, n))):
         g.add_node(i, type=0)
         for j, pred in enumerate(row[:i]):
