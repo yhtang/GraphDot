@@ -211,7 +211,7 @@ def test_mlgk_large():
             if pred:
                 g.add_edge(i, j, weight=1)
 
-    dfg = Graph.from_networkx(g)
+    dfg = Graph.from_networkx(g, weight='weight')
 
     q = 0.5
     node_kernel = TensorProduct(type=KroneckerDelta(1.0, 1.0))
