@@ -48,7 +48,7 @@ class Kernel:
         # only works with python >= 3.6
         # @cpptype(k1=k1.dtype, k2=k2.dtype)
         @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
-        class KernelOperator(object):
+        class KernelOperator(Kernel):
             def __init__(self, k1, k2):
                 self.k1 = copy(k1)
                 self.k2 = copy(k2)
@@ -100,7 +100,7 @@ def Constant(constant):
     # only works with python >= 3.6
     # @cpptype(constant=np.float32)
     @cpptype([('constant', np.float32)])
-    class ConstantKernel:
+    class ConstantKernel(Kernel):
         def __init__(self, constant):
             self.constant = float(constant)
 
