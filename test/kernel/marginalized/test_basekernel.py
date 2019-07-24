@@ -39,7 +39,6 @@ def test_simple_kernel(kernel):
         assert(kernel(i, j) >= 0 and kernel(i, j) <= 1)
         assert(kernel(i, j) == kernel(j, i))  # check symmetry
     ''' representation meaningness '''
-    assert(type(eval(repr(kernel))) == type(kernel))
     assert(eval(repr(kernel)).theta == kernel.theta)
     ''' hyperparameter retrieval '''
     assert(isinstance(kernel.theta, list))
@@ -62,7 +61,7 @@ def test_constant_kernel():
     assert(kernel(None, None) == 1)
     assert(kernel(1.0, 'a') == 1)
     ''' C++ code generation '''
-    assert(Constant.dtype.isalignedstruct)
+    assert(kernel.dtype.isalignedstruct)
     assert(isinstance(kernel.gencode('x', 'y'), str))
 
 
@@ -84,7 +83,7 @@ def test_kronecker_delta_kernel():
     assert(kernel(None, None) == 1)
     assert(kernel(1.0, 'a') == 0.5)
     ''' C++ code generation '''
-    assert(KroneckerDelta.dtype.isalignedstruct)
+    assert(kernel.dtype.isalignedstruct)
     assert(isinstance(kernel.gencode('x', 'y'), str))
 
 
@@ -99,7 +98,7 @@ def test_square_exponential_kernel():
     assert(kernel(-inf, inf) == 0)
     assert(kernel(inf, -inf) == 0)
     ''' C++ code generation '''
-    assert(SquareExponential.dtype.isalignedstruct)
+    assert(kernel.dtype.isalignedstruct)
     assert(isinstance(kernel.gencode('x', 'y'), str))
 
 
@@ -113,7 +112,7 @@ def test_multiply_quasikernel():
     for r1, r2 in np.random.randn(1000, 2):
         assert(kernel(r1, r2) == r1 * r2)
     ''' C++ code generation '''
-    assert(_Multiply.dtype.isalignedstruct)
+    assert(kernel.dtype.isalignedstruct)
     assert(isinstance(kernel.gencode('x', 'y'), str))
     ''' representation generation '''
     assert(isinstance(str(kernel), str))
@@ -121,7 +120,6 @@ def test_multiply_quasikernel():
     assert(kernel.theta == [])
     kernel.theta = kernel.theta
     ''' representation meaningness '''
-    assert(type(eval(repr(kernel))) == type(kernel))
     assert(eval(repr(kernel)).theta == kernel.theta)
 
 

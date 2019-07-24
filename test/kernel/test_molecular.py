@@ -4,14 +4,13 @@ import pytest
 import numpy as np
 from ase.build import molecule
 from graphdot import Graph
-import graphdot.graph.molecular
 from graphdot.kernel.molecular import Tang2019MolecularKernel
 
 
 def test_molecular_kernel():
     molecules = [molecule('H2'), molecule('O2'), molecule('CH4')]
 
-    graphs = [Graph.from_molecule(m) for m in molecules]
+    graphs = [Graph.from_ase(m) for m in molecules]
 
     kernel = Tang2019MolecularKernel()
 

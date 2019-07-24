@@ -4,4 +4,6 @@ pandas
 networkx
 ase
 pymatgen
+pysmiles
+mendeleev
 pycuda
