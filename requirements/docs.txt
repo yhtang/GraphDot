@@ -4,5 +4,7 @@ pandas
 networkx
 ase
 pymatgen
+pysmiles
+mendeleev
 sphinx
 sphinx-rtd-theme

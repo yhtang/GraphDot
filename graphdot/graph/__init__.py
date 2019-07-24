@@ -6,7 +6,11 @@ This module defines the class ``Graph`` that are used to store graphs across
 this library, and provides conversion and importing methods from popular
 graph formats.
 """
+import uuid
+from itertools import product
+import numpy as np
 import pandas as pd
+from graphdot.graph.adjacency.atomic import SimpleTentAtomicAdjacency
 
 __all__ = ['Graph']
 
@@ -61,7 +65,7 @@ class Graph:
     #     #     def ase_translator(atoms):
     #     #         pass
     #     #
-    #     #     graph_translator[ase.atoms.Atoms] = ase_translator
+    #     #     graph_translator[ase.atomsatoms.Atoms] = ase_translator
     #     #
     #     # if importlib.util.find_spec('networkx') is not None:
     #     #     nx = importlib.import_module('networkx')
@@ -70,14 +74,6 @@ class Graph:
     #     #         pass
     #     #
     #     #     graph_translator[nx.Graph] = networkx_graph_translator
-    #     pass
-
-    # @classmethod
-    # def from_pymatgen(cls, molecule):
-    #     pass
-
-    # @classmethod
-    # def from_smiles(cls, smiles):
     #     pass
 
     @classmethod
@@ -138,12 +134,12 @@ class Graph:
         return cls(nodes=node_df, edges=edge_df, title=title)
 
     @classmethod
-    def from_molecule(cls, molecule, use_pbc=True, adjacency='default'):
-        """Convert molecules to graphs
+    def from_ase(cls, atoms, use_pbc=True, adjacency='default'):
+        """Convert from ASE atoms to molecular graph
 
         Parameters
         ----------
-        atoms: an ASE Atoms or pymatgen Molecule object
+        atoms: ASE Atoms object
             A molecule as represented by a collection of atoms in 3D space.
         usb_pbc: boolean or list of 3 booleans
             Whether to use the periodic boundary condition as specified in the
@@ -153,11 +149,82 @@ class Graph:
 
         Returns
         -------
-        Graph:
+        graphdot.Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
-        raise RuntimeError('To convert from molecules, import graph.molecular')
+        pbc = np.logical_and(atoms.pbc, use_pbc)
+        images = [(atoms.cell.T * image).sum(axis=1) for image in product(
+            *tuple([-1, 0, 1] if p else [0] for p in pbc))]
+
+        if adjacency == 'default':
+            adj = SimpleTentAtomicAdjacency(h=1.5, order=1, images=images)
+        else:
+            adj = SimpleTentAtomicAdjacency(**adjacency, images=images)
+
+        nodes = pd.DataFrame()
+        nodes['element'] = atoms.get_atomic_numbers().astype(np.int8)
+
+        edge_data = []
+        for atom1 in atoms:
+            for atom2 in atoms:
+                if atom2.index <= atom1.index:
+                    continue
+                w, r = adj(atom1, atom2)
+                if w > 0:
+                    edge_data.append(((atom1.index, atom2.index), w, r))
+
+        edges = pd.DataFrame(edge_data, columns=['!ij', '!w', 'length'])
+
+        return cls(nodes, edges, title='Molecule {formula} {id}'.format(
+                   formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
+
+    @classmethod
+    def from_pymatgen(cls, molecule, use_pbc=True, adjacency='default'):
+        """Convert from pymatgen molecule to molecular graph
+
+        Parameters
+        ----------
+        molecule: pymatgen Molecule object
+            A molecule as represented by a collection of atoms in 3D space.
+        usb_pbc: boolean or list of 3 booleans
+            Whether to use the periodic boundary condition as specified in the
+            atoms object to create edges between atoms.
+        adjacency: 'default' or object
+            A functor that implements the rule for making edges between atoms.
+
+        Returns
+        -------
+        graphdot.Graph:
+            a molecular graph where atoms become nodes while edges resemble
+            short-range interatomic interactions.
+        """
+        import pymatgen.io
+        atoms = pymatgen.io.ase.AseAtomsAdaptor.get_atoms(molecule)
+        return cls.from_ase(atoms, use_pbc, adjacency)
+
+    @classmethod
+    def from_smiles(cls, smiles):
+        """ Convert from a SMILES string to molecular graph
+
+        Parameters
+        ----------
+        smiles: str
+            A string encoding a molecule using the OpenSMILES format
+
+        Returns
+        -------
+        graphdot.Graph:
+            A molecular graph where atoms becomes nodes with the 'aromatic',
+            'charge', 'element', 'hcount' attributes, and bonds become edges
+            with the 'order' attribute.
+        """
+        import pysmiles.read_smiles
+        from mendeleev import element
+        m = pysmiles.read_smiles(smiles)
+        for _, n in m.nodes.items():
+            n['element'] = element(n['element']).atomic_number
+        return cls.from_networkx(m)
 
     # @classmethod
     # def from_graphviz(cls, molecule):

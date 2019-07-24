@@ -38,8 +38,8 @@ Contents
    :maxdepth: 2
 
    installation
-   quickstart
    example
+   quickstart
    userguide
    api
 
@@ -59,6 +59,11 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
+
+Contributors
+------------
+
+Yu-Hang "Maxin" Tang, Oguz Selvitopi, Doru Popovici, Yin-Jia Zhang
 
 Copyright
 ---------

@@ -31,7 +31,7 @@ def run_apidoc(_):
         "--force",
         "--module-first",
         "--no-toc",
-        # "--separate",
+        "--separate",
         "-o", apidir,
         module
     ]
@@ -49,7 +49,7 @@ def run_apidoc(_):
 
 # -- enable documentation of __call__
 def keep_call(app, what, name, obj, would_skip, options):
-    if name == "__call__":
+    if name in ["__call__", "__add__", "__mul__"]:
         return False
     else:
         return would_skip
@@ -60,8 +60,8 @@ def setup(app):
     app.connect('builder-inited', run_apidoc)
     app.connect("autodoc-skip-member", keep_call)
 
-# -- Project information -----------------------------------------------------
 
+# -- Project information -----------------------------------------------------
 project = 'GraphDot'
 copyright = '2019, Yu-Hang "Maxin" Tang'
 author = 'Yu-Hang "Maxin" Tang'
