@@ -38,6 +38,7 @@ class Hybrid:
     SP2 = 2
     SP3 = 3
 
+
 labeled_graph1 = nx.Graph(title='H2O')
 labeled_graph1.add_node('O1', hybridization=Hybrid.SP2, charge=1)
 labeled_graph1.add_node('H1', hybridization=Hybrid.SP3, charge=-1)

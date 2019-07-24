@@ -297,7 +297,6 @@ def TensorProduct(**kw_kernels):
         valid Python/C++ identifiers.
     """
 
-
     @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
     class TensorProductKernel(Kernel):
         def __init__(self, **kw_kernels):
