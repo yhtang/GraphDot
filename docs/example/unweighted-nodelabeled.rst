@@ -7,7 +7,7 @@ Unweighted, Unlabeled Graph
 
 Exptected output:
 
-.. code-block::
+.. code-block:: none
 
    [[1.         0.99999963 1.00000005]
     [0.99999963 1.         0.99999958]

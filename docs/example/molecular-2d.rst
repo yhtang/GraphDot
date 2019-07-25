@@ -7,7 +7,7 @@
 
 Exptected output:
 
-.. code-block::
+.. code-block:: none
 
                CC       CCO       CCN       C=C      CC=C     CC=CC
   CC     1.000000  0.301240  0.320140  0.081422  0.168009  0.184527
