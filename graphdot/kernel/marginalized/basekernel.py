@@ -94,7 +94,7 @@ def Constant(constant):
     Returns
     -------
     Kernel
-        A `Kernel` instance implementing the kernel behavior
+        A kernel instance of corresponding behavior
     """
 
     # only works with python >= 3.6
@@ -142,7 +142,7 @@ def KroneckerDelta(h0, h1=1.0):
     Returns
     -------
     Kernel
-        A `Kernel` instance implementing the kernel behavior
+        A kernel instance of corresponding behavior
     """
 
     # only works with python >= 3.6
@@ -194,7 +194,7 @@ def SquareExponential(length_scale):
     Returns
     -------
     Kernel
-        A `Kernel` instance implementing the kernel behavior
+        A kernel instance of corresponding behavior
     """
 
     # only works with python >= 3.6

@@ -7,7 +7,7 @@
 
 Exptected output:
 
-.. code-block::
+.. code-block:: none
 
                      H2O       HCl      NaCl  NaCl-bulk  NaCl-bulk2
     H2O         1.000000  0.073903  0.031434   0.031434    0.031434

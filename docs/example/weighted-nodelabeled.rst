@@ -7,7 +7,7 @@ Weighted, Node-Labeled Graph
 
 Exptected output:
 
-.. code-block::
+.. code-block:: none
 
    [[1.         0.48829836 0.47495925]
     [0.48829836 1.         0.8931447 ]
