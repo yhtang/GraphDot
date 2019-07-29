@@ -43,7 +43,7 @@ class Graph:
     """
 
     def __init__(self, nodes, edges, title=''):
-        self.title = title
+        self.title = str(title)
         self.nodes = _from_dict(nodes)
         self.edges = _from_dict(edges)
 
