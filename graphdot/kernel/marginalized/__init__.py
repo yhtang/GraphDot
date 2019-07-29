@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import uuid
 import numpy as np
 import pycuda.driver
 import pycuda.gpuarray
@@ -66,6 +67,7 @@ class MarginalizedGraphKernel:
         self.template = Template(self._template)
         self.scratch = None
         self.scratch_capacity = 0
+        self.graph_cache = {}
 
         self.q = kwargs.pop('q', 0.01)
 
@@ -104,6 +106,16 @@ class MarginalizedGraphKernel:
                 raise TypeError('All graphs must be of the same type: %s' %
                                 str(e))
 
+    def _convert_to_octilegraph(self, graph):
+        if hasattr(graph, 'uuid') and graph.uuid in self.graph_cache:
+            return self.graph_cache[graph.uuid]
+        else:
+            if not hasattr(graph, 'uuid'):
+                graph.uuid = uuid.uuid4()
+            og = OctileGraph(graph)
+            self.graph_cache[graph.uuid] = og
+            return og
+
     def __call__(self, X, Y=None):
         """Compute pairwise similarity matrix between graphs
 
@@ -123,8 +135,8 @@ class MarginalizedGraphKernel:
         """
 
         ''' transfer grahs to GPU '''
-        X = [OctileGraph(x) for x in X]
-        Y = [OctileGraph(y) for y in Y] if Y is not None else []
+        X = [self._convert_to_octilegraph(x) for x in X]
+        Y = [self._convert_to_octilegraph(y) for y in Y] if Y else []
         self._assert_homegeneous(X + Y)
         graph_list_d = to_gpu(np.array([g.state for g in X + Y],
                                        OctileGraph.dtype))
