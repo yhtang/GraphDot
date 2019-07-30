@@ -114,7 +114,7 @@ class MarginalizedGraphKernel:
             self.graph_cache[graph.uuid] = og
             return og
 
-    def __call__(self, X, Y=None):
+    def __call__(self, X, Y=None, nodal=False):
         """Compute pairwise similarity matrix between graphs
 
         Parameters
@@ -224,12 +224,20 @@ class MarginalizedGraphKernel:
 
         ''' collect result '''
         if len(Y):
-            R = np.zeros((N, M))
+            R = np.empty((N, M), np.object)
             for job in jobs:
-                R[job.i, job.j - N] = job.vr_gpu.get().sum()
+                if nodal is True:
+                    R[job.i, job.j - N] = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
+                else:
+                    R[job.i, job.j - N] = job.vr_gpu.get().sum()
         else:
-            R = np.zeros((N, N))
+            R = np.empty((N, N), np.object)
             for job in jobs:
-                R[job.i, job.j] = R[job.j, job.i] = job.vr_gpu.get().sum()
+                if nodal is True:
+                    r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
+                    R[job.i, job.j] = r
+                    R[job.j, job.i] = r.T
+                else:
+                    R[job.i, job.j] = R[job.j, job.i] = job.vr_gpu.get().sum()
 
-        return R
+        return np.block(R.tolist())

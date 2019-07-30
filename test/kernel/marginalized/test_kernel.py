@@ -201,6 +201,9 @@ def test_mlgk_weighted():
     assert(R[0, 0] == pytest.approx(MLGK(G[0], node_kernel, edge_kernel, q)))
     assert(R[1, 1] == pytest.approx(MLGK(G[1], node_kernel, edge_kernel, q)))
 
+    R = mlgk(G, nodal=True)
+    n = np.sum([len(g.nodes) for g in G])
+    assert(R.shape == (n, n))
 
 # def test_mlgk_large():
 #     g = nx.Graph()
