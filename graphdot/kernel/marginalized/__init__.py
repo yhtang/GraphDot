@@ -226,18 +226,19 @@ class MarginalizedGraphKernel:
         if len(Y):
             R = np.empty((N, M), np.object)
             for job in jobs:
+                r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
                 if nodal is True:
-                    R[job.i, job.j - N] = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
+                    R[job.i, job.j - N] = r
                 else:
-                    R[job.i, job.j - N] = job.vr_gpu.get().sum()
+                    R[job.i, job.j - N] = r.sum()
         else:
             R = np.empty((N, N), np.object)
             for job in jobs:
+                r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
                 if nodal is True:
-                    r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
                     R[job.i, job.j] = r
                     R[job.j, job.i] = r.T
                 else:
-                    R[job.i, job.j] = R[job.j, job.i] = job.vr_gpu.get().sum()
+                    R[job.i, job.j] = R[job.j, job.i] = r.sum()
 
         return np.block(R.tolist())
