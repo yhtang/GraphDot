@@ -6,7 +6,7 @@ import numpy as np
 import pycuda.driver
 import pycuda.gpuarray
 from pycuda.compiler import SourceModule
-from pycuda.gpuarray import to_gpu
+from pycuda.gpuarray import to_gpu, GPUArray
 from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype, decltype
@@ -24,18 +24,16 @@ except Exception as e:
 
 # only works with python >= 3.6
 # @cpptype(i=np.int32, j=np.int32)
-@cpptype([('i', np.int32), ('j', np.int32)])
-class JobIn:
-    def __init__(self, i, j):
+@cpptype([('i', np.int32), ('j', np.int32), ('vr', np.uintp)])
+class Job:
+    def __init__(self, i, j, vr_gpu):
         self.i = i
         self.j = j
+        self.vr_gpu = vr_gpu
 
-
-# only works with python >= 3.6
-# @cpptype(similarity=np.float32, iterations=np.int32)
-@cpptype([('similarity', np.float32), ('iterations', np.int32)])
-class JobOut:
-    pass
+    @property
+    def vr(self):
+        return self.vr_gpu.ptr
 
 
 class MarginalizedGraphKernel:
@@ -116,7 +114,7 @@ class MarginalizedGraphKernel:
             self.graph_cache[graph.uuid] = og
             return og
 
-    def __call__(self, X, Y=None):
+    def __call__(self, X, Y=None, nodal=False):
         """Compute pairwise similarity matrix between graphs
 
         Parameters
@@ -145,14 +143,14 @@ class MarginalizedGraphKernel:
         N = len(X)
         M = len(Y)
         if len(Y):
-            jobs = np.array([JobIn(i, N + j).state
-                             for i in range(N)
-                             for j in range(M)], JobIn.dtype)
+            jobs = [Job(i, N + j, GPUArray(g1.n_node * g2.n_node, np.float32))
+                    for i, g1 in enumerate(X)
+                    for j, g2 in enumerate(Y)]
         else:
-            jobs = np.array([JobIn(i, j).state
-                             for i in range(N)
-                             for j in range(i, N)], JobIn.dtype)
-        jobs_d = to_gpu(jobs)
+            jobs = [Job(i, i + j, GPUArray(g1.n_node * g2.n_node, np.float32))
+                    for i, g1 in enumerate(X)
+                    for j, g2 in enumerate(X[i:])]
+        jobs_d = to_gpu(np.array([j.state for j in jobs], Job.dtype))
         i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
 
         ''' prepare GPU kernel launch '''
@@ -218,23 +216,29 @@ class MarginalizedGraphKernel:
                self.scratch_d,
                jobs_d,
                i_job_global,
-               np.uint32(jobs.size),
-               np.float32(1.0),
+               np.uint32(len(jobs)),
                np.float32(self.q),
                grid=(launch_block_count, 1, 1),
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
 
         ''' collect result '''
-        result = jobs_d.get().view(JobOut.dtype)
-
         if len(Y):
-            R = np.zeros((N, M))
-            for (i, j), (r, iteration) in zip(jobs, result):
-                R[i, j - N] = r
+            R = np.empty((N, M), np.object)
+            for job in jobs:
+                r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
+                if nodal is True:
+                    R[job.i, job.j - N] = r
+                else:
+                    R[job.i, job.j - N] = r.sum()
         else:
-            R = np.zeros((N, N))
-            for (i, j), (r, iteration) in zip(jobs, result):
-                R[i, j] = R[j, i] = r
+            R = np.empty((N, N), np.object)
+            for job in jobs:
+                r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
+                if nodal is True:
+                    R[job.i, job.j] = r
+                    R[job.j, job.i] = r.T
+                else:
+                    R[job.i, job.j] = R[job.j, job.i] = r.sum()
 
-        return R
+        return np.block(R.tolist())

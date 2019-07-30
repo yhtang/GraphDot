@@ -11,10 +11,8 @@ namespace graphdot {
 namespace marginalized {
 
 struct job_t {
-    union {
-        struct { int i, j; } in;
-        struct { float r; int it; } out;
-    };
+    int i, j;
+    float *vr;
 };
 
 struct block_scratch {
@@ -162,13 +160,13 @@ struct octile_block_solver {
     }
 
     template<class NodeKernel, class EdgeKernel>
-    __inline__ __device__ static auto compute(
+    __inline__ __device__ static void compute(
         Graph const    g1,
         Graph const    g2,
         block_scratch  scratch,
         char * const   p_shared,
-        const float    s,
-        const float    q) {
+        const float    q,
+        float *        vr) {
 
         using namespace graphdot::cuda;
 
@@ -287,15 +285,6 @@ struct octile_block_solver {
 
             __syncthreads();
 
-            // __syncthreads();
-            // if ( threadIdx.x == 0 ) {
-            //     for ( int ij = 0; ij < N; ++ij ) {
-            //         printf( "line %d iteration %d Ap[%d] = %.7f\n", __LINE__, k, ij, scratch.Ap( ij ) );
-            //     }
-            // }
-            // __syncthreads();
-            // break;
-
             // alpha = rTr / dot( p, Ap );
             auto pAp = block_vdotv (scratch.p(), scratch.Ap(), N);
             auto alpha = rTr / pAp;
@@ -329,10 +318,19 @@ struct octile_block_solver {
 
             rTr = rTr_next;
         }
+        __syncthreads();
 
+        for (int i = threadIdx.x; i < N; i += blockDim.x) {
+            int i1 = i / n2;
+            int i2 = i % n2;
+            if (i1 < g1.n_node && i2 < g2.n_node) vr[i1 * g2.n_node + i2] = scratch.x(i);
+        }
+
+        #if 0
+        __syncthreads();
         float R = 0;
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            R += s * s * scratch.x (i);
+            R += scratch.x (i);
         }
         R = warp_sum (R);
         __shared__ float block_R;
@@ -340,23 +338,15 @@ struct octile_block_solver {
         __syncthreads();
         if (laneid() == 0) atomicAdd (&block_R, R);
         __syncthreads();
-        #if 0
-        __syncthreads();
         if (threadIdx.x == 0) {
+            printf ("sum(R) = %.7f\n", block_R);
             printf ("Converged after %d iterations\n", k);
-            printf ("R(sum) = %.7f\n", block_R);
-            #if 0
             for (int ij = 0; ij < N; ++ij) {
                 printf ("solution x[%d] = %.7f\n", ij, scratch.x (ij));
             }
-            #endif
         }
         __syncthreads();
         #endif
-        job_t retval;
-        retval.out.r = block_R;
-        retval.out.it = k;
-        return retval;
     }
 };
 
