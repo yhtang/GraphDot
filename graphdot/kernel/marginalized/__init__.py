@@ -239,6 +239,7 @@ class MarginalizedGraphKernel:
                i_job_global,
                np.uint32(len(jobs)),
                np.float32(self.q),
+               np.float32(self.q),  # placeholder for q0
                grid=(launch_block_count, 1, 1),
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
