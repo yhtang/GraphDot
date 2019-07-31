@@ -11,7 +11,7 @@ from graphdot.kernel.marginalized.basekernel import SquareExponential
 from graphdot.kernel.marginalized.basekernel import TensorProduct
 
 
-def MLGK(G, knode, kedge, q, nodal=False):
+def MLGK(G, knode, kedge, q, q0, nodal=False):
     N = len(G.nodes)
     D = np.zeros(N)
     A = np.zeros((N, N))
@@ -49,7 +49,7 @@ def MLGK(G, knode, kedge, q, nodal=False):
     Dx = np.kron(D / (1.0 - q), D / (1.0 - q))
     Ax = np.kron(A, A)
 
-    rhs = Dx * np.ones(N * N) * q * q
+    rhs = Dx * np.ones(N * N) * q * q / q0 / q0
     linsys = np.diag(Dx / Vx) - Ax * Ex
     solution = np.linalg.solve(linsys, rhs)
 
@@ -129,7 +129,7 @@ def test_mlgk_typecheck():
         mlgk([G[2], G[1]])
 
 
-@pytest.mark.parametrize('case', {
+@pytest.mark.parametrize('caseset', {
     'unlabeled': {
         'graphs': [Graph.from_networkx(unlabeled_graph1),
                    Graph.from_networkx(unlabeled_graph2)],
@@ -155,25 +155,52 @@ def test_mlgk_typecheck():
                                length=SquareExponential(0.05)),
         'q': [0.01, 0.05, 0.1, 0.5]
     },
-})
-def test_mlgk(case):
+}.items())
+def test_mlgk(caseset):
 
-    G = [Graph.from_networkx(g) for g in case['graphs']]
+    casetitle, case = caseset
+    G = case['graphs']
     knode = case['knode']
     kedge = case['kedge']
     for q in case['q']:
+
         mlgk = MarginalizedGraphKernel(knode, kedge, q=q)
+
         R = mlgk(G)
         d = np.diag(R)**-0.5
         K = np.diag(d).dot(R).dot(np.diag(d))
 
-        assert(K.shape == (len(G), len(G)))
-        assert(np.count_nonzero(K - K.T) == 0)
-        assert(R[0, 0] == pytest.approx(MLGK(G[0], knode, kedge, q)))
-        assert(R[1, 1] == pytest.approx(MLGK(G[1], knode, kedge, q)))
+        assert(R.shape == (len(G), len(G)))
+        assert(np.count_nonzero(R - R.T) == 0)
+        assert(R[0, 0] == pytest.approx(MLGK(G[0], knode, kedge, q, q), 1e-5))
+        assert(R[1, 1] == pytest.approx(MLGK(G[1], knode, kedge, q, q), 1e-5))
         assert(K[0, 0] == pytest.approx(1, 1e-7))
         assert(K[1, 1] == pytest.approx(1, 1e-7))
 
+        for x, y in zip(mlgk(G[:1], G).ravel(), R[:1, :].ravel()):
+            assert(x == pytest.approx(y, 1e-6))
+        for x, y in zip(mlgk(G[1:], G).ravel(), R[1:, :].ravel()):
+            assert(x == pytest.approx(y, 1e-6))
+        for x, y in zip(mlgk(G, G[:1]).ravel(), R[:, :1].ravel()):
+            assert(x == pytest.approx(y, 1e-6))
+        for x, y in zip(mlgk(G, G[1:],).ravel(), R[:, 1:].ravel()):
+            assert(x == pytest.approx(y, 1e-6))
+
+        R_nodal = mlgk(G, nodal=True)
+        d_nodal = np.diag(R_nodal)**-0.5
+        K_nodal = np.diag(d_nodal).dot(R_nodal).dot(np.diag(d_nodal))
+
+        n = np.array([len(g.nodes) for g in G])
+        N = np.cumsum(n)
+        assert(R_nodal.shape == (N[-1], N[-1]))
+        assert(np.count_nonzero(R_nodal - R_nodal.T) == 0)
+        for k, (i, j) in enumerate(zip(N-n, N)):
+            gnd = MLGK(G[k], knode, kedge, q, q, nodal=True).ravel()
+            sub = R_nodal[i:j, :][:, i:j].ravel()
+            for r1, r2 in zip(sub, gnd):
+                assert(r1 == pytest.approx(r2, 1e-5))
+        for i in range(N[-1]):
+            assert(K_nodal[i, i] == pytest.approx(1, 1e-7))
 
 # def test_mlgk_large():
 #     g = nx.Graph()
