@@ -202,6 +202,21 @@ def test_mlgk(caseset):
         for i in range(N[-1]):
             assert(K_nodal[i, i] == pytest.approx(1, 1e-7))
 
+        mlgk = MarginalizedGraphKernel(knode, kedge, q=q,
+                                       p=lambda node: 2.0)
+        R = mlgk(G)
+        gnd_R00 = MLGK(G[0], knode, kedge, q, q) * 2.0**2
+        gnd_R11 = MLGK(G[1], knode, kedge, q, q) * 2.0**2
+        assert(R[0, 0] == pytest.approx(gnd_R00, 1e-5))
+        assert(R[1, 1] == pytest.approx(gnd_R11, 1e-5))
+
+        for i1, j1, g1 in zip(N-n, N, G):
+            for i2, j2, g2 in zip(N-n, N, G):
+                gnd = R_nodal[i1:j1, :][:, i2:j2] * 2.0**2
+                sub = mlgk([g1], [g2], nodal=True)
+                for r1, r2 in zip(sub, gnd):
+                    assert(r1 == pytest.approx(r2, 1e-5))
+
 # def test_mlgk_large():
 #     g = nx.Graph()
 #     n = 24
