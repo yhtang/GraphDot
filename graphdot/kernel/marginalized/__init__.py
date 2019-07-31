@@ -49,12 +49,18 @@ class MarginalizedGraphKernel:
     edge_kernel: base kernel or composition of base kernels
         A kernelet that computes the similarity between individual edge
     kwargs: optional arguments
+        p: functor or 'uniform' or 'default'
+            The starting probability of the random walk on each node. Must be
+            either a functor that takes in a node (a dataframe row) and returns
+            a number, or the name of a built-in distribution. Currently, only
+            'uniform' and 'default' are implemented.
+            Note that a custom probability does not have to be normalized.
         q: float in (0, 1)
-            The probability for the random walk to stop during each step
+            The probability for the random walk to stop during each step.
         block_per_sm: int
-            Tunes the GPU kernel
+            Tunes the GPU kernel.
         block_size: int
-            Tunes the GPU kernel
+            Tunes the GPU kernel.
     """
 
     _template = os.path.join(os.path.dirname(__file__), 'template.cu')
@@ -67,6 +73,7 @@ class MarginalizedGraphKernel:
         self.scratch_capacity = 0
         self.graph_cache = {}
 
+        self.p = kwargs.pop('p', 'default')
         self.q = kwargs.pop('q', 0.01)
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
@@ -131,6 +138,20 @@ class MarginalizedGraphKernel:
             similarities between the graphs in X; otherwise, returns a N-by-M
             matrix containing similarities across graphs in X and Y.
         """
+
+        ''' assign starting probabilities '''
+        if isinstance(self.p, str):
+            if self.p == 'uniform' or self.p == 'default':
+                pX = [np.ones(len(g.nodes)) for g in X]
+                pY = [np.ones(len(g.nodes)) for g in Y] if Y else []
+            else:
+                raise ValueError('Unknown starting probability distribution %s'
+                                 % self.p)
+        else:
+            pX = [np.array([self.p(node) for node in g.nodes.iterrows()])
+                  for g in X]
+            pY = [np.array([self.p(node) for node in g.nodes.iterrows()])
+                  for g in Y] if Y else []
 
         ''' transfer grahs to GPU '''
         X = [self._convert_to_octilegraph(x) for x in X]
@@ -227,18 +248,22 @@ class MarginalizedGraphKernel:
             R = np.empty((N, M), np.object)
             for job in jobs:
                 r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
+                pi = pX[job.i]
+                pj = pY[job.j - N]
                 if nodal is True:
-                    R[job.i, job.j - N] = r
+                    R[job.i, job.j - N] = pi[:, None] * r * pj[None, :]
                 else:
-                    R[job.i, job.j - N] = r.sum()
+                    R[job.i, job.j - N] = pi.dot(r).dot(pj)
         else:
             R = np.empty((N, N), np.object)
             for job in jobs:
                 r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
+                pi = pX[job.i]
+                pj = pX[job.j]
                 if nodal is True:
-                    R[job.i, job.j] = r
-                    R[job.j, job.i] = r.T
+                    R[job.i, job.j] = pi[:, None] * r * pj[None, :]
+                    R[job.j, job.i] = R[job.i, job.j].T
                 else:
-                    R[job.i, job.j] = R[job.j, job.i] = r.sum()
+                    R[job.i, job.j] = R[job.j, job.i] = pi.dot(r).dot(pj)
 
         return np.block(R.tolist())
