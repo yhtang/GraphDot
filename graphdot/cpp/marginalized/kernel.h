@@ -166,6 +166,7 @@ struct octile_block_solver {
         block_scratch  scratch,
         char * const   p_shared,
         const float    q,
+        const float    q0,
         float *        vr) {
 
         using namespace graphdot::cuda;
@@ -183,7 +184,7 @@ struct octile_block_solver {
             float d1 = g1.degree[i1] / (1 - q);
             float d2 = g2.degree[i2] / (1 - q);
             scratch.x (i) = 0;
-            float r = d1 * d2 * q * q;
+            float r = d1 * d2 * q * q / (q0 * q0);
             // printf("r[%d] = %f, D[%d] = %f, deg[%d] = %f, deg[%d] = %f\n", i, r, i, d1 * d2, i1, g1.degree[i1], i2, g2.degree[i2]);
             scratch.r (i) = r;
             scratch.p (i) = r;
@@ -299,7 +300,7 @@ struct octile_block_solver {
 
             auto rTr_next = block_vdotv (scratch.r(), scratch.r(), N);
 
-            if (rTr_next < float (1e-16) * N * N) break;
+            if (rTr_next < float (1e-20) * N * N) break;
 
             auto beta = rTr_next / rTr;
 
