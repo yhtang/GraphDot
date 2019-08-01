@@ -18,6 +18,9 @@ class Tang2019MolecularKernel:
     ----------
     stopping_probability: float in (0, 1)
         The probability for the random walk to stop during each step.
+    starting_probability: float
+        The probability for the random walk to start from any node. See the `p`
+        kwarg of :class:`graphdot.kernel.marginalized.MarginalizedGraphKernel`
     element_prior: float in (0, 1)
         The baseline similarity between distinct elements --- an element
         always have a similarity 1 to itself.
@@ -27,18 +30,24 @@ class Tang2019MolecularKernel:
         times of the length scale.
     """
 
-    def __init__(self, stopping_probability=0.01, element_prior=0.2,
-                 edge_length_scale=0.05):
+    def __init__(self,
+                 stopping_probability=0.01,
+                 starting_probability='uniform',
+                 element_prior=0.2,
+                 edge_length_scale=0.05, **kwargs):
         self.stopping_probability = stopping_probability
+        self.starting_probability = starting_probability
         self.element_prior = element_prior
         self.edge_length_scale = edge_length_scale
-        self._makekernel()
+        self._makekernel(**kwargs)
 
-    def _makekernel(self):
+    def _makekernel(self, **kwargs):
         self.kernel = MarginalizedGraphKernel(
             TensorProduct(element=KroneckerDelta(self.element_prior, 1.0)),
             TensorProduct(length=SquareExponential(self.edge_length_scale)),
-            q=self.stopping_probability
+            q=self.stopping_probability,
+            p=self.starting_probability,
+            **kwargs
         )
 
     def __call__(self, X, Y=None):

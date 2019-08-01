@@ -12,7 +12,7 @@ def test_molecular_kernel():
 
     graphs = [Graph.from_ase(m) for m in molecules]
 
-    kernel = Tang2019MolecularKernel()
+    kernel = Tang2019MolecularKernel(starting_probability='uniform')
 
     R = kernel(graphs)
     D = np.diag(np.diag(R)**-0.5)
