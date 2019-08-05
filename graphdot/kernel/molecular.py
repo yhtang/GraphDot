@@ -50,5 +50,5 @@ class Tang2019MolecularKernel:
             **kwargs
         )
 
-    def __call__(self, X, Y=None):
-        return self.kernel(X, Y)
+    def __call__(self, X, Y=None, **kwargs):
+        return self.kernel(X, Y, **kwargs)
