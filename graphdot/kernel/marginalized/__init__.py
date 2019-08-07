@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import uuid
+import warnings
 import numpy as np
 import pycuda.driver
 import pycuda.gpuarray
@@ -177,15 +178,17 @@ class MarginalizedGraphKernel:
                                       node_t=decltype(node_type),
                                       edge_t=decltype(edge_type))
 
-        mod = SourceModule(source,
-                           options=['-std=c++14',
-                                    '-O4',
-                                    '--use_fast_math',
-                                    '--expt-relaxed-constexpr',
-                                    '--maxrregcount=64',
-                                    ] + self.nvcc_extra,
-                           no_extern_c=True,
-                           include_dirs=cpp.__path__)
+        with warnings.catch_warnings(record=True) as w:
+            mod = SourceModule(source,
+                               options=['-std=c++14',
+                                        '-O4',
+                                        '--use_fast_math',
+                                        '--expt-relaxed-constexpr',
+                                        '--maxrregcount=64',
+                                        ] + self.nvcc_extra,
+                               no_extern_c=True,
+                               include_dirs=cpp.__path__)
+            self.compiler_message = [str(rec.message) for rec in w]
         kernel = mod.get_function('graph_kernel_solver')
 
         launch_block_count = (self.device.MULTIPROCESSOR_COUNT
