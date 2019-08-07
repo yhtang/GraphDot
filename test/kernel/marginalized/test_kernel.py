@@ -166,6 +166,8 @@ def test_mlgk(caseset):
 
         mlgk = MarginalizedGraphKernel(knode, kedge, q=q)
 
+        '''overall similarity'''
+        # similarities within X
         R = mlgk(G)
         d = np.diag(R)**-0.5
         K = np.diag(d).dot(R).dot(np.diag(d))
@@ -177,6 +179,7 @@ def test_mlgk(caseset):
         assert(K[0, 0] == pytest.approx(1, 1e-7))
         assert(K[1, 1] == pytest.approx(1, 1e-7))
 
+        # similarities across X and Y
         for x, y in zip(mlgk(G[:1], G).ravel(), R[:1, :].ravel()):
             assert(x == pytest.approx(y, 1e-6))
         for x, y in zip(mlgk(G[1:], G).ravel(), R[1:, :].ravel()):
@@ -186,15 +189,23 @@ def test_mlgk(caseset):
         for x, y in zip(mlgk(G, G[1:],).ravel(), R[:, 1:].ravel()):
             assert(x == pytest.approx(y, 1e-6))
 
+        # diagonal similarities
+        D = mlgk.diag(G)
+        assert(len(D) == 2)
+        assert(D[0] == pytest.approx(R[0, 0], 1e-7))
+        assert(D[1] == pytest.approx(R[1, 1], 1e-7))
+
+        '''nodal similarity'''
         R_nodal = mlgk(G, nodal=True)
         d_nodal = np.diag(R_nodal)**-0.5
         K_nodal = np.diag(d_nodal).dot(R_nodal).dot(np.diag(d_nodal))
 
+        # check submatrices
         n = np.array([len(g.nodes) for g in G])
         N = np.cumsum(n)
         assert(R_nodal.shape == (N[-1], N[-1]))
         assert(np.count_nonzero(R_nodal - R_nodal.T) == 0)
-        for k, (i, j) in enumerate(zip(N-n, N)):
+        for k, (i, j) in enumerate(zip(N - n, N)):
             gnd = MLGK(G[k], knode, kedge, q, q, nodal=True).ravel()
             sub = R_nodal[i:j, :][:, i:j].ravel()
             for r1, r2 in zip(sub, gnd):
@@ -202,6 +213,18 @@ def test_mlgk(caseset):
         for i in range(N[-1]):
             assert(K_nodal[i, i] == pytest.approx(1, 1e-7))
 
+        # check block-diags
+        D_nodal = mlgk.diag(G, nodal=True)
+        assert(len(D) == 2)
+        for k in range(2):
+            sub = D_nodal[k].ravel()
+            i = (N - n)[k]
+            j = N[k]
+            gnd = R_nodal[i:j, :][:, i:j].ravel()
+            for r1, r2 in zip(sub, gnd):
+                assert(r1 == pytest.approx(r2, 1e-7))
+
+        '''custom starting probability'''
         mlgk = MarginalizedGraphKernel(knode, kedge, q=q,
                                        p=lambda node: 2.0)
         R = mlgk(G)
