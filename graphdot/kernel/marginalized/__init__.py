@@ -121,61 +121,29 @@ class MarginalizedGraphKernel:
             self.graph_cache[graph.uuid] = og
             return og
 
-    def __call__(self, X, Y=None, nodal=False):
-        """Compute pairwise similarity matrix between graphs
-
-        Parameters
-        ----------
-        X: list of N graphs
-            The graphs must all have same node and edge attributes.
-        Y: None or list of M graphs
-            The graphs must all have same node and edge attributes.
-
-        Returns
-        -------
-        numpy.array
-            if Y is None, return a N-by-N matrix containing pairwise
-            similarities between the graphs in X; otherwise, returns a N-by-M
-            matrix containing similarities across graphs in X and Y.
-        """
-
-        ''' assign starting probabilities '''
+    def _get_starting_probability(self, p):
         if isinstance(self.p, str):
             if self.p == 'uniform' or self.p == 'default':
-                pX = [np.ones(len(g.nodes)) for g in X]
-                pY = [np.ones(len(g.nodes)) for g in Y] if Y else []
+                return lambda n: 1.0
             else:
                 raise ValueError('Unknown starting probability distribution %s'
                                  % self.p)
         else:
-            pX = [np.array([self.p(node) for node in g.nodes.iterrows()])
-                  for g in X]
-            pY = [np.array([self.p(node) for node in g.nodes.iterrows()])
-                  for g in Y] if Y else []
+            return p
 
+    def _launch_kernel(self, graphs, jobs, nodal):
         ''' transfer grahs to GPU '''
-        X = [self._convert_to_octilegraph(x) for x in X]
-        Y = [self._convert_to_octilegraph(y) for y in Y] if Y else []
-        self._assert_homegeneous(X + Y)
-        graph_list_d = to_gpu(np.array([g.state for g in X + Y],
+        oct_graphs = [self._convert_to_octilegraph(g) for g in graphs]
+        self._assert_homegeneous(oct_graphs)
+        oct_graphs_d = to_gpu(np.array([g.state for g in oct_graphs],
                                        OctileGraph.dtype))
 
-        ''' prepare pairwise work item list '''
-        N = len(X)
-        M = len(Y)
-        if len(Y):
-            jobs = [Job(i, N + j, GPUArray(g1.n_node * g2.n_node, np.float32))
-                    for i, g1 in enumerate(X)
-                    for j, g2 in enumerate(Y)]
-        else:
-            jobs = [Job(i, i + j, GPUArray(g1.n_node * g2.n_node, np.float32))
-                    for i, g1 in enumerate(X)
-                    for j, g2 in enumerate(X[i:])]
+        ''' upload work item list to device '''
         jobs_d = to_gpu(np.array([j.state for j in jobs], Job.dtype))
         i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
 
         ''' prepare GPU kernel launch '''
-        x = next(iter(X))
+        x = next(iter(oct_graphs))
         weighted = x.weighted
         node_type = x.node_type
         edge_type = x.edge_type
@@ -226,14 +194,14 @@ class MarginalizedGraphKernel:
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
-        max_graph_size = np.max([g.padded_size for g in X + Y])
+        max_graph_size = np.max([g.padded_size for g in oct_graphs])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
 
         # print("%-32s : %ld" % ("Blocks launched", launch_block_count))
         # print("%-32s : %ld" % ("Shared memory per block",
         #                        shmem_bytes_per_block))
 
-        kernel(graph_list_d,
+        kernel(oct_graphs_d,
                self.scratch_d,
                jobs_d,
                i_job_global,
@@ -244,27 +212,77 @@ class MarginalizedGraphKernel:
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
 
-        ''' collect result '''
-        if len(Y):
-            R = np.empty((N, M), np.object)
-            for job in jobs:
-                r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
-                pi = pX[job.i]
-                pj = pY[job.j - N]
-                if nodal is True:
-                    R[job.i, job.j - N] = pi[:, None] * r * pj[None, :]
-                else:
-                    R[job.i, job.j - N] = pi.dot(r).dot(pj)
+    def __call__(self, X, Y=None, nodal=False):
+        ''' generate jobs '''
+        if Y is None:
+            jobs = [Job(i, i + j,
+                        GPUArray(len(g1.nodes) * len(g2.nodes), np.float32))
+                    for i, g1 in enumerate(X)
+                    for j, g2 in enumerate(X[i:])]
         else:
+            jobs = [Job(i, len(X) + j,
+                        GPUArray(len(g1.nodes) * len(g2.nodes), np.float32))
+                    for i, g1 in enumerate(X)
+                    for j, g2 in enumerate(Y)]
+
+        ''' assign starting probabilities '''
+        p_func = self._get_starting_probability(self.p)
+        P = [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in X]
+        if Y is not None:
+            P += [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in Y]
+
+        ''' call GPU kernel '''
+        self._launch_kernel(X + Y if Y is not None else X, jobs, nodal)
+
+        ''' collect result '''
+        if Y is None:
+            N = len(X)
             R = np.empty((N, N), np.object)
             for job in jobs:
-                r = job.vr_gpu.get().reshape(X[job.i].n_node, -1)
-                pi = pX[job.i]
-                pj = pX[job.j]
+                r = job.vr_gpu.get().reshape(len(X[job.i].nodes), -1)
+                pi = P[job.i]
+                pj = P[job.j]
                 if nodal is True:
                     R[job.i, job.j] = pi[:, None] * r * pj[None, :]
                     R[job.j, job.i] = R[job.i, job.j].T
                 else:
                     R[job.i, job.j] = R[job.j, job.i] = pi.dot(r).dot(pj)
+        else:
+            N = len(X)
+            M = len(Y)
+            R = np.empty((N, M), np.object)
+            for job in jobs:
+                r = job.vr_gpu.get().reshape(len(X[job.i].nodes), -1)
+                pi = P[job.i]
+                pj = P[job.j]
+                if nodal is True:
+                    R[job.i, job.j - N] = pi[:, None] * r * pj[None, :]
+                else:
+                    R[job.i, job.j - N] = pi.dot(r).dot(pj)
 
         return np.block(R.tolist())
+
+    def diag(self, X, nodal=False):
+        ''' generate jobs '''
+        jobs = [Job(i, i, GPUArray(len(g1.nodes)**2, np.float32))
+                for i, g1 in enumerate(X)]
+
+        ''' assign starting probabilities '''
+        p_func = self._get_starting_probability(self.p)
+        P = [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in X]
+
+        ''' call GPU kernel '''
+        self._launch_kernel(X, jobs, nodal)
+
+        ''' collect result '''
+        N = len(X)
+        R = np.empty(N, np.object)
+        for job in jobs:
+            r = job.vr_gpu.get().reshape(len(X[job.i].nodes), -1)
+            pi = P[job.i]
+            if nodal is True:
+                R[job.i] = pi[:, None] * r * pi[None, :]
+            else:
+                R[job.i] = pi.dot(r).dot(pi)
+
+        return np.array(R.tolist())
