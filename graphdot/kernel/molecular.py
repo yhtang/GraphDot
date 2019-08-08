@@ -51,4 +51,7 @@ class Tang2019MolecularKernel:
         )
 
     def __call__(self, X, Y=None, **kwargs):
+        """The method uses the same call signature as
+        :py:meth:`graphdot.kernel.marginalized.MarginalizedGraphKernel.__call__`
+        """
         return self.kernel(X, Y, **kwargs)
