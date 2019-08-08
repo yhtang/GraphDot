@@ -224,6 +224,15 @@ def test_mlgk(caseset):
             for r1, r2 in zip(sub, gnd):
                 assert(r1 == pytest.approx(r2, 1e-7))
 
+        # exclude first step
+        g = G[0]
+        R0 = mlgk([g], nodal=True, lmin=0)
+        R1 = mlgk([g], nodal=True, lmin=1)
+        for i, n1 in g.nodes.iterrows():
+            for j, n2 in g.nodes.iterrows():
+                assert(R0[i, j] == pytest.approx(R1[i, j] + knode(n1, n2),
+                                                 abs=1e-7))
+
         '''custom starting probability'''
         mlgk = MarginalizedGraphKernel(knode, kedge, q=q,
                                        p=lambda node: 2.0)
@@ -239,6 +248,7 @@ def test_mlgk(caseset):
                 sub = mlgk([g1], [g2], nodal=True)
                 for r1, r2 in zip(sub, gnd):
                     assert(r1 == pytest.approx(r2, 1e-5))
+
 
 # def test_mlgk_large():
 #     g = nx.Graph()

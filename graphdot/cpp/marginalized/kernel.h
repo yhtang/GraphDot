@@ -167,6 +167,7 @@ struct octile_block_solver {
         char * const   p_shared,
         const float    q,
         const float    q0,
+        const int      lmin,
         float *        vr) {
 
         using namespace graphdot::cuda;
@@ -324,7 +325,13 @@ struct octile_block_solver {
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             int i1 = i / n2;
             int i2 = i % n2;
-            if (i1 < g1.n_node && i2 < g2.n_node) vr[i1 * g2.n_node + i2] = scratch.x(i);
+            if (i1 < g1.n_node && i2 < g2.n_node) {
+                auto r = scratch.x(i);
+                if (lmin == 1) {
+                    r -=  NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * q * q / (q0 * q0);
+                }
+                vr[i1 * g2.n_node + i2] = r;
+            }
         }
 
         #if 0

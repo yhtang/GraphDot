@@ -132,7 +132,10 @@ class MarginalizedGraphKernel:
         else:
             return p
 
-    def _launch_kernel(self, graphs, jobs, nodal):
+    def _launch_kernel(self, graphs, jobs, nodal, lmin):
+        if lmin != 0 and lmin != 1:
+            raise ValueError('lmin must be 0 or 1')
+
         ''' transfer grahs to GPU '''
         oct_graphs = [self._convert_to_octilegraph(g) for g in graphs]
         self._assert_homegeneous(oct_graphs)
@@ -211,11 +214,12 @@ class MarginalizedGraphKernel:
                np.uint32(len(jobs)),
                np.float32(self.q),
                np.float32(self.q),  # placeholder for q0
+               np.int32(lmin),
                grid=(launch_block_count, 1, 1),
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
 
-    def __call__(self, X, Y=None, nodal=False):
+    def __call__(self, X, Y=None, nodal=False, lmin=0):
         """Compute pairwise similarity matrix between graphs
 
         Parameters
@@ -227,6 +231,13 @@ class MarginalizedGraphKernel:
         nodal: bool
             If True, return node-wise similarities; otherwise, return graphwise
             similarities.
+        lmin: 0 or 1
+            Number of steps to skip in each random walk path before similarity
+            is computed.
+            lmin + 1 corresponds to the starting value of l in the summation
+            of Eq. 1 in Tang & de Jong, 2019 https://doi.org/10.1063/1.5078640
+            (or the first unnumbered equation as in Kashima, Tsuda, and
+            Inokuchi, 2003).
 
         Returns
         -------
@@ -255,7 +266,7 @@ class MarginalizedGraphKernel:
             P += [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in Y]
 
         ''' call GPU kernel '''
-        self._launch_kernel(X + Y if Y is not None else X, jobs, nodal)
+        self._launch_kernel(X + Y if Y is not None else X, jobs, nodal, lmin)
 
         ''' collect result '''
         if Y is None:
@@ -285,7 +296,7 @@ class MarginalizedGraphKernel:
 
         return np.block(R.tolist())
 
-    def diag(self, X, nodal=False):
+    def diag(self, X, nodal=False, lmin=0):
         """Compute the self-similarities for a list of graphs
 
         Parameters
@@ -295,6 +306,13 @@ class MarginalizedGraphKernel:
         nodal: bool
             If True, return node-wise similarities; otherwise, return graphwise
             similarities.
+        lmin: 0 or 1
+            Number of steps to skip in each random walk path before similarity
+            is computed.
+            lmin + 1 corresponds to the starting value of l in the summation
+            of Eq. 1 in Tang & de Jong, 2019 https://doi.org/10.1063/1.5078640
+            (or the first unnumbered equation as in Kashima, Tsuda, and
+            Inokuchi, 2003).
 
         Returns
         -------
@@ -314,7 +332,7 @@ class MarginalizedGraphKernel:
         P = [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in X]
 
         ''' call GPU kernel '''
-        self._launch_kernel(X, jobs, nodal)
+        self._launch_kernel(X, jobs, nodal, lmin)
 
         ''' collect result '''
         N = len(X)
