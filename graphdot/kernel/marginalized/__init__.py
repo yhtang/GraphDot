@@ -216,6 +216,26 @@ class MarginalizedGraphKernel:
                shared=shmem_bytes_per_block)
 
     def __call__(self, X, Y=None, nodal=False):
+        """Compute pairwise similarity matrix between graphs
+
+        Parameters
+        ----------
+        X: list of N graphs
+            The graphs must all have same node and edge attributes.
+        Y: None or list of M graphs
+            The graphs must all have same node and edge attributes.
+        nodal: bool
+            If True, return node-wise similarities; otherwise, return graphwise
+            similarities.
+
+        Returns
+        -------
+        numpy.array
+            if Y is None, return a square matrix containing pairwise
+            similarities between the graphs in X; otherwise, returns a matrix
+            containing similarities across graphs in X and Y.
+        """
+
         ''' generate jobs '''
         if Y is None:
             jobs = [Job(i, i + j,
@@ -266,6 +286,25 @@ class MarginalizedGraphKernel:
         return np.block(R.tolist())
 
     def diag(self, X, nodal=False):
+        """Compute the self-similarities for a list of graphs
+
+        Parameters
+        ----------
+        X: list of N graphs
+            The graphs must all have same node and edge attributes.
+        nodal: bool
+            If True, return node-wise similarities; otherwise, return graphwise
+            similarities.
+
+        Returns
+        -------
+        numpy.array
+            if nodal is True, return a vector containing the self-similarities
+            of each graph with itself; otherwise, return a list of square
+            matrices that contain the node-wise self similarities within each
+            graph.
+        """
+
         ''' generate jobs '''
         jobs = [Job(i, i, GPUArray(len(g1.nodes)**2, np.float32))
                 for i, g1 in enumerate(X)]
