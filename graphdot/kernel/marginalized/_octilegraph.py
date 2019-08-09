@@ -11,14 +11,6 @@ __all__ = ['OctileGraph']
 @cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', np.uint64),
           ('elements', np.uintp)])
 class Octile(object):
-    """
-    using octile_t = struct {
-        int upper, left;
-        std::uint64_t nzmask;
-        edge_t * elements;
-    };
-    """
-
     def __init__(self, upper, left, nzmask, elements):
         self.upper = upper
         self.left = left
@@ -103,9 +95,9 @@ class OctileGraph(object):
             c = j % 8
             upper = i - r
             left = j - c
-            octile_dict[(upper, left)][0] |= np.uint64(1 << (r + c * 8))
+            octile_dict[(upper, left)][0] |= np.uint64(1 << (r * 8 + c))
             octile_dict[(upper, left)][1][r + c * 8] = edge
-            octile_dict[(left, upper)][0] |= np.uint64(1 << (c + r * 8))
+            octile_dict[(left, upper)][0] |= np.uint64(1 << (c * 8 + r))
             octile_dict[(left, upper)][1][c + r * 8] = edge
 
         ''' create edge octiles on GPU '''
