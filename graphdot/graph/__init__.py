@@ -175,6 +175,7 @@ class Graph:
                     edge_data.append(((atom1.index, atom2.index), w, r))
 
         edges = pd.DataFrame(edge_data, columns=['!ij', '!w', 'length'])
+        edges.length = edges.length.to_numpy(dtype=np.float32)
 
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
                    formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
