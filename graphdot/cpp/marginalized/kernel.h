@@ -127,25 +127,20 @@ struct octile_block_solver {
     // compute submatrix inner prpduct
     template<class EdgeKernel>
     __inline__ __device__ static void mmv_octile (
-        const int i1_upper,
-        const int i1_lower,
+        const int i1,
         const int i2,
-        uint nzmask_i1_upper,
-        uint nzmask_i1_lower,
+        uint nzmask_i1,
         const uint nzmask_i2,
         octile octile1,
         octile octile2,
         rhs rhs,
         int j1_margin,
-        float & sum_upper,
-        float & sum_lower
+        float & sum
     ) {
 #pragma unroll (octile_w)
         for (int j1 = 0; j1 < octile_w && j1 < j1_margin; ++j1) {
-            auto e1_upper = octile1 (i1_upper, j1);
-            auto e1_lower = octile1 (i1_lower, j1);
-            bool m1_upper = nzmask_i1_upper & 1;
-            bool m1_lower = nzmask_i1_lower & 1;
+            auto e1 = octile1(i1, j1);
+            bool m1 = nzmask_i1 & 1;
 
             #if 0
 
@@ -171,8 +166,7 @@ struct octile_block_solver {
                 auto e2_##j2 = octile2 (i2, j2);\
                 auto r_##j2  = rhs (j1, j2);\
                 bool m2_##j2 = nzmask_i2 & mask;\
-                if (m1_upper && m2_##j2) sum_upper -= EdgeKernel::compute(e1_upper, e2_##j2) * r_##j2;\
-                if (m1_lower && m2_##j2) sum_lower -= EdgeKernel::compute(e1_lower, e2_##j2) * r_##j2;
+                if (m1 && m2_##j2) sum -= EdgeKernel::compute(e1, e2_##j2) * r_##j2;\
 
                 EXPAND(0, 0x1)
                 EXPAND(1, 0x2)
@@ -185,8 +179,7 @@ struct octile_block_solver {
             #undef EXPAND
 
             #endif
-            nzmask_i1_upper >>= 1;
-            nzmask_i1_lower >>= 1;
+            nzmask_i1 >>= 1;
         }
     }
 
@@ -303,12 +296,12 @@ struct octile_block_solver {
                         rhs (j1,                        j2) = scratch.p ((J1 + j1                       ) * n2 + (J2 + j2));
                         rhs (j1 + warp_size / octile_w, j2) = scratch.p ((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
-                        float sum_upper = 0, sum_lower = 0;
-                        mmv_octile<EdgeKernel>(i1_upper, i1_lower, i2, o1.nzmask_bytes[i1_upper], o1.nzmask_bytes[i1_lower], o2.nzmask_bytes[i2], octile1, octile2, rhs, g1.n_node - J1, sum_upper, sum_lower);
-                        // printf("threadIdx %d sum_upper  %d %f sum_lower %d %f\n", threadIdx.x, (I1 + i1_upper) * n2 + (I2 + i2), sum_upper, (I1 + i1_lower) * n2 + (I2 + i2), sum_lower);
-
-
+                        float sum_upper = 0;
+                        mmv_octile<EdgeKernel>(i1_upper, i2, o1.nzmask_bytes[i1_upper], o2.nzmask_bytes[i2], octile1, octile2, rhs, g1.n_node - J1, sum_upper);
                         atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper);
+
+                        float sum_lower = 0;
+                        mmv_octile<EdgeKernel>(i1_lower, i2, o1.nzmask_bytes[i1_lower], o2.nzmask_bytes[i2], octile1, octile2, rhs, g1.n_node - J1, sum_lower);
                         atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
                     }
 
