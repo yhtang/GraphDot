@@ -8,7 +8,7 @@ __all__ = ['OctileGraph']
 
 # only works with python >= 3.6
 # @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
-@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', np.uint64),
+@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', '<u8'),
           ('elements', np.uintp)])
 class Octile(object):
     def __init__(self, upper, left, nzmask, elements):
