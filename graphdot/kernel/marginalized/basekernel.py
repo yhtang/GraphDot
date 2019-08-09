@@ -214,8 +214,8 @@ def SquareExponential(length_scale):
             return 'SquareExponential({})'.format(self.length_scale)
 
         def gencode(self, x, y):
-            return 'expf({:f}f * power({} - {}, 2))'.format(
-                -0.5 / self.length_scale**2, x, y)
+            return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
+                -0.5 / self.length_scale**2, x, y, x, y)
 
         @property
         def neg_half_inv_l2(self):
