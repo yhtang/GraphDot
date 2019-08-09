@@ -188,6 +188,8 @@ class MarginalizedGraphKernel:
                                         '--use_fast_math',
                                         '--expt-relaxed-constexpr',
                                         '--maxrregcount=64',
+                                        '-Xptxas', '-v',
+                                        '-lineinfo',
                                         ] + self.nvcc_extra,
                                no_extern_c=True,
                                include_dirs=cpp.__path__)
