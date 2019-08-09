@@ -80,7 +80,7 @@ class MarginalizedGraphKernel:
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
 
-        self.device = pycuda.driver.Device(kwargs.pop('block_per_sm', 0))
+        self.device = pycuda.driver.Device(kwargs.pop('device', 0))
         self.nvcc_extra = kwargs.pop('nvcc_extra', [])
         self.ctx = self.device.make_context()
 
@@ -188,6 +188,8 @@ class MarginalizedGraphKernel:
                                         '--use_fast_math',
                                         '--expt-relaxed-constexpr',
                                         '--maxrregcount=64',
+                                        '-Xptxas', '-v',
+                                        '-lineinfo',
                                         ] + self.nvcc_extra,
                                no_extern_c=True,
                                include_dirs=cpp.__path__)

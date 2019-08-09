@@ -1,5 +1,4 @@
 #include <marginalized/kernel.h>
-#include <math/power.h>
 #include <misc/numpy_type.h>
 
 using namespace graphdot;

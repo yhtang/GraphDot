@@ -42,7 +42,10 @@ template<class Node, class Edge> struct graph_t {
     using edge_t = Edge;
     using octile_t = struct {
         int upper, left;
-        std::uint64_t nzmask;
+        union {
+            std::uint64_t nzmask; // row-major! in constrat to the column-major layout of elements
+            unsigned char nzmask_bytes[8];
+        };
         edge_t * elements;
     };
 
@@ -127,8 +130,8 @@ struct octile_block_solver {
         const int i1_upper,
         const int i1_lower,
         const int i2,
-        const std::uint64_t nzmask1,
-        const std::uint64_t nzmask2,
+        uint nzmask1_uplo,
+        const uint nzmask2,
         octile octile1,
         octile octile2,
         rhs rhs,
@@ -136,26 +139,46 @@ struct octile_block_solver {
         float & sum_upper,
         float & sum_lower
     ) {
-#pragma unroll (octile_w)
+        #pragma unroll (octile_w)
         for (int j1 = 0; j1 < octile_w && j1 < j1_margin; ++j1) {
             auto e1_upper = octile1 (i1_upper, j1);
             auto e1_lower = octile1 (i1_lower, j1);
-            bool m1_upper = nzmask1 & (1LL << (i1_upper + j1 * octile_h));
-            bool m1_lower = nzmask1 & (1LL << (i1_lower + j1 * octile_h));
-#pragma unroll (octile_w)
-            for (int j2 = 0; j2 < octile_w; ++j2) {
+            bool m1_upper = nzmask1_uplo & 0x1;
+            bool m1_lower = nzmask1_uplo & 0x100;
+
+            #if 1
+            #define ITERATION(j2, mask) \
+                auto e2_##j2 = octile2 (i2, j2);\
+                auto r_##j2  = rhs (j1, j2);\
+                bool m2_##j2 = nzmask2 & mask;\
+                if (m1_upper && m2_##j2) sum_upper -= EdgeKernel::compute(e1_upper, e2_##j2) * r_##j2;\
+                if (m1_lower && m2_##j2) sum_lower -= EdgeKernel::compute(e1_lower, e2_##j2) * r_##j2;
+
+            ITERATION(0, 0x1)
+            ITERATION(1, 0x2)
+            ITERATION(2, 0x4)
+            ITERATION(3, 0x8)
+            ITERATION(4, 0x10)
+            ITERATION(5, 0x20)
+            ITERATION(6, 0x40)
+            ITERATION(7, 0x80)
+            #undef ITERATION
+            #else
+            #pragma unroll (octile_w)
+            for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
                 auto e2 = octile2 (i2, j2);
                 auto r  = rhs (j1, j2);
-                bool m2 = nzmask2 & (1LL << (i2 + j2 * octile_h));
+                bool m2 = nzmask2 & mask;
                 if (m1_upper && m2) {
-                    //printf("KE((%d,%d)=>(%lf,%ld),(%d,%d)=>(%lf,%ld)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_upper, j1, e1_upper.label.length, e1_upper.label.order, i2, j2, e2.label.length, e2.label.order, EdgeKernel::compute(e1_upper, e2), r, e1_upper.weight, e2.weight);
                     sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
                 }
                 if (m1_lower && m2) {
-                    // printf("KE((%d,%d)=>(%lf,%ld),(%d,%d)=>(%lf,%ld)) = %f, r = %f, e1.w %f, e2.w %f\n", i1_lower, j1, e1_lower.label.length, e1_lower.label.order, i2, j2, e2.label.length, e2.label.order, EdgeKernel::compute(e1_lower, e2), r, e1_lower.weight, e2.weight);
                     sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
                 }
             }
+            #endif
+
+            nzmask1_uplo >>= 1;
         }
     }
 
@@ -256,11 +279,11 @@ struct octile_block_solver {
                         auto o1 = g1.octile[ O1 + p1 ];
                         const int I1 = o1.upper;
                         const int J1 = o1.left;
-                        const std::uint64_t nzmask1 = o1.nzmask;
+                        // const std::uint64_t nzmask1 = o1.nzmask;
                         auto o2 = g2.octile[ O2 + p2 ];
                         const int I2 = o2.upper;
                         const int J2 = o2.left;
-                        const std::uint64_t nzmask2 = o2.nzmask;
+                        // const std::uint64_t nzmask2 = o2.nzmask;
 
                         octile octile1 {p_shared + p1 * shmem_bytes_per_warp};
                         octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octile::size_bytes};
@@ -273,7 +296,7 @@ struct octile_block_solver {
                         rhs (j1 + warp_size / octile_w, j2) = scratch.p ((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
                         float sum_upper = 0, sum_lower = 0;
-                        mmv_octile<EdgeKernel>(i1_upper, i1_lower, i2, nzmask1, nzmask2, octile1, octile2, rhs, g1.n_node - J1, sum_upper, sum_lower);
+                        mmv_octile<EdgeKernel>(i1_upper, i1_lower, i2, o1.nzmask_bytes[i1_upper] | ( o1.nzmask_bytes[i1_lower] << 8 ), o2.nzmask_bytes[i2], octile1, octile2, rhs, g1.n_node - J1, sum_upper, sum_lower);
                         // printf("threadIdx %d sum_upper  %d %f sum_lower %d %f\n", threadIdx.x, (I1 + i1_upper) * n2 + (I2 + i2), sum_upper, (I1 + i1_lower) * n2 + (I2 + i2), sum_lower);
 
 
