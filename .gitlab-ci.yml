@@ -7,6 +7,7 @@ stages:
   - static-analysis
   - unit-test
   - coverage-analysis
+  - benchmark
   - documentation
 
 Lint:
@@ -37,6 +38,11 @@ Coverage:
   script:
     - tox -e coverage
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
+
+Benchmark:
+  stage: benchmark
+  script:
+    - tox -e benchmark
 
 Docs:
   stage: documentation
