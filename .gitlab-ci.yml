@@ -8,7 +8,6 @@ stages:
   - unit-test
   - coverage-analysis
   - benchmark
-  - documentation
 
 Lint:
   stage: static-analysis
@@ -48,6 +47,6 @@ Benchmark:
     - tox -e benchmark
 
 Docs:
-  stage: documentation
+  stage: static-analysis
   script:
     - tox -e docs
