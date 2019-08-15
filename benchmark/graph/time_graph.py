@@ -8,20 +8,19 @@ from graphdot.graph import Graph
 def test_graph_from_networkx(n, benchmark):
 
     nxg = nx.Graph(title='Large')
-    nn = n
-    ne = n * 10
     np.random.seed(0)
-    for i in range(nn):
+    for i in range(n):
         nxg.add_node(i, label=np.random.randn())
-    for _ in range(ne):
-        i, j = np.random.randint(nn, size=2)
+    for _ in range(n * 10):
+        i, j = np.random.randint(n, size=2)
         nxg.add_edge(i, j, weight=np.random.rand())
 
     def fun(nxg):
         return Graph.from_networkx(nxg)
 
-    g = benchmark.pedantic(fun, args=(nxg,), iterations=5, rounds=5)
+    g = benchmark.pedantic(fun, args=(nxg,), iterations=5, rounds=5,
+                           warmup_rounds=1)
 
     assert(g.title == 'Large')
-    assert(len(g.nodes) == nn)
-    assert(len(g.edges) <= ne)
+    assert(len(g.nodes) == nxg.number_of_nodes())
+    assert(len(g.edges) == nxg.number_of_edges())
