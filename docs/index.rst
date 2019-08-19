@@ -21,7 +21,9 @@ Welcome to GraphDot's documentation!
 .. image:: https://readthedocs.org/projects/graphdot/badge/?version=latest&style=flat
    :target: https://graphdot.readthedocs.org/
 
-GraphDot is a library for similarity comparison between labeled and weighted graphs. Currently, it implements the Marginalized Graph Kernel algorithm. It is GPU-accelerated and supports versatile customization through just-in-time code generation and compilation.
+GraphDot is a Python library that carry out graph dot product computations, a process through which a similarity measure can be defined among the graphs. Currently, the library can handle unweighted graphs containing arbitrary nodal and edge labels and attributes via the use of the Marginalized Graph Kernel algorithm. It is GPU-accelerated and supports versatile customization through just-in-time code generation and compilation.
+
+
 
 Features
 --------
