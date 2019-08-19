@@ -1,4 +1,5 @@
 pytest
 coverage
 pytest-cov
+pytest-benchmark
 exrex

@@ -3,7 +3,7 @@ from .graph import Graph
 
 __all__ = ['Graph']
 
-__version__ = '0.1.5p1'
+__version__ = '0.1.6'
 __author__ = 'Yu-Hang "Maxin" Tang, Oguz Selvitopi'
 __maintainer__ = 'Yu-Hang "Maxin" Tang'
 __email__ = 'Tang.Maxin@gmail.com'
