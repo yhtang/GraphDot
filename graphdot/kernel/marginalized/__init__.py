@@ -98,7 +98,7 @@ class MarginalizedGraphKernel:
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
-    def clone_with_theta():
+    def clone_with_theta(self):
         """scikit-learn compatibility method"""
         pass
 
