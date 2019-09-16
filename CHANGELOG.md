@@ -1,5 +1,10 @@
+## 0.1.8 (2019-09-15)
+- Added a freshly-designed atomic adjacency rule.
+- Significantly accelerated conversion from ASE molecules to graphs.
+- Documentation update.
+
 ## 0.1.7 (2019-08-23)
-- Documentation update
+- Documentation update.
 
 ## 0.1.6 (2019-08-12)
 - Added the `diag()` method to `Tang2019MolecularKernel`.
