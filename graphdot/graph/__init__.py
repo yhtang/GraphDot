@@ -10,7 +10,8 @@ import uuid
 from itertools import product
 import numpy as np
 import pandas as pd
-from graphdot.graph.adjacency.atomic import SimpleTentAtomicAdjacency
+from scipy.spatial import cKDTree
+from graphdot.graph.adjacency.atomic import AtomicAdjacency
 
 __all__ = ['Graph']
 
@@ -153,29 +154,34 @@ class Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
-        pbc = np.logical_and(atoms.pbc, use_pbc)
-        images = [(atoms.cell.T * image).sum(axis=1) for image in product(
-            *tuple([-1, 0, 1] if p else [0] for p in pbc))]
-
         if adjacency == 'default':
-            adj = SimpleTentAtomicAdjacency(h=1.5, order=1, images=images)
-        else:
-            adj = SimpleTentAtomicAdjacency(**adjacency, images=images)
+            adjacency = AtomicAdjacency()
 
         nodes = pd.DataFrame()
         nodes['element'] = atoms.get_atomic_numbers().astype(np.int8)
 
-        edge_data = []
-        for atom1 in atoms:
-            for atom2 in atoms:
-                if atom2.index <= atom1.index:
-                    continue
-                w, r = adj(atom1, atom2)
-                if w > 0:
-                    edge_data.append(((atom1.index, atom2.index), w, r))
+        pbc = np.logical_and(atoms.pbc, use_pbc)
+        images = [(atoms.cell.T * image).sum(axis=1) for image in product(
+            *tuple([-1, 0, 1] if p else [0] for p in pbc))]
+        x = atoms.get_positions()
+        x_images = np.vstack([x + i for i in images])
+        # prefer lookup over integer modulo
+        j_images = list(range(len(atoms))) * len(images)
+
+        cutoff = adjacency.cutoff(atoms.get_atomic_numbers())
+        nl = cKDTree(x).sparse_distance_matrix(cKDTree(x_images), cutoff)
+
+        edge_data = {}
+        for (i, j), r in nl.items():
+            j = j_images[j]
+            if j > i:
+                w = adjacency(atoms[i].number, atoms[j].number, r)
+                if w > 0 and ((i, j) not in edge_data or
+                              edge_data[(i, j)][1] > r):
+                    edge_data[(i, j)] = (w, r)
+        edge_data = [((i, j), w, r) for (i, j), (w, r) in edge_data.items()]
 
         edges = pd.DataFrame(edge_data, columns=['!ij', '!w', 'length'])
-        edges.length = edges.length.to_numpy(dtype=np.float32)
 
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
                    formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))

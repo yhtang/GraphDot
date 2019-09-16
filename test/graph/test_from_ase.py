@@ -4,14 +4,14 @@ import pytest
 from ase.build import molecule
 from ase.lattice.cubic import SimpleCubic
 from graphdot.graph import Graph
+from graphdot.graph.adjacency import AtomicAdjacency
 
 
-adj_config = {"h": 1.0, "order": 1}
-
+simple_adj = AtomicAdjacency(shape='tent1', length_scale=1.0, zoom=1)
 
 def test_ase_one():
     atoms = molecule('H2')
-    graph = Graph.from_ase(atoms, adjacency=adj_config)
+    graph = Graph.from_ase(atoms)
     assert(len(graph.nodes) == 2)
     assert(len(graph.edges) == 1)
 
@@ -22,8 +22,8 @@ def test_ase_one():
     SimpleCubic(latticeconstant=2, size=(1, 1, 2), symbol='Cu', pbc=(0, 0, 1)),
 ])
 def test_ase_pbc1(atoms):
-    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=adj_config)
-    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=adj_config)
+    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=simple_adj)
+    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=simple_adj)
     assert(len(graph_pbc.edges) == len(graph_nopbc.edges))
 
 
@@ -39,8 +39,8 @@ def test_ase_pbc1(atoms):
     SimpleCubic(latticeconstant=2, size=(1, 1, 7), symbol='Cu', pbc=(0, 0, 1)),
 ])
 def test_ase_pbc2(atoms):
-    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=adj_config)
-    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=adj_config)
+    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=simple_adj)
+    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=simple_adj)
     assert(len(graph_pbc.edges) > len(graph_nopbc.edges))
 
 

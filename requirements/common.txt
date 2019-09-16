@@ -1,5 +1,7 @@
 setuptools
 numpy
+scipy
+numba
 pandas
 networkx
 ase
