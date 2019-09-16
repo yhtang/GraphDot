@@ -27,8 +27,9 @@ class Tent:
     def cutoff(self, length_scale):
         return length_scale * 3
 
+
 if __name__ == '__main__':
-    
+
     g = Gaussian(1.0)
     print(g(1.0))
     print(g(2.0))

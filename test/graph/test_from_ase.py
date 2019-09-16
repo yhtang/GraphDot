@@ -9,6 +9,7 @@ from graphdot.graph.adjacency import AtomicAdjacency
 
 simple_adj = AtomicAdjacency(shape='tent1', length_scale=1.0, zoom=1)
 
+
 def test_ase_one():
     atoms = molecule('H2')
     graph = Graph.from_ase(atoms)

@@ -3,7 +3,7 @@
 import re
 import functools
 import numpy as np
-from mendeleev import element, get_table
+from mendeleev import get_table
 from graphdot.graph.adjacency.euclidean import Tent
 
 
