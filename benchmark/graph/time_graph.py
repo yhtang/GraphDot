@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import networkx as nx
+from ase.build import molecule, fcc111
 from graphdot.graph import Graph
 
 
@@ -24,3 +25,20 @@ def test_graph_from_networkx(n, benchmark):
     assert(g.title == 'Large')
     assert(len(g.nodes) == nxg.number_of_nodes())
     assert(len(g.edges) == nxg.number_of_edges())
+
+
+@pytest.mark.parametrize("atoms", [
+    molecule('H2O'),
+    molecule('bicyclobutane'),
+    fcc111('Cu', size=(4, 4, 4), periodic=True),
+    fcc111('Cu', size=(8, 8, 8), periodic=True),
+])
+def test_graph_from_ase(atoms, benchmark):
+
+    def fun(atoms):
+        return Graph.from_ase(atoms)
+
+    g = benchmark.pedantic(fun, args=(atoms,), iterations=5, rounds=5,
+                           warmup_rounds=1)
+
+    assert(len(g.nodes) == len(atoms))
