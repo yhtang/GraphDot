@@ -22,9 +22,9 @@ def test_graph_from_networkx(n, benchmark):
     g = benchmark.pedantic(fun, args=(nxg,), iterations=5, rounds=5,
                            warmup_rounds=1)
 
-    # assert(g.title == 'Large')
-    # assert(len(g.nodes) == nxg.number_of_nodes())
-    # assert(len(g.edges) == nxg.number_of_edges())
+    assert(g.title == 'Large')
+    assert(len(g.nodes) == nxg.number_of_nodes())
+    assert(len(g.edges) == nxg.number_of_edges())
 
 
 @pytest.mark.parametrize("atoms", [
@@ -40,3 +40,5 @@ def test_graph_from_ase(atoms, benchmark):
 
     g = benchmark.pedantic(fun, args=(atoms,), iterations=5, rounds=5,
                            warmup_rounds=1)
+
+    assert(len(g.nodes) == len(atoms))
