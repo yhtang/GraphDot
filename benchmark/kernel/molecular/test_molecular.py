@@ -14,5 +14,5 @@ def test_molecular_kernel_on_organics(benchmark):
     def fun(kernel, graphs):
         return kernel(graphs, nodal=True)
 
-    g = benchmark.pedantic(fun, args=(kernel, graphs), iterations=3, rounds=3,
-                           warmup_rounds=1)
+    benchmark.pedantic(fun, args=(kernel, graphs), iterations=3, rounds=3,
+                       warmup_rounds=1)
