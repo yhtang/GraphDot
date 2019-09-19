@@ -6,7 +6,9 @@
 [![PyPI version](https://badge.fury.io/py/graphdot.svg)](https://badge.fury.io/py/graphdot)
 [![docs](https://readthedocs.org/projects/graphdot/badge/?version=latest&style=flat)](https://graphdot.readthedocs.org/)
 
-GraphDot is a Python library that carry out graph dot product computations, through which a similarity measure is defined among the graphs. For more details, please checkout the latest documentation on [readthedocs](https://graphdot.readthedocs.io/).
+GraphDot is a GPU-accelerated Python library that carries out graph dot product operations to compute graph similarity. Currently, the library implements the Marginalized Graph Kernel algorithm, which uses a random walk process to compare subtree patterns and thus defining a generalized graph convolution process. The library can operate on undirected graphs, either weighted or unweighted, that contain arbitrary nodal and edge labels and attributes. It implements state-of-the-art GPU acceleration algorithms and supports versatile customization through just-in-time code generation and compilation.
+
+For more details, please checkout the latest documentation on [readthedocs](https://graphdot.readthedocs.io/).
 
 # Copyright
 
