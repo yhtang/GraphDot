@@ -37,7 +37,6 @@ class OctileGraph(object):
     };
     """
 
-    # @profile
     def __init__(self, graph):
 
         nodes = graph.nodes

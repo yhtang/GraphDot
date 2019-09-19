@@ -215,7 +215,6 @@ class MarginalizedGraphKernel:
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
 
-    # @profile
     def __call__(self, X, Y=None, nodal=False, lmin=0):
         """Compute pairwise similarity matrix between graphs
 
