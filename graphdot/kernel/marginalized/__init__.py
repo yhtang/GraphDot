@@ -4,37 +4,30 @@ import os
 import uuid
 import warnings
 import numpy as np
-import pycuda.driver
-import pycuda.gpuarray
+import pycuda
 from pycuda.compiler import SourceModule
-from pycuda.gpuarray import to_gpu, GPUArray
 from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype, decltype
+from graphdot.cuda.array import umarray, umlike
 from ._scratch import BlockScratch
 from ._octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
 
-try:
-    pycuda.driver.init()
-except Exception as e:
-    raise RuntimeWarning('PyCUDA initialization failed, message: ' + str(e))
-
-
 # only works with python >= 3.6
 # @cpptype(i=np.int32, j=np.int32)
-@cpptype([('i', np.int32), ('j', np.int32), ('vr', np.uintp)])
+@cpptype([('i', np.int32), ('j', np.int32), ('p_vr', np.uintp)])
 class Job:
-    def __init__(self, i, j, vr_gpu):
+    def __init__(self, i, j, vr):
         self.i = i
         self.j = j
-        self.vr_gpu = vr_gpu
+        self.vr = vr
 
     @property
-    def vr(self):
-        return self.vr_gpu.ptr
+    def p_vr(self):
+        return self.vr.ptr
 
 
 class MarginalizedGraphKernel:
@@ -93,8 +86,8 @@ class MarginalizedGraphKernel:
                 self.scratch[0].capacity < capacity):
             self.ctx.synchronize()
             self.scratch = [BlockScratch(capacity) for _ in range(count)]
-            self.scratch_d = to_gpu(np.array([s.state for s in self.scratch],
-                                             BlockScratch.dtype))
+            self.scratch_d = umlike(np.array([s.state for s in self.scratch],
+                                   BlockScratch.dtype))
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
@@ -139,11 +132,11 @@ class MarginalizedGraphKernel:
         ''' transfer grahs to GPU '''
         oct_graphs = [self._convert_to_octilegraph(g) for g in graphs]
         self._assert_homegeneous(oct_graphs)
-        oct_graphs_d = to_gpu(np.array([g.state for g in oct_graphs],
-                                       OctileGraph.dtype))
+        oct_graphs_d = umlike(np.array([g.state for g in oct_graphs],
+                             OctileGraph.dtype))
 
         ''' upload work item list to device '''
-        jobs_d = to_gpu(np.array([j.state for j in jobs], Job.dtype))
+        jobs_d = umlike(np.array([j.state for j in jobs], Job.dtype))
         i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
 
         ''' prepare GPU kernel launch '''
@@ -180,6 +173,7 @@ class MarginalizedGraphKernel:
                                       edge_kernel=edge_kernel_src,
                                       node_t=decltype(node_type),
                                       edge_t=decltype(edge_type))
+        self.source = source
 
         with warnings.catch_warnings(record=True) as w:
             mod = SourceModule(source,
@@ -209,9 +203,9 @@ class MarginalizedGraphKernel:
         # print("%-32s : %ld" % ("Shared memory per block",
         #                        shmem_bytes_per_block))
 
-        kernel(oct_graphs_d,
-               self.scratch_d,
-               jobs_d,
+        kernel(oct_graphs_d.base,
+               self.scratch_d.base,
+               jobs_d.base,
                i_job_global,
                np.uint32(len(jobs)),
                np.float32(self.q),
@@ -221,6 +215,7 @@ class MarginalizedGraphKernel:
                block=(self.block_size, 1, 1),
                shared=shmem_bytes_per_block)
 
+    # @profile
     def __call__(self, X, Y=None, nodal=False, lmin=0):
         """Compute pairwise similarity matrix between graphs
 
@@ -251,13 +246,11 @@ class MarginalizedGraphKernel:
 
         ''' generate jobs '''
         if Y is None:
-            jobs = [Job(i, i + j,
-                        GPUArray(len(g1.nodes) * len(g2.nodes), np.float32))
+            jobs = [Job(i, i + j, umarray(len(g1.nodes) * len(g2.nodes)))
                     for i, g1 in enumerate(X)
                     for j, g2 in enumerate(X[i:])]
         else:
-            jobs = [Job(i, len(X) + j,
-                        GPUArray(len(g1.nodes) * len(g2.nodes), np.float32))
+            jobs = [Job(i, len(X) + j, umarray(len(g1.nodes) * len(g2.nodes)))
                     for i, g1 in enumerate(X)
                     for j, g2 in enumerate(Y)]
 
@@ -275,7 +268,7 @@ class MarginalizedGraphKernel:
             N = len(X)
             R = np.empty((N, N), np.object)
             for job in jobs:
-                r = job.vr_gpu.get().reshape(len(X[job.i].nodes), -1)
+                r = job.vr.reshape(len(X[job.i].nodes), -1)
                 pi = P[job.i]
                 pj = P[job.j]
                 if nodal is True:
@@ -288,7 +281,7 @@ class MarginalizedGraphKernel:
             M = len(Y)
             R = np.empty((N, M), np.object)
             for job in jobs:
-                r = job.vr_gpu.get().reshape(len(X[job.i].nodes), -1)
+                r = job.vr.reshape(len(X[job.i].nodes), -1)
                 pi = P[job.i]
                 pj = P[job.j]
                 if nodal is True:
@@ -328,8 +321,7 @@ class MarginalizedGraphKernel:
         """
 
         ''' generate jobs '''
-        jobs = [Job(i, i, GPUArray(len(g1.nodes)**2, np.float32))
-                for i, g1 in enumerate(X)]
+        jobs = [Job(i, i, umarray(len(g1.nodes)**2)) for i, g1 in enumerate(X)]
 
         ''' assign starting probabilities '''
         p_func = self._get_starting_probability(self.p)
@@ -342,17 +334,17 @@ class MarginalizedGraphKernel:
         N = [len(x.nodes) for x in X]
         if nodal is True:
             return np.concatenate(
-                [p**2 * job.vr_gpu.get()[::n + 1]
+                [p**2 * job.vr[::n + 1]
                  for job, p, n in zip(jobs, P, N)]
             )
         elif nodal is False:
             return np.array(
-                [p.dot(job.vr_gpu.get().reshape(n, -1)).dot(p)
+                [p.dot(job.vr.reshape(n, -1)).dot(p)
                  for job, p, n in zip(jobs, P, N)]
             )
         elif nodal == 'block':
             return list(
-                p[:, None] * job.vr_gpu.get().reshape(n, -1) * p[None, :]
+                p[:, None] * job.vr.reshape(n, -1) * p[None, :]
                 for job, p, n in zip(jobs, P, N)
             )
         else:
