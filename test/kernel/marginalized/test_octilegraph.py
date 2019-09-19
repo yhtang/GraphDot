@@ -7,14 +7,20 @@ from graphdot.kernel.marginalized._octilegraph import OctileGraph, Octile
 from graphdot import Graph
 
 
+class MockArray(np.ndarray):
+    @property
+    def ptr(self):
+        return 1
+
+
 def test_octile():
     assert(Octile.dtype.isalignedstruct)
 
-    octile = Octile(0, 0, 0, np.zeros(64))
+    octile = Octile(0, 0, 0, np.zeros(64).view(MockArray))
     assert(octile.upper == 0)
     assert(octile.left == 0)
     assert(octile.nzmask == 0)
-    assert(octile.elements != 0)
+    assert(octile.p_elements != 0)
     assert(octile.state)
 
 
@@ -33,15 +39,15 @@ def test_octile_graph_unweighted():
     assert(og.n_node == len(dfg.nodes))
     assert(og.padded_size >= og.n_node and og.padded_size % 8 == 0)
     assert(og.n_octile == (og.padded_size // 8)**2)
-    assert(og.octile != 0)
-    assert(og.degree != 0)
-    assert(og.node != 0)
+    assert(og.p_octile != 0)
+    assert(og.p_degree != 0)
+    assert(og.p_node != 0)
     with pytest.raises(AttributeError):
-        og.octile = np.uintp(0)
+        og.p_octile = np.uintp(0)
     with pytest.raises(AttributeError):
-        og.degree = np.uintp(0)
+        og.p_degree = np.uintp(0)
     with pytest.raises(AttributeError):
-        og.node = np.uintp(0)
+        og.p_node = np.uintp(0)
 
     assert(og.node_type.isalignedstruct)
     for name in og.node_type.names:
@@ -71,15 +77,15 @@ def test_octile_graph_weighted():
     assert(og.n_node == len(dfg.nodes))
     assert(og.padded_size >= og.n_node and og.padded_size % 8 == 0)
     assert(og.n_octile == (og.padded_size // 8)**2)
-    assert(og.octile != 0)
-    assert(og.degree != 0)
-    assert(og.node != 0)
+    assert(og.p_octile != 0)
+    assert(og.p_degree != 0)
+    assert(og.p_node != 0)
     with pytest.raises(AttributeError):
-        og.octile = np.uintp(0)
+        og.p_octile = np.uintp(0)
     with pytest.raises(AttributeError):
-        og.degree = np.uintp(0)
+        og.p_degree = np.uintp(0)
     with pytest.raises(AttributeError):
-        og.node = np.uintp(0)
+        og.p_node = np.uintp(0)
 
     assert(og.node_type.isalignedstruct)
     for name in og.node_type.names:

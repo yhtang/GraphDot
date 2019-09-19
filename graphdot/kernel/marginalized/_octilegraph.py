@@ -1,31 +1,32 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from pycuda.gpuarray import to_gpu
 from graphdot.codegen.typetool import cpptype, rowtype
+from graphdot.cuda.array import umlike, umzeros
 
 __all__ = ['OctileGraph']
 
 # only works with python >= 3.6
 # @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
 @cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', '<u8'),
-          ('elements', np.uintp)])
+          ('p_elements', np.uintp)])
 class Octile(object):
     def __init__(self, upper, left, nzmask, elements):
         self.upper = upper
         self.left = left
         self.nzmask = nzmask
-        self.__elements = to_gpu(elements)
+        self.elements = elements
 
     @property
-    def elements(self):
-        return self.__elements.ptr
+    def p_elements(self):
+        return self.elements.ptr
+
 
 # only works with python >= 3.6
 # @cpptype(n_node=np.int32, n_octile=np.int32, degree=np.uintp,
 #          node=np.uintp, octile=np.uintp)
-@cpptype([('n_node', np.int32), ('n_octile', np.int32), ('degree', np.uintp),
-          ('node', np.uintp), ('octile', np.uintp)])
+@cpptype([('n_node', np.int32), ('n_octile', np.int32), ('p_degree', np.uintp),
+          ('p_node', np.uintp), ('p_octile', np.uintp)])
 class OctileGraph(object):
     """
     struct graph_t {
@@ -36,6 +37,7 @@ class OctileGraph(object):
     };
     """
 
+    # @profile
     def __init__(self, graph):
 
         nodes = graph.nodes
@@ -46,42 +48,41 @@ class OctileGraph(object):
         if len(nodes.columns) == 0:
             nodes = nodes.assign(labeled=lambda _: False)
 
-        if len(edges.drop(['!ij'], axis=1).columns) == 0:
+        if len(edges.columns) == 1:
+            assert(edges.columns[0] == '!ij')
             edges = edges.assign(labeled=lambda _: False)
 
         ''' determine node type '''
-        node_type = rowtype(nodes)
-        node_d = to_gpu(nodes[list(node_type.names)]
-                        .to_records(index=False)
-                        .astype(node_type))
+        self.node_type = node_type = rowtype(nodes)
+        self.node = umlike(nodes[list(node_type.names)]
+                          .to_records(index=False)
+                          .astype(node_type))
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
-        degree_h = np.zeros(self.padded_size, dtype=np.float32)
-        edge_label_type = rowtype(edges.drop(['!ij', '!w'],
-                                  axis=1,
-                                  errors='ignore'))
+        self.degree = degree = umzeros(self.padded_size, dtype=np.float32)
+        edge_label_type = rowtype(edges, exclude=['!ij', '!w'])
         if '!w' in edges.columns:  # weighted graph
             self.weighted = True
             edge_type = np.dtype([('weight', np.float32),
                                   ('label', edge_label_type)], align=True)
+            self.edge_type = edge_type
             for (i, j), w in zip(edges['!ij'], edges['!w']):
-                degree_h[i] += w
-                degree_h[j] += w
+                degree[i] += w
+                degree[j] += w
         else:
             self.weighted = False
-            edge_type = edge_label_type
+            self.edge_type = edge_type = edge_label_type
             for i, j in edges['!ij']:
-                degree_h[i] += 1.0
-                degree_h[j] += 1.0
-        degree_d = to_gpu(degree_h)
+                degree[i] += 1.0
+                degree[j] += 1.0
 
         ''' collect non-zero edge octiles '''
         uniq_oct = np.unique([(i - i % 8, j - j % 8)
                               for i, j in edges['!ij']], axis=0)
         uniq_oct = np.unique(np.vstack((uniq_oct, uniq_oct[:, -1::-1])),
                              axis=0)
-        octile_dict = {(upper, left): [np.uint64(), np.zeros(64, edge_type)]
+        octile_dict = {(upper, left): [np.uint64(), umzeros(64, edge_type)]
                        for upper, left in uniq_oct}
 
         for index, row in edges.iterrows():
@@ -101,34 +102,26 @@ class OctileGraph(object):
             octile_dict[(left, upper)][1][c + r * 8] = edge
 
         ''' create edge octiles on GPU '''
-        octile_list = [Octile(upper, left, nzmask, elements)
-                       for (upper, left), (nzmask, elements)
-                       in octile_dict.items()]
+        self.octile_list = [Octile(upper, left, nzmask, elements)
+                            for (upper, left), (nzmask, elements)
+                            in octile_dict.items()]
+        self.n_octile = len(self.octile_list)
 
         ''' collect edge octile structures into continuous buffer '''
-        octile_hdr = to_gpu(np.array([x.state for x in octile_list],
-                                     Octile.dtype))
-
-        self.node_type = node_type
-        self.edge_type = edge_type
-
-        self.n_octile = len(octile_list)
-        self.degree_d = degree_d
-        self.node_d = node_d
-        self.octile_hdr_d = octile_hdr
-        self.octile_list = octile_list  # prevent automatic deconstruction
+        self.octile_hdr = umlike(np.array([x.state for x in self.octile_list],
+                                          Octile.dtype))        
 
     @property
-    def octile(self):
-        return self.octile_hdr_d.ptr
+    def p_octile(self):
+        return self.octile_hdr.ptr
 
     @property
-    def degree(self):
-        return self.degree_d.ptr
+    def p_degree(self):
+        return self.degree.ptr
 
     @property
-    def node(self):
-        return self.node_d.ptr
+    def p_node(self):
+        return self.node.ptr
 
     @property
     def padded_size(self):
