@@ -231,7 +231,13 @@ class Graph:
         m = pysmiles.read_smiles(smiles)
         for _, n in m.nodes.items():
             n['element'] = element(n['element']).atomic_number
-        return cls.from_networkx(m)
+        graph = cls.from_networkx(m)
+        graph.nodes = graph.nodes.astype(dict(aromatic=np.bool_,
+                                             charge=np.float32,
+                                             element=np.int8,
+                                             hcount=np.int8))
+        graph.edges = graph.edges.astype(dict(order=np.float32))
+        return graph
 
     # @classmethod
     # def from_graphviz(cls, molecule):
