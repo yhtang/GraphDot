@@ -47,8 +47,8 @@ class AtomicAdjacency:
         if isinstance(length_scale, str):
             self.ltable = get_length_scales(length_scale)
         else:
-            ptable = get_ptable()
-            self.ltable = length_scale * np.ones(ptable.atomic_number.max() + 1)
+            ptbl = get_ptable()
+            self.ltable = length_scale * np.ones(ptbl.atomic_number.max() + 1)
         self.ltable *= zoom
 
     def __call__(self, n1, n2, r):

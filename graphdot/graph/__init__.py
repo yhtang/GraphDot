@@ -233,9 +233,9 @@ class Graph:
             n['element'] = element(n['element']).atomic_number
         graph = cls.from_networkx(m)
         graph.nodes = graph.nodes.astype(dict(aromatic=np.bool_,
-                                             charge=np.float32,
-                                             element=np.int8,
-                                             hcount=np.int8))
+                                              charge=np.float32,
+                                              element=np.int8,
+                                              hcount=np.int8))
         graph.edges = graph.edges.astype(dict(order=np.float32))
         return graph
 
