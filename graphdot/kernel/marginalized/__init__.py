@@ -304,7 +304,7 @@ class MarginalizedGraphKernel:
         Parameters
         ----------
         X: list of N graphs
-            The graphs must all have same node and edge attributes.
+            The graphs must all have same node attributes and edge attributes.
         nodal: bool
             If True, return node-wise similarities; otherwise, return graphwise
             similarities.
@@ -319,10 +319,9 @@ class MarginalizedGraphKernel:
         Returns
         -------
         numpy.array
-            if nodal is True, return a vector containing the self-similarities
-            of each graph with itself; otherwise, return a list of square
-            matrices that contain the node-wise self similarities within each
-            graph.
+            if nodal is True, return a vector of node-wise similarities for
+            each node in each graph; otherwise, return a vector containing the
+            overall self-similarities of each graph with itself.
         """
 
         ''' generate jobs '''
@@ -338,13 +337,16 @@ class MarginalizedGraphKernel:
 
         ''' collect result '''
         N = len(X)
-        R = np.empty(N, np.object)
+        R = [None for _ in range(N)]
         for job in jobs:
             r = job.vr_gpu.get().reshape(len(X[job.i].nodes), -1)
             pi = P[job.i]
             if nodal is True:
-                R[job.i] = pi[:, None] * r * pi[None, :]
+                R[job.i] = pi**2 * np.diag(r)
             else:
                 R[job.i] = pi.dot(r).dot(pi)
 
-        return np.array(R.tolist())
+        if nodal is True:
+            return np.concatenate(R)
+        else:
+            return np.array(R)
