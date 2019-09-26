@@ -5,7 +5,7 @@ import pytest
 from graphdot.graph import Graph
 
 
-@pytest.mark.parametrize('smi', ['C', 'CC', 'CCC', 'CCCC', 'C=C', 'C=C-C',
+@pytest.mark.parametrize('smi', ['CC', 'CCC', 'CCCC', 'C=C', 'C=C-C',
                                  'C=C-C=C', 'CN', 'CCN', 'C=CN', 'CC=N'])
 def test_linear(smi):
     g = Graph.from_smiles(smi)

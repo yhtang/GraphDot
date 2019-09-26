@@ -1,3 +1,6 @@
+## 0.1.9 (2019-09-25)
+- Fixed an edge label consistency issue with graphs generated from SMILES strings.
+
 ## 0.1.8 (2019-09-15)
 - Added a freshly-designed atomic adjacency rule.
 - Significantly accelerated conversion from ASE molecules to graphs.
