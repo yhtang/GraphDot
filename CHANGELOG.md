@@ -1,3 +1,6 @@
+## 0.2.0 (2019-09-26)
+- Changed return type of the `diag()` method of `MarginalizedGraphKernel` to fix #30.
+
 ## 0.1.9 (2019-09-25)
 - Fixed an edge label consistency issue with graphs generated from SMILES strings.
 
