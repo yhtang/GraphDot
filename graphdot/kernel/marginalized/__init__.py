@@ -304,10 +304,12 @@ class MarginalizedGraphKernel:
         Parameters
         ----------
         X: list of N graphs
-            The graphs must all have same node and edge attributes.
-        nodal: bool
-            If True, return node-wise similarities; otherwise, return graphwise
-            similarities.
+            The graphs must all have same node attributes and edge attributes.
+        nodal: bool or 'block'
+            If True, returns a vector containing nodal self similarties;
+            if False, returns a vector containing graphs' overall self
+            similarities; if 'block', return a list of square matrices, each
+            being a pairwise nodal similarity matrix within a graph.
         lmin: 0 or 1
             Number of steps to skip in each random walk path before similarity
             is computed.
@@ -318,11 +320,11 @@ class MarginalizedGraphKernel:
 
         Returns
         -------
-        numpy.array
-            if nodal is True, return a vector containing the self-similarities
-            of each graph with itself; otherwise, return a list of square
-            matrices that contain the node-wise self similarities within each
-            graph.
+        numpy.array or list of np.array(s)
+            If nodal=True, returns a vector containing nodal self similarties;
+            if nodal=False, returns a vector containing graphs' overall self
+            similarities; if nodal = 'block', return a list of square matrices,
+            each being a pairwise nodal similarity matrix within a graph.
         """
 
         ''' generate jobs '''
@@ -337,14 +339,21 @@ class MarginalizedGraphKernel:
         self._launch_kernel(X, jobs, nodal, lmin)
 
         ''' collect result '''
-        N = len(X)
-        R = np.empty(N, np.object)
-        for job in jobs:
-            r = job.vr_gpu.get().reshape(len(X[job.i].nodes), -1)
-            pi = P[job.i]
-            if nodal is True:
-                R[job.i] = pi[:, None] * r * pi[None, :]
-            else:
-                R[job.i] = pi.dot(r).dot(pi)
-
-        return np.array(R.tolist())
+        N = [len(x.nodes) for x in X]
+        if nodal is True:
+            return np.concatenate(
+                [p**2 * job.vr_gpu.get()[::n + 1]
+                 for job, p, n in zip(jobs, P, N)]
+            )
+        elif nodal is False:
+            return np.array(
+                [p.dot(job.vr_gpu.get().reshape(n, -1)).dot(p)
+                 for job, p, n in zip(jobs, P, N)]
+            )
+        elif nodal == 'block':
+            return list(
+                p[:, None] * job.vr_gpu.get().reshape(n, -1) * p[None, :]
+                for job, p, n in zip(jobs, P, N)
+            )
+        else:
+            raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
