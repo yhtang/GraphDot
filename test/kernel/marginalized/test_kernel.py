@@ -203,6 +203,8 @@ def test_mlgk(caseset):
         # check submatrices
         n = np.array([len(g.nodes) for g in G])
         N = np.cumsum(n)
+        start = N - n
+        end = N
         assert(R_nodal.shape == (N[-1], N[-1]))
         assert(np.count_nonzero(R_nodal - R_nodal.T) == 0)
         for k, (i, j) in enumerate(zip(N - n, N)):
@@ -215,12 +217,12 @@ def test_mlgk(caseset):
 
         # check block-diags
         D_nodal = mlgk.diag(G, nodal=True)
-        assert(len(D) == 2)
+        assert(len(D_nodal) == N[-1])
         for k in range(2):
-            sub = D_nodal[k].ravel()
-            i = (N - n)[k]
-            j = N[k]
-            gnd = R_nodal[i:j, :][:, i:j].ravel()
+            i = start[k]
+            j = end[k]
+            sub = D_nodal[i:j]
+            gnd = np.diag(R_nodal[i:j, :][:, i:j])
             for r1, r2 in zip(sub, gnd):
                 assert(r1 == pytest.approx(r2, 1e-7))
 
