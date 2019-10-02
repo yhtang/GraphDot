@@ -54,8 +54,7 @@ class OctileGraph(object):
         ''' determine node type '''
         self.node_type = node_type = rowtype(nodes)
         self.node = umlike(nodes[list(node_type.names)]
-                          .to_records(index=False)
-                          .astype(node_type))
+                           .to_records(index=False).astype(node_type))
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
@@ -108,7 +107,7 @@ class OctileGraph(object):
 
         ''' collect edge octile structures into continuous buffer '''
         self.octile_hdr = umlike(np.array([x.state for x in self.octile_list],
-                                          Octile.dtype))        
+                                          Octile.dtype))
 
     @property
     def p_octile(self):

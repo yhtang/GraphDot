@@ -87,7 +87,7 @@ class MarginalizedGraphKernel:
             self.ctx.synchronize()
             self.scratch = [BlockScratch(capacity) for _ in range(count)]
             self.scratch_d = umlike(np.array([s.state for s in self.scratch],
-                                   BlockScratch.dtype))
+                                             BlockScratch.dtype))
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
@@ -133,7 +133,7 @@ class MarginalizedGraphKernel:
         oct_graphs = [self._convert_to_octilegraph(g) for g in graphs]
         self._assert_homegeneous(oct_graphs)
         oct_graphs_d = umlike(np.array([g.state for g in oct_graphs],
-                             OctileGraph.dtype))
+                                       OctileGraph.dtype))
 
         ''' upload work item list to device '''
         jobs_d = umlike(np.array([j.state for j in jobs], Job.dtype))
