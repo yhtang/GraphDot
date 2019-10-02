@@ -1,3 +1,7 @@
+## 0.2.1 (2019-10-02)
+- Reduced kernel launch preparation time by 50% to address #28.
+- Fixed a memory leak issue #31.
+
 ## 0.2.0 (2019-09-26)
 - Changed return type of the `diag()` method of `MarginalizedGraphKernel` to fix #30.
 
