@@ -23,9 +23,9 @@ sizes = [1, 11, 16, 17, 25, 31, 32, 217, 8195, 91924]
 def test_scratch_allocation(size):
     scratch = BlockScratch(size)
     assert(scratch.capacity >= size)
-    assert(scratch.ptr != 0)
+    assert(scratch.p_buffer != 0)
     assert(scratch.state)
     with pytest.raises(AttributeError):
-        scratch.ptr = np.uint64(0)
+        scratch.p_buffer = np.uint64(0)
     with pytest.raises(AttributeError):
-        scratch.ptr = 0
+        scratch.p_buffer = 0

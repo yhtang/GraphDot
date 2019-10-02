@@ -7,7 +7,7 @@ from graphdot.codegen.typetool import cpptype
 
 # only works with python >= 3.6
 # @cpptype(ptr=np.uintp, capacity=np.int64)
-@cpptype([('ptr', np.uintp), ('capacity', np.int64)])
+@cpptype([('p_buffer', np.uintp), ('capacity', np.int64)])
 class BlockScratch(object):
     def __init__(self, capacity):
         self.capacity = ((capacity + 15) // 16) * 16
@@ -16,5 +16,5 @@ class BlockScratch(object):
         self.buffer = gpuarray.empty(int(self.capacity) * 4, np.float32)
 
     @property
-    def ptr(self):
+    def p_buffer(self):
         return self.buffer.ptr
