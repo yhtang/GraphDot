@@ -86,7 +86,7 @@ class MarginalizedGraphKernel:
 
     def __del__(self):
         self.ctx.synchronize()
-        self.ctx.pop()
+        self.ctx.detach()
 
     def _allocate_scratch(self, count, capacity):
         if (self.scratch is None or len(self.scratch) < count or
