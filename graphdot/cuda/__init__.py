@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import pycuda.driver
+import pycuda.autoinit
 
-try:
-    pycuda.driver.init()
-except Exception as e:
-    raise RuntimeWarning('PyCUDA initialization failed, message: ' + str(e))
+__all__ = ['defctx']
+
+defctx = pycuda.autoinit.context

@@ -9,6 +9,7 @@ from pycuda.compiler import SourceModule
 from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype, decltype
+import graphdot.cuda
 from graphdot.cuda.array import umarray, umlike
 from ._scratch import BlockScratch
 from ._octilegraph import OctileGraph
@@ -51,6 +52,9 @@ class MarginalizedGraphKernel:
             Note that a custom probability does not have to be normalized.
         q: float in (0, 1)
             The probability for the random walk to stop during each step.
+        context: :py:class:`pycuda.driver.Context` instance
+            The CUDA context for launching kernels, Will use a default one if
+            none is given.
         block_per_sm: int
             Tunes the GPU kernel.
         block_size: int
@@ -73,13 +77,12 @@ class MarginalizedGraphKernel:
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
 
-        self.device = pycuda.driver.Device(kwargs.pop('device', 0))
         self.nvcc_extra = kwargs.pop('nvcc_extra', [])
-        self.ctx = self.device.make_context()
+        self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
+        self.device = self.ctx.get_device()
 
     def __del__(self):
         self.ctx.synchronize()
-        self.ctx.detach()
 
     def _allocate_scratch(self, count, capacity):
         if (self.scratch is None or len(self.scratch) < count or
