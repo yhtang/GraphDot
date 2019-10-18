@@ -37,6 +37,29 @@ def test_resizable_array_append(count):
     assert(arr.capacity >= count)
 
 
+def test_resizable_array_iadd():
+
+    np.random.seed(0)
+    N = np.minimum(8192, 1 + np.random.pareto(0.2, 10)).astype(np.int32)
+    M = np.minimum(8192, 1 + np.random.pareto(0.2, 10)).astype(np.int32)
+
+    for n in N:
+        for m in M:
+
+            arr = ResizableArray(np.float32, n)
+            arr[:] = -1
+            arr += range(m)
+
+            assert(len(arr) == n + m)
+            assert(arr.capacity >= n + m)
+
+            for i in range(n):
+                assert(arr[i] == -1)
+            for i in range(m):
+                assert(arr[n + i] == i)
+                assert(arr[-(i + 1)] == m - (i + 1))
+
+
 def test_resizable_array_resize():
 
     arr = ResizableArray(np.float64)

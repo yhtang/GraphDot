@@ -23,9 +23,6 @@ class ResizableArray:
         self._size += 1
         self._update_active()
 
-    def _update_active(self):
-        self._active = self._ptr[:self._size]
-
     def resize(self, count):
         count = int(count)
         if count > self._capacity:
@@ -58,6 +55,15 @@ class ResizableArray:
     def __setitem__(self, key, value):
         self._active[key] = value
 
+    def __iadd__(self, gen):
+        for value in gen:
+            if self._size == self._capacity:
+                self.reserve(self._capacity * 2 + 1)
+            self._ptr[self._size] = value
+            self._size += 1
+        self._update_active()
+        return self
+
     @property
     def data(self):
         return self._ptr
@@ -65,3 +71,6 @@ class ResizableArray:
     @property
     def capacity(self):
         return self._capacity
+
+    def _update_active(self):
+        self._active = self._ptr[:self._size]
