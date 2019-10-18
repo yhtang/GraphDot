@@ -56,11 +56,11 @@ class ResizableArray:
         self._active[key] = value
 
     def __iadd__(self, gen):
-        for value in gen:
-            if self._size == self._capacity:
-                self.reserve(self._capacity * 2 + 1)
-            self._ptr[self._size] = value
-            self._size += 1
+        lst = list(gen)
+        ext_size = self._size + len(lst)
+        self.reserve(ext_size)
+        self._ptr[self._size:ext_size] = lst
+        self._size = ext_size
         self._update_active()
         return self
 

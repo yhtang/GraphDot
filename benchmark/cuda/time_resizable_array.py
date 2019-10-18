@@ -16,12 +16,41 @@ def test_resizable_array_init(benchmark, dtype, count):
     benchmark.pedantic(fun, iterations=5, rounds=5, warmup_rounds=1)
 
 
+def test_list_iadd_1M(benchmark):
+
+    def fun():
+        arr = []
+        arr += range(1048576)
+
+    benchmark.pedantic(fun, iterations=5, rounds=1, warmup_rounds=0)
+
+
 @pytest.mark.parametrize("dtype", [np.bool_, np.int16, np.float32, np.float64])
 def test_resizable_array_iadd_1M(benchmark, dtype):
 
     def fun():
         arr = ResizableArray(dtype)
         arr += range(1048576)
+
+    benchmark.pedantic(fun, iterations=5, rounds=1, warmup_rounds=0)
+
+
+@pytest.mark.parametrize("dtype", [np.bool_, np.int16, np.float32, np.float64])
+def test_resizable_array_setitem_1M(benchmark, dtype):
+
+    def fun():
+        arr = ResizableArray(dtype, 1048576)
+        arr[:] = range(1048576)
+
+    benchmark.pedantic(fun, iterations=5, rounds=1, warmup_rounds=0)
+
+
+@pytest.mark.parametrize("dtype", [np.bool_, np.int16, np.float32, np.float64])
+def test_ndarray_setitem_1M(benchmark, dtype):
+
+    def fun():
+        arr = np.empty(1048576, dtype=dtype)
+        arr[:] = range(1048576)
 
     benchmark.pedantic(fun, iterations=5, rounds=1, warmup_rounds=0)
 
