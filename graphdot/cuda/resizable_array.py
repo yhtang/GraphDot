@@ -6,8 +6,13 @@ from pycuda.driver import mem_attach_flags as ma_flags
 
 
 class ResizableArray:
-    def __init__(self, type, count=0, allocator=managed_empty):
-        self.type = type
+    """
+    Python version of std::vector. To be used together with CUDA managed memory
+    to reduce kernel launch delay.
+    """
+
+    def __init__(self, dtype, count=0, allocator=managed_empty):
+        self.dtype = dtype
         self.allocator = allocator
         self._ptr = None
         self._active = None
@@ -35,7 +40,7 @@ class ResizableArray:
         if count <= self._size:
             warnings.warn('Reserving no more than current size has no effect')
             return
-        _new = self.allocator(count, self.type, 'C', ma_flags.GLOBAL)
+        _new = self.allocator(count, self.dtype, 'C', ma_flags.GLOBAL)
         if self._size > 0:  # copy data to new buffer
             _new[:self._size] = self._ptr[:self._size]
         self._ptr = _new
