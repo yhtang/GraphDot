@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+
 def pytest_benchmark_scale_unit(config, unit, benchmarks, best, worst, sort):
     if unit == 'seconds':
         prefix = 'm'

@@ -5,13 +5,13 @@ import numpy as np
 import pycuda.autoinit
 from graphdot.cuda.resizable_array import ResizableArray
 
-    
+
 @pytest.mark.parametrize("dtype", [np.bool_, np.int16, np.float32, np.float64])
 @pytest.mark.parametrize("count", [0, 1, 16, 256, 4096, 1048576])
 def test_resizable_array_init(benchmark, dtype, count):
 
     def fun():
-        arr = ResizableArray(dtype, count)
+        return ResizableArray(dtype, count)
 
     benchmark.pedantic(fun, iterations=5, rounds=5, warmup_rounds=1)
 
