@@ -1,8 +1,8 @@
 #ifndef GRAPHDOT_MARGINALIZED_KERNEL_H_
 #define GRAPHDOT_MARGINALIZED_KERNEL_H_
 
-#include <cstdint>   // TODO: remove after moving graph_t out of this file
 #include "util_cuda.h"
+#include "graph.h"
 
 namespace graphdot {
 
@@ -18,51 +18,26 @@ struct pcg_scratch_t {
     float * ptr;
     int stride;
 
-    block_scratch(block_scratch const &other) = default;
+    pcg_scratch_t(pcg_scratch_t const &other) = default;
 
     __host__ __device__ __inline__ constexpr float * x  () { return ptr + stride * 0; }
     __host__ __device__ __inline__ constexpr float * r  () { return ptr + stride * 1; }
-    __host__ __device__ __inline__ constexpr float * p  () { return ptr + stride * 2; }
-    __host__ __device__ __inline__ constexpr float * Ap () { return ptr + stride * 3; }
-    __host__ __device__ __inline__ constexpr float & x  (int i) { return x()[i]; }
-    __host__ __device__ __inline__ constexpr float & r  (int i) { return r()[i]; }
-    __host__ __device__ __inline__ constexpr float & p  (int i) { return p()[i]; }
-    __host__ __device__ __inline__ constexpr float & Ap (int i) { return Ap()[i]; }
-};
-
-template<class Node, class Edge> struct graph_t {
-
-    using deg_t  = float;
-    using node_t = Node;
-    using edge_t = Edge;
-    using octile_t = struct {
-        int upper, left;
-        union {
-            std::uint64_t nzmask; // row-major! in constrat to the column-major layout of elements
-            unsigned char nzmask_bytes[8];
-        };
-        edge_t * elements;
-    };
-
-    constexpr static float eps = 1e-14;
-
-    int n_node, n_octile;
-    deg_t   *  degree;
-    node_t  *  vertex;
-    octile_t * octile;
-
-    constexpr __inline__ __host__ __device__ int padded_size() const {
-        return (n_node + 7) & ~7U;
-    }
+    __host__ __device__ __inline__ constexpr float * z  () { return ptr + stride * 2; }
+    __host__ __device__ __inline__ constexpr float * p  () { return ptr + stride * 3; }
+    __host__ __device__ __inline__ constexpr float * Ap () { return ptr + stride * 4; }
+    __host__ __device__ __inline__ constexpr float & x  ( int i ) { return x()[i]; }
+    __host__ __device__ __inline__ constexpr float & r  ( int i ) { return r()[i]; }
+    __host__ __device__ __inline__ constexpr float & z  ( int i ) { return z()[i]; }
+    __host__ __device__ __inline__ constexpr float & p  ( int i ) { return p()[i]; }
+    __host__ __device__ __inline__ constexpr float & Ap ( int i ) { return Ap()[i]; }
 };
 
 /*-----------------------------------------------------------------------------
-Block CG solver: solve the MLGK linear system using matrix-free CG where
-the matvec operations are done in 8x8 tiles.
+CG solver based on on-the-fly Kronecker product matrix-vector (XMV) operations
 -----------------------------------------------------------------------------*/
 template<class Graph>
-struct octile_block_solver {
-    /*  Each simple octile consists of 64 elemented put in column-major format
+struct labeled_compact_block_dynsched_pcg {
+    /*  Each octile contains up to 64 elemented in column-major format
         =========================================
         |  0 |  8 | 16 | 24 | 32 | 40 | 48 | 56 |
         -----------------------------------------
@@ -94,15 +69,15 @@ struct octile_block_solver {
 
         edge_t * const _data;
 
-        constexpr static int size_bytes = octile_w * octile_h * sizeof (edge_t);
+        constexpr static int size_bytes = octile_w * octile_h * sizeof(edge_t);
 
-        constexpr __inline__ __device__ __host__ octile (void * ptr) : _data (reinterpret_cast<edge_t *> (ptr)) {}
+        __inline__ __device__ __host__ octile(void * ptr) : _data(reinterpret_cast<edge_t *>(ptr)) {}
 
-        constexpr __inline__ __device__ __host__ edge_t & operator() (int i, int j) {
-            return _data[ i + j * octile_h ];
+        __inline__ __device__ __host__ edge_t & operator()(int i, int j) {
+            return _data[i + j * octile_h];
         }
 
-        constexpr __inline__ __device__ __host__ edge_t & operator() (int i) {
+        __inline__ __device__ __host__ edge_t & operator()(int i) {
             return _data[i];
         }
     };
@@ -111,74 +86,37 @@ struct octile_block_solver {
 
         float * const _data;
 
-        constexpr static int size_bytes = octile_w * octile_w * sizeof (float);
+        constexpr static int size_bytes = octile_w * octile_w * sizeof( float );
 
-        constexpr __inline__ __device__ rhs (void * ptr) : _data (reinterpret_cast<float *> (ptr)) {}
+        __inline__ __device__ rhs( void * ptr ) : _data( reinterpret_cast<float *>( ptr ) ) {}
 
-        constexpr __inline__ __device__ float & operator() (int j1, int j2) {
+        __inline__ __device__ float & operator() ( int j1, int j2 ) {
             return _data[ j1 * octile_w + j2 ];
         }
     };
 
-    constexpr static int shmem_bytes_per_warp = octile::size_bytes * 2 + rhs::size_bytes;
+    struct nzlist {
+        using nzindex_t = int;
 
-    // compute submatrix inner prpduct
-    template<class EdgeKernel>
-    __inline__ __device__ static void mmv_octile (
-        const int i1_upper,
-        const int i1_lower,
-        const int i2,
-        uint nzmask1_uplo,
-        const uint nzmask2,
-        octile octile1,
-        octile octile2,
-        rhs rhs,
-        int j1_margin,
-        float & sum_upper,
-        float & sum_lower
-    ) {
-        #pragma unroll (octile_w)
-        for (int j1 = 0; j1 < octile_w && j1 < j1_margin; ++j1) {
-            auto e1_upper = octile1 (i1_upper, j1);
-            auto e1_lower = octile1 (i1_lower, j1);
-            bool m1_upper = nzmask1_uplo & 0x1;
-            bool m1_lower = nzmask1_uplo & 0x100;
+        nzindex_t * _data;
+        
+        constexpr static int size_bytes = octile_w * octile_h * sizeof(nzindex_t);
 
-            #if 1
-            #define ITERATION(j2, mask) \
-                auto e2_##j2 = octile2 (i2, j2);\
-                auto r_##j2  = rhs (j1, j2);\
-                bool m2_##j2 = nzmask2 & mask;\
-                if (m1_upper && m2_##j2) sum_upper -= EdgeKernel::compute(e1_upper, e2_##j2) * r_##j2;\
-                if (m1_lower && m2_##j2) sum_lower -= EdgeKernel::compute(e1_lower, e2_##j2) * r_##j2;
+        __inline__ __device__ nzlist(void * ptr) : _data(reinterpret_cast<nzindex_t *>(ptr)) {}
 
-            ITERATION(0, 0x1)
-            ITERATION(1, 0x2)
-            ITERATION(2, 0x4)
-            ITERATION(3, 0x8)
-            ITERATION(4, 0x10)
-            ITERATION(5, 0x20)
-            ITERATION(6, 0x40)
-            ITERATION(7, 0x80)
-            #undef ITERATION
-            #else
-            #pragma unroll (octile_w)
-            for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
-                auto e2 = octile2 (i2, j2);
-                auto r  = rhs (j1, j2);
-                bool m2 = nzmask2 & mask;
-                if (m1_upper && m2) {
-                    sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                }
-                if (m1_lower && m2) {
-                    sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
-                }
-            }
-            #endif
-
-            nzmask1_uplo >>= 1;
+        __inline__ __device__ __host__ nzindex_t & operator() ( int i ) {
+            return _data[ i ];
         }
-    }
+
+        __inline__ __device__ __host__ nzindex_t const & operator() ( int i ) const {
+            return _data[ i ];
+        }
+    };
+
+    constexpr static int shmem_bytes_per_warp =
+        3 * octile::size_bytes +
+        1 * rhs::size_bytes + 
+        2 * nzlist::size_bytes;
 
     template<class NodeKernel, class EdgeKernel>
     __inline__ __device__ static void compute(
@@ -199,6 +137,8 @@ struct octile_block_solver {
         const int n1             = g1.padded_size();
         const int n2             = g2.padded_size();
         const int N              = n1 * n2;
+
+        octile octilex {p_shared + warp_id_local * shmem_bytes_per_warp};
 
         octile octilex {p_shared + warp_id_local * shmem_bytes_per_warp};
 
@@ -263,12 +203,30 @@ struct octile_block_solver {
                 const int nt1 = min (g1.n_octile - O1, warp_num_local);
 
                 if (warp_id_local < nt1) {
-                    // load the first submatrix into shared memory, stored in col-major layout
-                    //if ( lane == 0 ) printf("loading left octile %d\n", O1 + warp_id_local );
-                    auto o1 = g1.octile[ O1 + warp_id_local ];
-                    octile octile1 { p_shared + warp_id_local * shmem_bytes_per_warp };
-                    octile1 (lane            ) = o1.elements[lane            ];
-                    octile1 (lane + warp_size) = o1.elements[lane + warp_size];
+                    // load the first submatrix in compact format into shared memory
+                    auto o1 = g1.octile[O1 + warp_id_local];
+                    octile octile1 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes};
+                    nzlist nzlist1 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
+
+                    // expand into col-major dense ayout
+                    const int nnz1 = __popcll(o1.nzmask);
+                    if (lane             < nnz1) octilex(lane)             = o1.elements[lane];
+                    if (lane + warp_size < nnz1) octilex(lane + warp_size) = o1.elements[lane + warp_size];
+
+                    __syncwarp();
+
+                    if (o1.nzmask_halves[0] & (1 << lane)) {
+                        int src = __popc(o1.nzmask_halves[0] & lanemask_lt());
+                        octile1(lane) = octilex(src);
+                        nzlist1(src)  = lane;
+                    }
+
+                    if (o1.nzmask_halves[1] & (1 << lane)) {
+                        int src = __popc(o1.nzmask_halves[1] & lanemask_lt()) +
+                                    __popc(o1.nzmask_halves[0]);
+                        octile1(lane + warp_size) = octilex(src);
+                        nzlist1(src)              = lane + warp_size;
+                    }
                 }
 
                 __syncthreads();
@@ -277,13 +235,31 @@ struct octile_block_solver {
 
                     const int nt2 = min (g2.n_octile - O2, warp_num_local);
 
-                    if (warp_id_local < nt2) {
-                        //if ( lane == 0 ) printf("loading right octile %d\n", O2 + warp_id_local );
-                        auto o2 = g2.octile[ O2 + warp_id_local ];
-                        octile octile2 {p_shared + warp_id_local * shmem_bytes_per_warp + octile::size_bytes};
-                        // load the second submatrix into cache, stored in col-major layout
-                        octile2 (lane            ) = o2.elements[lane            ];
-                        octile2 (lane + warp_size) = o2.elements[lane + warp_size];
+                    if ( warp_id_local < nt2 ) {
+                        // load the second submatrix in compact fornat into shared memory
+                        auto o2 = g2.octile[O2 + warp_id_local];
+                        octile octile2 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
+                        nzlist nzlist2 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes + octile2.size_bytes};
+
+                        // expand into col-major dense ayout
+                        const int nnz2 = __popcll(o2.nzmask);
+                        if (lane             < nnz2) octilex(lane)             = o2.elements[lane];
+                        if (lane + warp_size < nnz2) octilex(lane + warp_size) = o2.elements[lane + warp_size];
+
+                        __syncwarp();
+
+                        if (o2.nzmask_halves[0] & (1 << lane)) {
+                            int src = __popc(o2.nzmask_halves[0] & lanemask_lt());
+                            octile2(lane) = octilex(src);
+                            nzlist2(src)  = lane;
+                        }
+
+                        if (o2.nzmask_halves[1] & (1 << lane)) {
+                            int src = __popc(o2.nzmask_halves[1] & lanemask_lt()) +
+                                        __popc(o2.nzmask_halves[0]);
+                            octile2(lane + warp_size) = octilex(src);
+                            nzlist2(src)              = lane + warp_size;
+                        }
                     }
 
                     __syncthreads();
@@ -295,18 +271,18 @@ struct octile_block_solver {
 
                         //if ( lane == 0 ) printf("computing %d-%d\n", p1, p2 );
 
-                        auto o1 = g1.octile[ O1 + p1 ];
+                        auto o1 = g1.octile[O1 + p1];
+                        const int nnz1 = __popcll(o1.nzmask);
                         const int I1 = o1.upper;
                         const int J1 = o1.left;
-                        // const std::uint64_t nzmask1 = o1.nzmask;
-                        auto o2 = g2.octile[ O2 + p2 ];
+                        auto o2 = g2.octile[O2 + p2];
+                        const int nnz2 = __popcll(o2.nzmask);
                         const int I2 = o2.upper;
                         const int J2 = o2.left;
-                        // const std::uint64_t nzmask2 = o2.nzmask;
 
-                        octile octile1 {p_shared + p1 * shmem_bytes_per_warp};
-                        octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octile::size_bytes};
-                        rhs    rhs     {p_shared + warp_id_local * shmem_bytes_per_warp + octile::size_bytes + octile::size_bytes};
+                        octile octile1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes };
+                        octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
+                        rhs    rhs     {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes * 2 + nzlist::size_bytes * 2};
 
                         // load RHS
                         int j1 = lane / octile_w;
@@ -314,13 +290,51 @@ struct octile_block_solver {
                         rhs (j1,                        j2) = scratch.p ((J1 + j1                       ) * n2 + (J2 + j2));
                         rhs (j1 + warp_size / octile_w, j2) = scratch.p ((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
-                        float sum_upper = 0, sum_lower = 0;
-                        mmv_octile<EdgeKernel>(i1_upper, i1_lower, i2, o1.nzmask_bytes[i1_upper] | ( o1.nzmask_bytes[i1_lower] << 8 ), o2.nzmask_bytes[i2], octile1, octile2, rhs, g1.n_node - J1, sum_upper, sum_lower);
-                        // printf("threadIdx %d sum_upper  %d %f sum_lower %d %f\n", threadIdx.x, (I1 + i1_upper) * n2 + (I2 + i2), sum_upper, (I1 + i1_lower) * n2 + (I2 + i2), sum_lower);
+                        if (nnz1 * nnz2 >= 256) {
+                            float sum_upper = 0, sum_lower = 0;
 
+                            for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1) {
+                                auto e1_upper = octile1 (i1_upper, j1);
+                                auto e1_lower = octile1 (i1_lower, j1);
+                                auto m1_upper = 1ULL << (i1_upper + j1 * octile_h);
+                                auto m1_lower = 1ULL << (i1_lower + j1 * octile_h);
+                    
+                                #pragma unroll (octile_w)
+                                for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
+                                    auto e2 = octile2 (i2, j2);
+                                    auto r  = rhs (j1, j2);
+                                    auto m2 = 1ULL << (i2 + j2 * octile_h);
+                                    if ((o1.nzmask & m1_upper) && (o2.nzmask & m2)) {
+                                        sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                                    }
+                                    if ((o1.nzmask & m1_lower) && (o2.nzmask & m2)) {
+                                        sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                                    }
+                                }                    
+                            }
 
-                        atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper);
-                        atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
+                            // printf("threadIdx %d sum_upper  %d %f sum_lower %d %f\n", threadIdx.x, (I1 + i1_upper) * n2 + (I2 + i2), sum_upper, (I1 + i1_lower) * n2 + (I2 + i2), sum_lower);
+                            atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper);
+                            atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
+                        } else {
+                            nzlist nzlist1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
+                            nzlist nzlist2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
+                            
+                            for(int i = lane; i < nnz1 * nnz2; i += warp_size) {
+                                int k1 = i / nnz2;
+                                int k2 = i - k1 * nnz2;
+                                int p1 = nzlist1(k1);
+                                int p2 = nzlist2(k2);
+                                int i1 = p1 % octile_h;
+                                int j1 = p1 / octile_h;
+                                int i2 = p2 % octile_h;
+                                int j2 = p2 / octile_h;
+                                auto e1 = octile1(p1);
+                                auto e2 = octile2(p2);
+                                auto r  = rhs( j1, j2 );
+                                atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2)), -EdgeKernel::compute(e1, e2) * r);
+                            }
+                        }
                     }
 
                     __syncthreads();
