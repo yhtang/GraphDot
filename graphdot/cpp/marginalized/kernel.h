@@ -2,7 +2,6 @@
 #define GRAPHDOT_MARGINALIZED_KERNEL_H_
 
 #include <cuda/balloc.h>
-#include <cuda/util_host.h>
 #include <cuda/util_device.h>
 
 namespace graphdot {
@@ -17,20 +16,18 @@ struct job_t {
 struct pcg_scratch_t {
 
     float * ptr;
-    int     stride;
+    int stride;
 
-    pcg_scratch_t(pcg_scratch_t const & other) = default;
+    block_scratch(block_scratch const &other) = default;
 
-    __device__ __inline__ float * x() { return ptr + stride * 0; }
-    __device__ __inline__ float * r() { return ptr + stride * 1; }
-    __device__ __inline__ float * z() { return ptr + stride * 2; }
-    __device__ __inline__ float * p() { return ptr + stride * 3; }
-    __device__ __inline__ float * Ap() { return ptr + stride * 4; }
-    __device__ __inline__ float & x(int i) { return x()[i]; }
-    __device__ __inline__ float & r(int i) { return r()[i]; }
-    __device__ __inline__ float & z(int i) { return z()[i]; }
-    __device__ __inline__ float & p(int i) { return p()[i]; }
-    __device__ __inline__ float & Ap(int i) { return Ap()[i]; }
+    __host__ __device__ __inline__ constexpr float * x  () { return ptr + stride * 0; }
+    __host__ __device__ __inline__ constexpr float * r  () { return ptr + stride * 1; }
+    __host__ __device__ __inline__ constexpr float * p  () { return ptr + stride * 2; }
+    __host__ __device__ __inline__ constexpr float * Ap () { return ptr + stride * 3; }
+    __host__ __device__ __inline__ constexpr float & x  (int i) { return x()[i]; }
+    __host__ __device__ __inline__ constexpr float & r  (int i) { return r()[i]; }
+    __host__ __device__ __inline__ constexpr float & p  (int i) { return p()[i]; }
+    __host__ __device__ __inline__ constexpr float & Ap (int i) { return Ap()[i]; }
 };
 
 template<class Node, class Edge> struct graph_t {
