@@ -1,5 +1,5 @@
-#include <marginalized/kernel.h>
-#include <misc/numpy_type.h>
+#include <marginalized_kernel.h>
+#include <numpy_type.h>
 
 using namespace graphdot;
 using namespace numpy_type;

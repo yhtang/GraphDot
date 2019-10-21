@@ -1,8 +1,8 @@
 #ifndef GRAPHDOT_MARGINALIZED_KERNEL_H_
 #define GRAPHDOT_MARGINALIZED_KERNEL_H_
 
-#include <cuda/balloc.h>
-#include <cuda/util_device.h>
+#include <cstdint>   // TODO: remove after moving graph_t out of this file
+#include "util_cuda.h"
 
 namespace graphdot {
 
