@@ -7,7 +7,7 @@ namespace graphdot {
 
 template<class Node, class Edge> struct graph_t {
 
-    using deg_t  = float;
+    using real_t = float;
     using node_t = Node;
     using edge_t = Edge;
     using octile_t = struct {
@@ -22,9 +22,9 @@ template<class Node, class Edge> struct graph_t {
 
     constexpr static float eps = 1e-14;
 
-    int n_node, n_octile;
-    deg_t   *  degree;
-    node_t  *  vertex;
+    int n_node, n_tile;
+    real_t * degree;
+    node_t * node;
     octile_t * octile;
 
     constexpr __inline__ __host__ __device__ int padded_size() const {

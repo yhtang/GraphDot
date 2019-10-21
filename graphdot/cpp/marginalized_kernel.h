@@ -160,7 +160,7 @@ struct labeled_compact_block_dynsched_pcg {
             //    = Vx . qx
             float z0 =
                 i1 < g1.n_node && i2 < g2.n_node ?
-                NodeKernel::compute( g1.vertex[i1], g2.vertex[i2] ) * q * q / (q0 * q0) :
+                NodeKernel::compute( g1.node[i1], g2.node[i2] ) * q * q / (q0 * q0) :
                 0;
             // x0 = 0
             scratch.x(i) = 0;
@@ -198,9 +198,9 @@ struct labeled_compact_block_dynsched_pcg {
             const int i2       =  lane              % octile_h;
 
             // Ap = A * p, off-diagonal part
-            for (int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local) {
+            for (int O1 = 0; O1 < g1.n_tile; O1 += warp_num_local) {
 
-                const int nt1 = min (g1.n_octile - O1, warp_num_local);
+                const int nt1 = min (g1.n_tile - O1, warp_num_local);
 
                 if (warp_id_local < nt1) {
                     // load the first submatrix in compact format into shared memory
@@ -231,9 +231,9 @@ struct labeled_compact_block_dynsched_pcg {
 
                 __syncthreads();
 
-                for (int O2 = 0; O2 < g2.n_octile; O2 += warp_num_local) {
+                for (int O2 = 0; O2 < g2.n_tile; O2 += warp_num_local) {
 
-                    const int nt2 = min (g2.n_octile - O2, warp_num_local);
+                    const int nt2 = min (g2.n_tile - O2, warp_num_local);
 
                     if ( warp_id_local < nt2 ) {
                         // load the second submatrix in compact fornat into shared memory
@@ -361,9 +361,9 @@ struct labeled_compact_block_dynsched_pcg {
                 if (i1 < g1.n_node && i2 < g2.n_node) {
                     float d1 = g1.degree[i1] / (1 - q);
                     float d2 = g2.degree[i2] / (1 - q);
-                    float D  = d1 * d2;
-                    float V  = NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]);
-                    scratch.z(i) = scratch.r(i) / (D / V);
+                    float D = d1 * d2;
+                    float V = NodeKernel::compute( g1.node[i1], g2.node[i2] );
+                    scratch.z( i )  = scratch.r( i ) / (D / V);
                 }
                 rTr += scratch.r(i) * scratch.r(i);
                 rTz_next += scratch.r(i) * scratch.z(i);
@@ -407,11 +407,11 @@ struct labeled_compact_block_dynsched_pcg {
                 int i1 = i / n2;
                 int i2 = i % n2;
                 if (i1 < g1.n_node && i2 < g2.n_node) {
-                    float p       = scratch.z(i) + beta * scratch.p(i);
-                    float d1      = g1.degree[i1] / (1 - q);
-                    float d2      = g2.degree[i2] / (1 - q);
-                    scratch.p(i)  = p;
-                    scratch.Ap(i) = d1 * d2 / NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * p;
+                    float p = scratch.z( i ) + beta * scratch.p( i );
+                    float d1 = g1.degree[i1] / (1 - q);
+                    float d2 = g2.degree[i2] / (1 - q);
+                    scratch.p( i ) = p;
+                    scratch.Ap( i ) = d1 * d2 / NodeKernel::compute( g1.node[i1], g2.node[i2] ) * p;
                 }
             }
             __syncthreads();
@@ -426,7 +426,7 @@ struct labeled_compact_block_dynsched_pcg {
             if (i1 < g1.n_node && i2 < g2.n_node) {
                 auto r = scratch.x(i);
                 if (lmin == 1) {
-                    r -=  NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * q * q / (q0 * q0);
+                    r -=  NodeKernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
                 vr[i1 * g2.n_node + i2] = r;
             }
