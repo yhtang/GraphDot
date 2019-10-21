@@ -4,7 +4,6 @@
 #include <cuda/balloc.h>
 #include <cuda/util_host.h>
 #include <cuda/util_device.h>
-#include <misc/format.h>
 
 namespace graphdot {
 
