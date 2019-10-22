@@ -9,34 +9,33 @@ namespace graphdot {
 namespace marginalized {
 
 struct job_t {
-    int i, j;
-    float *vr;
+    int     i, j;
+    float * vr;
 };
 
 struct pcg_scratch_t {
 
     float * ptr;
-    int stride;
+    int     stride;
 
-    pcg_scratch_t(pcg_scratch_t const &other) = default;
+    pcg_scratch_t(pcg_scratch_t const & other) = default;
 
-    __host__ __device__ __inline__ constexpr float * x  () { return ptr + stride * 0; }
-    __host__ __device__ __inline__ constexpr float * r  () { return ptr + stride * 1; }
-    __host__ __device__ __inline__ constexpr float * z  () { return ptr + stride * 2; }
-    __host__ __device__ __inline__ constexpr float * p  () { return ptr + stride * 3; }
-    __host__ __device__ __inline__ constexpr float * Ap () { return ptr + stride * 4; }
-    __host__ __device__ __inline__ constexpr float & x  ( int i ) { return x()[i]; }
-    __host__ __device__ __inline__ constexpr float & r  ( int i ) { return r()[i]; }
-    __host__ __device__ __inline__ constexpr float & z  ( int i ) { return z()[i]; }
-    __host__ __device__ __inline__ constexpr float & p  ( int i ) { return p()[i]; }
-    __host__ __device__ __inline__ constexpr float & Ap ( int i ) { return Ap()[i]; }
+    __device__ __inline__ float * x() { return ptr + stride * 0; }
+    __device__ __inline__ float * r() { return ptr + stride * 1; }
+    __device__ __inline__ float * z() { return ptr + stride * 2; }
+    __device__ __inline__ float * p() { return ptr + stride * 3; }
+    __device__ __inline__ float * Ap() { return ptr + stride * 4; }
+    __device__ __inline__ float & x(int i) { return x()[i]; }
+    __device__ __inline__ float & r(int i) { return r()[i]; }
+    __device__ __inline__ float & z(int i) { return z()[i]; }
+    __device__ __inline__ float & p(int i) { return p()[i]; }
+    __device__ __inline__ float & Ap(int i) { return Ap()[i]; }
 };
 
 /*-----------------------------------------------------------------------------
 CG solver based on on-the-fly Kronecker product matrix-vector (XMV) operations
 -----------------------------------------------------------------------------*/
-template<class Graph>
-struct labeled_compact_block_dynsched_pcg {
+template<class Graph> struct labeled_compact_block_dynsched_pcg {
     /*  Each octile contains up to 64 elemented in column-major format
         =========================================
         |  0 |  8 | 16 | 24 | 32 | 40 | 48 | 56 |
@@ -65,33 +64,35 @@ struct labeled_compact_block_dynsched_pcg {
     constexpr static int octile_w = 8;
     constexpr static int octile_h = 8;
 
-    struct octile { // maps a piece of shared memory as an octile for matvec computation
+    // maps a piece of shared memory as an octile for matvec computation
+    struct octile {
 
         edge_t * const _data;
 
         constexpr static int size_bytes = octile_w * octile_h * sizeof(edge_t);
 
-        __inline__ __device__ __host__ octile(void * ptr) : _data(reinterpret_cast<edge_t *>(ptr)) {}
+        __device__ __inline__ octile(void * ptr)
+            : _data(reinterpret_cast<edge_t *>(ptr)) {}
 
-        __inline__ __device__ __host__ edge_t & operator()(int i, int j) {
+        __device__ __inline__ edge_t & operator()(int i, int j) {
             return _data[i + j * octile_h];
         }
 
-        __inline__ __device__ __host__ edge_t & operator()(int i) {
-            return _data[i];
-        }
+        __device__ __inline__ edge_t & operator()(int i) { return _data[i]; }
     };
 
-    struct rhs { // maps a piece of shared memory as 4 hexdectors for matvec computation
+    // maps a piece of shared memory as 4 hexdectors for matvec computation
+    struct rhs {
 
         float * const _data;
 
-        constexpr static int size_bytes = octile_w * octile_w * sizeof( float );
+        constexpr static int size_bytes = octile_w * octile_w * sizeof(float);
 
-        __inline__ __device__ rhs( void * ptr ) : _data( reinterpret_cast<float *>( ptr ) ) {}
+        __device__ __inline__ rhs(void * ptr)
+            : _data(reinterpret_cast<float *>(ptr)) {}
 
-        __inline__ __device__ float & operator() ( int j1, int j2 ) {
-            return _data[ j1 * octile_w + j2 ];
+        __device__ __inline__ float & operator()(int j1, int j2) {
+            return _data[j1 * octile_w + j2];
         }
     };
 
@@ -99,17 +100,17 @@ struct labeled_compact_block_dynsched_pcg {
         using nzindex_t = int;
 
         nzindex_t * _data;
-        
-        constexpr static int size_bytes = octile_w * octile_h * sizeof(nzindex_t);
 
-        __inline__ __device__ nzlist(void * ptr) : _data(reinterpret_cast<nzindex_t *>(ptr)) {}
+        constexpr static int size_bytes =
+            octile_w * octile_h * sizeof(nzindex_t);
 
-        __inline__ __device__ __host__ nzindex_t & operator() ( int i ) {
-            return _data[ i ];
-        }
+        __device__ __inline__ nzlist(void * ptr)
+            : _data(reinterpret_cast<nzindex_t *>(ptr)) {}
 
-        __inline__ __device__ __host__ nzindex_t const & operator() ( int i ) const {
-            return _data[ i ];
+        __device__ __inline__ nzindex_t & operator()(int i) { return _data[i]; }
+
+        __device__ __inline__ nzindex_t const & operator()(int i) const {
+            return _data[i];
         }
     };
 
@@ -137,8 +138,6 @@ struct labeled_compact_block_dynsched_pcg {
         const int n1             = g1.padded_size();
         const int n2             = g2.padded_size();
         const int N              = n1 * n2;
-
-        octile octilex {p_shared + warp_id_local * shmem_bytes_per_warp};
 
         octile octilex {p_shared + warp_id_local * shmem_bytes_per_warp};
 
@@ -200,7 +199,7 @@ struct labeled_compact_block_dynsched_pcg {
             // Ap = A * p, off-diagonal part
             for (int O1 = 0; O1 < g1.n_tile; O1 += warp_num_local) {
 
-                const int nt1 = min (g1.n_tile - O1, warp_num_local);
+                const int nt1 = min(g1.n_tile - O1, warp_num_local);
 
                 if (warp_id_local < nt1) {
                     // load the first submatrix in compact format into shared memory
@@ -223,7 +222,7 @@ struct labeled_compact_block_dynsched_pcg {
 
                     if (o1.nzmask_halves[1] & (1 << lane)) {
                         int src = __popc(o1.nzmask_halves[1] & lanemask_lt()) +
-                                    __popc(o1.nzmask_halves[0]);
+                                  __popc(o1.nzmask_halves[0]);
                         octile1(lane + warp_size) = octilex(src);
                         nzlist1(src)              = lane + warp_size;
                     }
@@ -233,9 +232,9 @@ struct labeled_compact_block_dynsched_pcg {
 
                 for (int O2 = 0; O2 < g2.n_tile; O2 += warp_num_local) {
 
-                    const int nt2 = min (g2.n_tile - O2, warp_num_local);
+                    const int nt2 = min(g2.n_tile - O2, warp_num_local);
 
-                    if ( warp_id_local < nt2 ) {
+                    if (warp_id_local < nt2) {
                         // load the second submatrix in compact fornat into shared memory
                         auto o2 = g2.octile[O2 + warp_id_local];
                         octile octile2 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
@@ -256,7 +255,7 @@ struct labeled_compact_block_dynsched_pcg {
 
                         if (o2.nzmask_halves[1] & (1 << lane)) {
                             int src = __popc(o2.nzmask_halves[1] & lanemask_lt()) +
-                                        __popc(o2.nzmask_halves[0]);
+                                      __popc(o2.nzmask_halves[0]);
                             octile2(lane + warp_size) = octilex(src);
                             nzlist2(src)              = lane + warp_size;
                         }
@@ -271,14 +270,14 @@ struct labeled_compact_block_dynsched_pcg {
 
                         //if ( lane == 0 ) printf("computing %d-%d\n", p1, p2 );
 
-                        auto o1 = g1.octile[O1 + p1];
+                        auto      o1   = g1.octile[O1 + p1];
+                        auto      o2   = g2.octile[O2 + p2];
                         const int nnz1 = __popcll(o1.nzmask);
-                        const int I1 = o1.upper;
-                        const int J1 = o1.left;
-                        auto o2 = g2.octile[O2 + p2];
                         const int nnz2 = __popcll(o2.nzmask);
-                        const int I2 = o2.upper;
-                        const int J2 = o2.left;
+                        const int I1   = o1.upper;
+                        const int J1   = o1.left;
+                        const int I2   = o2.upper;
+                        const int J2   = o2.left;
 
                         octile octile1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes };
                         octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
@@ -310,7 +309,7 @@ struct labeled_compact_block_dynsched_pcg {
                                     if ((o1.nzmask & m1_lower) && (o2.nzmask & m2)) {
                                         sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
                                     }
-                                }                    
+                                }
                             }
 
                             // printf("threadIdx %d sum_upper  %d %f sum_lower %d %f\n", threadIdx.x, (I1 + i1_upper) * n2 + (I2 + i2), sum_upper, (I1 + i1_lower) * n2 + (I2 + i2), sum_lower);
@@ -319,19 +318,19 @@ struct labeled_compact_block_dynsched_pcg {
                         } else {
                             nzlist nzlist1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
                             nzlist nzlist2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
-                            
-                            for(int i = lane; i < nnz1 * nnz2; i += warp_size) {
-                                int k1 = i / nnz2;
-                                int k2 = i - k1 * nnz2;
-                                int p1 = nzlist1(k1);
-                                int p2 = nzlist2(k2);
-                                int i1 = p1 % octile_h;
-                                int j1 = p1 / octile_h;
-                                int i2 = p2 % octile_h;
-                                int j2 = p2 / octile_h;
+
+                            for (int i = lane; i < nnz1 * nnz2; i += warp_size) {
+                                int  k1 = i / nnz2;
+                                int  k2 = i - k1 * nnz2;
+                                int  p1 = nzlist1(k1);
+                                int  p2 = nzlist2(k2);
+                                int  i1 = p1 % octile_h;
+                                int  j1 = p1 / octile_h;
+                                int  i2 = p2 % octile_h;
+                                int  j2 = p2 / octile_h;
                                 auto e1 = octile1(p1);
                                 auto e2 = octile2(p2);
-                                auto r  = rhs( j1, j2 );
+                                auto r  = rhs(j1, j2);
                                 atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2)), -EdgeKernel::compute(e1, e2) * r);
                             }
                         }
@@ -361,9 +360,9 @@ struct labeled_compact_block_dynsched_pcg {
                 if (i1 < g1.n_node && i2 < g2.n_node) {
                     float d1 = g1.degree[i1] / (1 - q);
                     float d2 = g2.degree[i2] / (1 - q);
-                    float D = d1 * d2;
-                    float V = NodeKernel::compute( g1.node[i1], g2.node[i2] );
-                    scratch.z( i )  = scratch.r( i ) / (D / V);
+                    float D  = d1 * d2;
+                    float V  = NodeKernel::compute(g1.node[i1], g2.node[i2]);
+                    scratch.z(i) = scratch.r(i) / (D / V);
                 }
                 rTr += scratch.r(i) * scratch.r(i);
                 rTz_next += scratch.r(i) * scratch.z(i);
@@ -407,11 +406,11 @@ struct labeled_compact_block_dynsched_pcg {
                 int i1 = i / n2;
                 int i2 = i % n2;
                 if (i1 < g1.n_node && i2 < g2.n_node) {
-                    float p = scratch.z( i ) + beta * scratch.p( i );
-                    float d1 = g1.degree[i1] / (1 - q);
-                    float d2 = g2.degree[i2] / (1 - q);
-                    scratch.p( i ) = p;
-                    scratch.Ap( i ) = d1 * d2 / NodeKernel::compute( g1.node[i1], g2.node[i2] ) * p;
+                    float p       = scratch.z(i) + beta * scratch.p(i);
+                    float d1      = g1.degree[i1] / (1 - q);
+                    float d2      = g2.degree[i2] / (1 - q);
+                    scratch.p(i)  = p;
+                    scratch.Ap(i) = d1 * d2 / NodeKernel::compute(g1.node[i1], g2.node[i2]) * p;
                 }
             }
             __syncthreads();
@@ -456,8 +455,8 @@ struct labeled_compact_block_dynsched_pcg {
     }
 };
 
-}
+}  // namespace marginalized
 
-}
+}  // namespace graphdot
 
 #endif
