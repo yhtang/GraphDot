@@ -22,7 +22,7 @@ template<class Node, class Edge> struct graph_t {
 
     constexpr static float eps = 1e-14;
 
-    int n_node, n_tile;
+    int n_node, n_octile;
     real_t * degree;
     node_t * node;
     octile_t * octile;

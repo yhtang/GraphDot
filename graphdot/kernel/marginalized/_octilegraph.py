@@ -8,8 +8,8 @@ __all__ = ['OctileGraph']
 
 # only works with python >= 3.6
 # @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
-@cpptype([('upper', np.int32), ('left', np.int32), ('nzmask', '<u8'),
-          ('p_elements', np.uintp)])
+@cpptype([('p_elements', np.uintp), ('nzmask', '<u8'),
+          ('upper', np.int32), ('left', np.int32)])
 class Octile(object):
     def __init__(self, upper, left, nzmask, elements):
         self.upper = upper
@@ -28,14 +28,7 @@ class Octile(object):
 @cpptype([('n_node', np.int32), ('n_octile', np.int32), ('p_degree', np.uintp),
           ('p_node', np.uintp), ('p_octile', np.uintp)])
 class OctileGraph(object):
-    """
-    struct graph_t {
-        int n_node, n_octile;
-        deg_t    * degree;
-        node_t   * node;
-        octile_t * octile;
-    };
-    """
+    """ Python counterpart of C++ class graphdot::graph_t """
 
     def __init__(self, graph):
 
@@ -94,20 +87,30 @@ class OctileGraph(object):
             c = j % 8
             upper = i - r
             left = j - c
-            octile_dict[(upper, left)][0] |= np.uint64(1 << (r * 8 + c))
+            octile_dict[(upper, left)][0] |= np.uint64(1 << (r + c * 8))
             octile_dict[(upper, left)][1][r + c * 8] = edge
-            octile_dict[(left, upper)][0] |= np.uint64(1 << (c * 8 + r))
+            octile_dict[(left, upper)][0] |= np.uint64(1 << (c + r * 8))
             octile_dict[(left, upper)][1][c + r * 8] = edge
 
         ''' create edge octiles on GPU '''
         self.octile_list = [Octile(upper, left, nzmask, elements)
                             for (upper, left), (nzmask, elements)
                             in octile_dict.items()]
+        print('Graph %s n_octile %d' % (graph.title, len(self.octile_list)))
+        # compact the tiles
+        for o in self.octile_list:
+            k = 0
+            for i in range(64):
+                if o.nzmask & np.uint64(1 << i):
+                    o.elements[k] = o.elements[i]
+                    k += 1
+
         self.n_octile = len(self.octile_list)
 
         ''' collect edge octile structures into continuous buffer '''
         self.octile_hdr = umlike(np.array([x.state for x in self.octile_list],
                                           Octile.dtype))
+        print('self.octile_hdr\n', self.octile_hdr)
 
     @property
     def p_octile(self):
