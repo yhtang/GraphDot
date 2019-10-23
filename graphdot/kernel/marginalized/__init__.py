@@ -156,7 +156,7 @@ class MarginalizedGraphKernel:
                              ] + self.nvcc_extra,
                     no_extern_c=True,
                     include_dirs=cpp.__path__)
-                self.compiler_message = [str(rec.message) for rec in w]
+                self._compiler_message = [str(rec.message) for rec in w]
         return self._module
 
     def _launch_kernel(self, graphs, jobs, nodal, lmin):
