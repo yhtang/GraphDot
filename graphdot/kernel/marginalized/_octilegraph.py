@@ -96,23 +96,8 @@ class OctileGraph(object):
         self.octile_list = [Octile(upper, left, nzmask, elements)
                             for (upper, left), (nzmask, elements)
                             in octile_dict.items()]
-        print('Graph %s n_octile %d' % (graph.title, len(self.octile_list)))
         # compact the tiles
-        import sys
-        def print_nzmask(m):
-            for r in range(8):
-                for c in range(8):
-                    if m & np.uint64(1 << (r + c * 8)):
-                        sys.stdout.write('o')
-                    else:
-                        sys.stdout.write(' ')
-                sys.stdout.write('\n')
-            sys.stdout.flush()
-
-
-        for I, o in enumerate(self.octile_list):
-            print('octile', I)
-            # print_nzmask(o.nzmask)
+        for o in self.octile_list:
             k = 0
             for i in range(64):
                 if o.nzmask & np.uint64(1 << i):
@@ -124,7 +109,6 @@ class OctileGraph(object):
         ''' collect edge octile structures into continuous buffer '''
         self.octile_hdr = umlike(np.array([x.state for x in self.octile_list],
                                           Octile.dtype))
-        print('self.octile_hdr\n', self.octile_hdr)
 
     @property
     def p_octile(self):
