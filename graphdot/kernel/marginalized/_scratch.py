@@ -13,7 +13,7 @@ class BlockScratch(object):
         self.capacity = ((capacity + 15) // 16) * 16
         if capacity <= 0:
             raise ValueError('Scratch size must be greater than zero.')
-        self.buffer = gpuarray.empty(int(self.capacity) * 4, np.float32)
+        self.buffer = gpuarray.empty(int(self.capacity) * 5, np.float32)
 
     @property
     def p_buffer(self):

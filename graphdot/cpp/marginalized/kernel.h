@@ -15,24 +15,23 @@ struct job_t {
     float *vr;
 };
 
-struct block_scratch {
+struct pcg_scratch_t {
 
     float * ptr;
-    int stride;
+    int     stride;
 
-    block_scratch (int max_size, cuda::belt_allocator & alloc) {
-        stride = ((max_size + 15) / 16) * 16;
-        ptr = (float *) alloc (stride * sizeof (float) * 4);
-    }
+    pcg_scratch_t(pcg_scratch_t const & other) = default;
 
-    __host__ __device__ __inline__ constexpr float * x  () { return ptr + stride * 0; }
-    __host__ __device__ __inline__ constexpr float * r  () { return ptr + stride * 1; }
-    __host__ __device__ __inline__ constexpr float * p  () { return ptr + stride * 2; }
-    __host__ __device__ __inline__ constexpr float * Ap () { return ptr + stride * 3; }
-    __host__ __device__ __inline__ constexpr float & x  (int i) { return x()[i]; }
-    __host__ __device__ __inline__ constexpr float & r  (int i) { return r()[i]; }
-    __host__ __device__ __inline__ constexpr float & p  (int i) { return p()[i]; }
-    __host__ __device__ __inline__ constexpr float & Ap (int i) { return Ap()[i]; }
+    __device__ __inline__ float * x() { return ptr + stride * 0; }
+    __device__ __inline__ float * r() { return ptr + stride * 1; }
+    __device__ __inline__ float * z() { return ptr + stride * 2; }
+    __device__ __inline__ float * p() { return ptr + stride * 3; }
+    __device__ __inline__ float * Ap() { return ptr + stride * 4; }
+    __device__ __inline__ float & x(int i) { return x()[i]; }
+    __device__ __inline__ float & r(int i) { return r()[i]; }
+    __device__ __inline__ float & z(int i) { return z()[i]; }
+    __device__ __inline__ float & p(int i) { return p()[i]; }
+    __device__ __inline__ float & Ap(int i) { return Ap()[i]; }
 };
 
 template<class Node, class Edge> struct graph_t {
@@ -87,7 +86,10 @@ struct octile_block_solver {
         =========================================
         The right-hand side is a 64-element vector */
 
-    using edge_t = typename Graph::edge_t;
+    using graph_t   = Graph;
+    using scratch_t = pcg_scratch_t;
+    using node_t    = typename graph_t::node_t;
+    using edge_t    = typename graph_t::edge_t;
 
     constexpr static int octile_w = 8;
     constexpr static int octile_h = 8;
@@ -186,7 +188,7 @@ struct octile_block_solver {
     __inline__ __device__ static void compute(
         Graph const    g1,
         Graph const    g2,
-        block_scratch  scratch,
+        scratch_t      scratch,
         char * const   p_shared,
         const float    q,
         const float    q0,
@@ -195,29 +197,50 @@ struct octile_block_solver {
 
         using namespace graphdot::cuda;
 
-        const int warp_id_local = threadIdx.x / warp_size;
+        const int warp_id_local  = threadIdx.x / warp_size;
         const int warp_num_local = blockDim.x / warp_size;
-        const int lane = laneid();
-        const int n1 = g1.padded_size();
-        const int n2 = g2.padded_size();
-        const int N  = n1 * n2;
+        const int lane           = laneid();
+        const int n1             = g1.padded_size();
+        const int n2             = g2.padded_size();
+        const int N              = n1 * n2;
+
+        octile octilex {p_shared + warp_id_local * shmem_bytes_per_warp};
 
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            int i1 = i / n2;
-            int i2 = i % n2;
+            int   i1 = i / n2;
+            int   i2 = i % n2;
             float d1 = g1.degree[i1] / (1 - q);
             float d2 = g2.degree[i2] / (1 - q);
-            scratch.x (i) = 0;
-            float r = d1 * d2 * q * q / (q0 * q0);
-            // printf("r[%d] = %f, D[%d] = %f, deg[%d] = %f, deg[%d] = %f\n", i, r, i, d1 * d2, i1, g1.degree[i1], i2, g2.degree[i2]);
-            scratch.r (i) = r;
-            scratch.p (i) = r;
-            scratch.Ap (i) = (i1 < g1.n_node && i2 < g2.n_node) ? d1 * d2 / NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * r : 0.f;
-            // if (i1 < g1.n_node && i2 < g2.n_node) printf("Kv([%ld,%ld], [%ld,%ld]]) = %f\n", g1.vertex[i1].hybridization, g1.vertex[i1].charge, g2.vertex[i2].hybridization, g2.vertex[i2].charge, NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]));
+            // b  = Dx . qx
+            float b = d1 * d2 * q * q / (q0 * q0);
+            // r0 = b - A . x0
+            //    = b
+            float r0 = b;
+            // z0 = M^-1 . r0
+            //    = (Dx . Vx^-1)^-1 . r0
+            //    = Vx . Dx^-1 . r0
+            //    = Vx . Dx^-1 . b
+            //    = Vx . Dx^-1 . Dx . qx
+            //    = Vx . qx
+            float z0 =
+                i1 < g1.n_node && i2 < g2.n_node ?
+                NodeKernel::compute( g1.vertex[i1], g2.vertex[i2] ) * q * q / (q0 * q0) :
+                0;
+            // x0 = 0
+            scratch.x(i) = 0;
+            scratch.r(i) = r0;
+            scratch.z(i) = z0;
+            // p0 = z0
+            scratch.p(i) = z0;
+            //Ap0 = diag(A . p0)
+            //    = Dx . Vx^-1 . p0
+            //    = Dx . Vx^-1 . Vx . qx
+            //    = Dx . qx
+            scratch.Ap(i) = d1 * d2 * q * q / (q0 * q0);
         }
         __syncthreads();
 
-        auto rTr = block_vdotv (scratch.r(), scratch.r(), N);
+        auto rTz = block_vdotv(scratch.r(), scratch.z(), N);
 
         int k;
         for (k = 0; k < N; ++k) {
@@ -311,37 +334,79 @@ struct octile_block_solver {
             __syncthreads();
 
             // alpha = rTr / dot( p, Ap );
-            auto pAp = block_vdotv (scratch.p(), scratch.Ap(), N);
-            auto alpha = rTr / pAp;
+            auto pAp   = block_vdotv(scratch.p(), scratch.Ap(), N);
+            auto alpha = rTz / pAp;
 
             // x = x + alpha * p;
             // r = r - alpha * Ap;
+            // z = M^-1 . r
+            // rTr      = r^T . r
+            // rTz_next = r^T . z
+            float rTr = 0, rTz_next = 0;
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                scratch.x (i) += alpha * scratch.p (i);
-                scratch.r (i) -= alpha * scratch.Ap (i);
+                scratch.x(i) += alpha * scratch.p(i);
+                scratch.r(i) -= alpha * scratch.Ap(i);
+                int i1 = i / n2;
+                int i2 = i % n2;
+                if (i1 < g1.n_node && i2 < g2.n_node) {
+                    float d1 = g1.degree[i1] / (1 - q);
+                    float d2 = g2.degree[i2] / (1 - q);
+                    float D  = d1 * d2;
+                    float V  = NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]);
+                    scratch.z(i) = scratch.r(i) / (D / V);
+                }
+                rTr += scratch.r(i) * scratch.r(i);
+                rTz_next += scratch.r(i) * scratch.z(i);
             }
-            //__syncthreads(); // not needed
+            __shared__ float sum1, sum2;
+            if (threadIdx.x == 0) sum1 = 0, sum2 = 0;
+            #pragma unroll
+            for (int p = (warp_size >> 1); p >= 1; p >>= 1) {
+                rTr      += __shfl_xor_sync(0xFFFFFFFF, rTr, p);
+                rTz_next += __shfl_xor_sync(0xFFFFFFFF, rTz_next, p);
+            }
+            __syncthreads();
+            if (laneid() == 0) {
+                atomicAdd(&sum1, rTr);
+                atomicAdd(&sum2, rTz_next);
+            }
+            __syncthreads();
+            rTr      = sum1;
+            rTz_next = sum2;
 
-            auto rTr_next = block_vdotv (scratch.r(), scratch.r(), N);
+            // rTr = block_sum(rTr);
+            // rTz_next = block_sum(rTz_next);
 
-            if (rTr_next < float (1e-20) * N * N) break;
+            #if 0
+            __syncthreads();
+            if ( threadIdx.x == 0 && blockIdx.x == 0 ) {
+                for ( int ij = 0; ij < N; ++ij ) {
+                    printf( "iteration %d solution x[%d] = %.7f\n", k, ij, scratch.x( ij ) );
+                }
+                // printf("rTr %e\n", rTr);
+            }
+            #endif
 
-            auto beta = rTr_next / rTr;
+            if (rTr < 1e-20f * N * N) break;
+
+            auto beta = rTz_next / rTz;
 
             // p = r + beta * p;
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                // scratch.p(i) = scratch.r(i) + beta * scratch.p(i);
+                //scratch.p(i) = scratch.r(i) + beta * scratch.p(i);
                 int i1 = i / n2;
                 int i2 = i % n2;
-                float p = scratch.r (i) + beta * scratch.p (i);
-                scratch.p(i) = p;
-                auto d1 = g1.degree[i1] / (1 - q);
-                auto d2 = g2.degree[i2] / (1 - q);
-                scratch.Ap(i) = (i1 < g1.n_node && i2 < g2.n_node) ? d1 * d2 / NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * p : 0.f;
+                if (i1 < g1.n_node && i2 < g2.n_node) {
+                    float p       = scratch.z(i) + beta * scratch.p(i);
+                    float d1      = g1.degree[i1] / (1 - q);
+                    float d2      = g2.degree[i2] / (1 - q);
+                    scratch.p(i)  = p;
+                    scratch.Ap(i) = d1 * d2 / NodeKernel::compute(g1.vertex[i1], g2.vertex[i2]) * p;
+                }
             }
             __syncthreads();
 
-            rTr = rTr_next;
+            rTz = rTz_next;
         }
         __syncthreads();
 
