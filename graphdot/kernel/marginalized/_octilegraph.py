@@ -98,7 +98,21 @@ class OctileGraph(object):
                             in octile_dict.items()]
         print('Graph %s n_octile %d' % (graph.title, len(self.octile_list)))
         # compact the tiles
-        for o in self.octile_list:
+        import sys
+        def print_nzmask(m):
+            for r in range(8):
+                for c in range(8):
+                    if m & np.uint64(1 << (r + c * 8)):
+                        sys.stdout.write('o')
+                    else:
+                        sys.stdout.write(' ')
+                sys.stdout.write('\n')
+            sys.stdout.flush()
+
+
+        for I, o in enumerate(self.octile_list):
+            print('octile', I)
+            # print_nzmask(o.nzmask)
             k = 0
             for i in range(64):
                 if o.nzmask & np.uint64(1 << i):
