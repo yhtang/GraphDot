@@ -10,7 +10,7 @@ ${edge_kernel}
 using node_t = ${node_t};
 using edge_t = ${edge_t};
 
-using graph_t   = graphdot::marginalized::graph_t<node_t, edge_t>;
+using graph_t   = graphdot::graph_t<node_t, edge_t>;
 using scratch_t = graphdot::marginalized::pcg_scratch_t;
 using job_t     = graphdot::marginalized::job_t;
 using solver_t  = graphdot::marginalized::labeled_compact_block_dynsched_pcg<graph_t>;
