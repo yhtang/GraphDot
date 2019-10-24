@@ -182,6 +182,7 @@ class Graph:
         edge_data = [((i, j), w, r) for (i, j), (w, r) in edge_data.items()]
 
         edges = pd.DataFrame(edge_data, columns=['!ij', '!w', 'length'])
+        edges = edges.astype(dict(length=np.float32))
 
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
                    formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))

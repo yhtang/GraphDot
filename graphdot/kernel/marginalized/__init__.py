@@ -9,7 +9,9 @@ from pycuda.compiler import SourceModule
 from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype, decltype
+import graphdot.cuda
 from graphdot.cuda.array import umarray, umlike
+from graphdot.util import Timer
 from ._scratch import BlockScratch
 from ._octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply
@@ -51,6 +53,9 @@ class MarginalizedGraphKernel:
             Note that a custom probability does not have to be normalized.
         q: float in (0, 1)
             The probability for the random walk to stop during each step.
+        context: :py:class:`pycuda.driver.Context` instance
+            The CUDA context for launching kernels, Will use a default one if
+            none is given.
         block_per_sm: int
             Tunes the GPU kernel.
         block_size: int
@@ -73,13 +78,13 @@ class MarginalizedGraphKernel:
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
 
-        self.device = pycuda.driver.Device(kwargs.pop('device', 0))
         self.nvcc_extra = kwargs.pop('nvcc_extra', [])
-        self.ctx = self.device.make_context()
+        self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
+        self.device = self.ctx.get_device()
+        self._source = ''
+        self._module = None
 
-    def __del__(self):
-        self.ctx.synchronize()
-        self.ctx.detach()
+        self.timer = Timer()
 
     def _allocate_scratch(self, count, capacity):
         if (self.scratch is None or len(self.scratch) < count or
@@ -125,21 +130,55 @@ class MarginalizedGraphKernel:
         else:
             return p
 
+    @property
+    def source(self):
+        return self._source
+
+    @source.setter
+    def source(self, source):
+        if self.source != source:
+            self._source = source
+            self._module = None
+
+    @property
+    def module(self):
+        if not self._module:
+            with warnings.catch_warnings(record=True) as w:
+                self._module = SourceModule(
+                    self.source,
+                    options=['-std=c++14',
+                             '-O4',
+                             '--use_fast_math',
+                             '--expt-relaxed-constexpr',
+                             '--maxrregcount=64',
+                             '-Xptxas', '-v',
+                             '-lineinfo',
+                             ] + self.nvcc_extra,
+                    no_extern_c=True,
+                    include_dirs=cpp.__path__)
+                self._compiler_message = [str(rec.message) for rec in w]
+        return self._module
+
     def _launch_kernel(self, graphs, jobs, nodal, lmin):
         if lmin != 0 and lmin != 1:
             raise ValueError('lmin must be 0 or 1')
 
-        ''' transfer grahs to GPU '''
+        ''' transfer graphs to GPU '''
+        self.timer.tic('transferring graphs to GPU')
         oct_graphs = [self._convert_to_octilegraph(g) for g in graphs]
         self._assert_homegeneous(oct_graphs)
         oct_graphs_d = umlike(np.array([g.state for g in oct_graphs],
                                        OctileGraph.dtype))
+        self.timer.toc('transferring graphs to GPU')
 
-        ''' upload work item list to device '''
+        ''' upload work item list to GPU '''
+        self.timer.tic('uploading work item list to GPU')
         jobs_d = umlike(np.array([j.state for j in jobs], Job.dtype))
         i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
+        self.timer.toc('uploading work item list to GPU')
 
-        ''' prepare GPU kernel launch '''
+        ''' code generation '''
+        self.timer.tic('code generation')
         x = next(iter(oct_graphs))
         weighted = x.weighted
         node_type = x.node_type
@@ -153,7 +192,7 @@ class MarginalizedGraphKernel:
 
         node_kernel_src = Template(r'''
         struct node_kernel {
-            template<class V> __device__
+            template<class V> __device__ __inline__
             static auto compute(V const &v1, V const &v2) {
                 return ${node_expr};
             }
@@ -162,60 +201,55 @@ class MarginalizedGraphKernel:
 
         edge_kernel_src = Template(r'''
         struct edge_kernel {
-            template<class T> __device__
+            template<class T> __device__ __inline__
             static auto compute(T const &e1, T const &e2) {
                 return ${edge_expr};
             }
         };
         ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
 
-        source = self.template.render(node_kernel=node_kernel_src,
-                                      edge_kernel=edge_kernel_src,
-                                      node_t=decltype(node_type),
-                                      edge_t=decltype(edge_type))
-        self.source = source
+        self.source = self.template.render(node_kernel=node_kernel_src,
+                                           edge_kernel=edge_kernel_src,
+                                           node_t=decltype(node_type),
+                                           edge_t=decltype(edge_type))
+        self.timer.toc('code generation')
 
-        with warnings.catch_warnings(record=True) as w:
-            mod = SourceModule(source,
-                               options=['-std=c++14',
-                                        '-O4',
-                                        '--use_fast_math',
-                                        '--expt-relaxed-constexpr',
-                                        '--maxrregcount=64',
-                                        '-Xptxas', '-v',
-                                        '-lineinfo',
-                                        ] + self.nvcc_extra,
-                               no_extern_c=True,
-                               include_dirs=cpp.__path__)
-            self.compiler_message = [str(rec.message) for rec in w]
-        kernel = mod.get_function('graph_kernel_solver')
+        ''' JIT '''
+        self.timer.tic('JIT')
+        kernel = self.module.get_function('graph_kernel_solver')
+        self.timer.toc('JIT')
 
+        ''' calculate launch configuration '''
+        self.timer.tic('calculating launch configuration')
         launch_block_count = (self.device.MULTIPROCESSOR_COUNT
                               * self.block_per_sm)
-        shmem_bytes_per_warp = mod.get_global('shmem_bytes_per_warp')[1]
+        shmem_bytes_per_warp = self.module.get_global('shmem_bytes_per_warp')[1]
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
         max_graph_size = np.max([g.padded_size for g in oct_graphs])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
+        self.timer.toc('calculating launch configuration')
 
-        # print("%-32s : %ld" % ("Blocks launched", launch_block_count))
-        # print("%-32s : %ld" % ("Shared memory per block",
-        #                        shmem_bytes_per_block))
+        ''' GPU kernel execution '''
+        self.timer.tic('GPU kernel execution')
+        kernel(
+            oct_graphs_d.base,
+            self.scratch_d.base,
+            jobs_d.base,
+            i_job_global,
+            np.uint32(len(jobs)),
+            np.float32(self.q),
+            np.float32(self.q),  # placeholder for q0
+            np.int32(lmin),
+            grid=(launch_block_count, 1, 1),
+            block=(self.block_size, 1, 1),
+            shared=shmem_bytes_per_block,
+        )
+        self.ctx.synchronize()
+        self.timer.toc('GPU kernel execution')
 
-        kernel(oct_graphs_d.base,
-               self.scratch_d.base,
-               jobs_d.base,
-               i_job_global,
-               np.uint32(len(jobs)),
-               np.float32(self.q),
-               np.float32(self.q),  # placeholder for q0
-               np.int32(lmin),
-               grid=(launch_block_count, 1, 1),
-               block=(self.block_size, 1, 1),
-               shared=shmem_bytes_per_block)
-
-    def __call__(self, X, Y=None, nodal=False, lmin=0):
+    def __call__(self, X, Y=None, nodal=False, lmin=0, timer=False):
         """Compute pairwise similarity matrix between graphs
 
         Parameters
@@ -244,6 +278,7 @@ class MarginalizedGraphKernel:
         """
 
         ''' generate jobs '''
+        self.timer.tic('generating jobs')
         if Y is None:
             jobs = [Job(i, i + j, umarray(len(g1.nodes) * len(g2.nodes)))
                     for i, g1 in enumerate(X)
@@ -252,17 +287,23 @@ class MarginalizedGraphKernel:
             jobs = [Job(i, len(X) + j, umarray(len(g1.nodes) * len(g2.nodes)))
                     for i, g1 in enumerate(X)
                     for j, g2 in enumerate(Y)]
+        self.timer.toc('generating jobs')
 
         ''' assign starting probabilities '''
+        self.timer.tic('assigning starting probabilities')
         p_func = self._get_starting_probability(self.p)
         P = [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in X]
         if Y is not None:
             P += [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in Y]
+        self.timer.toc('assigning starting probabilities')
 
         ''' call GPU kernel '''
+        self.timer.tic('calling GPU kernel (overall)')
         self._launch_kernel(X + Y if Y is not None else X, jobs, nodal, lmin)
+        self.timer.toc('calling GPU kernel (overall)')
 
         ''' collect result '''
+        self.timer.tic('collecting result')
         if Y is None:
             N = len(X)
             R = np.empty((N, N), np.object)
@@ -287,6 +328,11 @@ class MarginalizedGraphKernel:
                     R[job.i, job.j - N] = pi[:, None] * r * pj[None, :]
                 else:
                     R[job.i, job.j - N] = pi.dot(r).dot(pj)
+        self.timer.toc('collecting result')
+
+        if timer:
+            self.timer.report(unit='ms')
+        self.timer.reset()
 
         return np.block(R.tolist())
 

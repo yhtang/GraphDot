@@ -1,0 +1,42 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: Cpp11
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+ColumnLimit: 80
+ReflowComments: false
+PenaltyBreakComment: 10000
+SortIncludes: false
+SortUsingDeclarations: false
+# indent
+IndentWidth: 4
+# IndentPPDirectives: BeforeHash
+# alginment
+AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: true
+# AlignConsecutiveMacros: true
+AlignEscapedNewlines: Left
+AlignOperands: true
+AlignTrailingComments: true
+PointerAlignment: Middle
+# spaces
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceAfterCStyleCast: true
+SpacesInCStyleCastParentheses: false
+# SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: true
+SpaceBeforeCtorInitializerColon: false
+SpaceBeforeInheritanceColon: false
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+# SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 2
+SpacesInAngles: false
+SpacesInContainerLiterals: false
+...

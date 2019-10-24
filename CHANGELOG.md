@@ -1,3 +1,8 @@
+## 0.2.3 (2019-10-24)
+- Incorporated many new optimizations as detailed in https://arxiv.org/abs/1910.06310.
+- Preparing for faster memory allocation and job creation.
+- Fixes #32, #33.
+
 ## 0.2.1 (2019-10-02)
 - Reduced kernel launch preparation time by 50% to address #28.
 - Fixed a memory leak issue #31.

@@ -1,5 +1,6 @@
-#ifndef GRAPHDOT_MISC_NUMPY_TYPE_H_
-#define GRAPHDOT_MISC_NUMPY_TYPE_H_
+#ifndef GRAPHDOT_NUMPY_TYPE_H_
+#define GRAPHDOT_NUMPY_TYPE_H_
+
 #include <cstdint>
 
 namespace graphdot {
