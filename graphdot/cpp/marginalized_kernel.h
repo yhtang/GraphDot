@@ -256,8 +256,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         const int p1 = t / nt2;
                         const int p2 = t % nt2;
 
-                        auto      o1   = g1.octile[O1 + p1];
-                        auto      o2   = g2.octile[O2 + p2];
+                        const auto o1  = g1.octile[O1 + p1];
+                        const auto o2  = g2.octile[O2 + p2];
                         const int nnz1 = __popcll(o1.nzmask);
                         const int nnz2 = __popcll(o2.nzmask);
                         const int I1   = o1.upper;
@@ -272,31 +272,27 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         // load RHS
                         int j1 = lane / octile_w;
                         int j2 = lane % octile_w;
-                        rhs (j1,                        j2) = scratch.p ((J1 + j1                       ) * n2 + (J2 + j2));
-                        rhs (j1 + warp_size / octile_w, j2) = scratch.p ((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
+                        rhs (j1,                        j2) = scratch.p((J1 + j1                       ) * n2 + (J2 + j2));
+                        rhs (j1 + warp_size / octile_w, j2) = scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
                         if (nnz1 * nnz2 >= 256) {
-
                             // dense x dense
                             float sum_upper = 0, sum_lower = 0;
 
-                            #if 0
-                            for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1) {
-                                auto e1_upper = octile1 (i1_upper, j1);
-                                auto e1_lower = octile1 (i1_lower, j1);
-                                bool m1_upper = 1 & o1.nzmask >> (i1_upper + j1 * octile_h);
-                                bool m1_lower = 1 & o1.nzmask >> (i1_lower + j1 * octile_h);
-
-                                uint rowmask2 = o2.nzmask_r[i2];
+                            #if 1
+                            for (int j1 = 0, colmask1 = 1; j1 < octile_w && j1 < g1.n_node - J1; ++j1, colmask1 <<= 1) {
+                                auto e1_upper = octile1(i1_upper, j1);
+                                auto e1_lower = octile1(i1_lower, j1);
+                                bool m1_upper = o1.nzmask_r_bytes[i1_upper] & colmask1;
+                                bool m1_lower = o1.nzmask_r_bytes[i1_lower] & colmask1;
+                    
                                 #pragma unroll (octile_w)
-                                for (uint j2 = 0, sel = 1; j2 < octile_w; ++j2, sel <<= 1) {
-                                    // bool m2 = 1 & o2.nzmask >> (i2 + j2 * octile_h);
-                                    bool m2 = rowmask2 & sel;
-                                    if (m2) {
-                                        auto e2 = octile2 (i2, j2);
-                                        auto r  = rhs (j1, j2);
-                                        if (m1_upper) sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                                        if (m1_lower) sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                                for (int j2 = 0, colmask2 = 1; j2 < octile_w; ++j2, colmask2 <<= 1) {
+                                    if (o2.nzmask_r_bytes[i2] & colmask2) {
+                                        auto e2 = octile2(i2, j2);
+                                        auto r  = rhs(j1, j2);
+                                        sum_upper -= r * (m1_upper ? EdgeKernel::compute(e1_upper, e2) : 0.f);
+                                        sum_lower -= r * (m1_lower ? EdgeKernel::compute(e1_lower, e2) : 0.f);
                                     }
                                 }
                             }
@@ -326,7 +322,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                             atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
 
                         } else {
-
                             // sparse x sparse
                             nzlist nzlist1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
                             nzlist nzlist2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};

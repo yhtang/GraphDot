@@ -12,13 +12,14 @@ template<class Node, class Edge> struct graph_t {
     using edge_t = Edge;
     using octile_t = struct {
         edge_t * elements;
-        union {
-            std::uint64_t nzmask;            // column major
+        union {                              // column major
+            std::uint64_t nzmask;            
             std::uint32_t nzmask_halves[2];  // one byte for each column
             std::uint8_t  nzmask_bytes[8];   // one byte for each column
         };
-        union {
-            std::uint8_t nzmask_r[8];
+        union {                              // row major
+            std::uint64_t nzmask_r;
+            std::uint8_t  nzmask_r_bytes[8];
         };
         int upper, left;
     };
