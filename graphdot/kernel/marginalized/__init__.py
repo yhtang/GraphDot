@@ -192,7 +192,7 @@ class MarginalizedGraphKernel:
 
         node_kernel_src = Template(r'''
         struct node_kernel {
-            template<class V> __device__
+            template<class V> __device__ __inline__
             static auto compute(V const &v1, V const &v2) {
                 return ${node_expr};
             }
@@ -201,7 +201,7 @@ class MarginalizedGraphKernel:
 
         edge_kernel_src = Template(r'''
         struct edge_kernel {
-            template<class T> __device__
+            template<class T> __device__ __inline__
             static auto compute(T const &e1, T const &e2) {
                 return ${edge_expr};
             }

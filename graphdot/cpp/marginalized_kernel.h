@@ -291,6 +291,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         rhs (j1 + warp_size / octile_w, j2) = scratch.p ((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
                         if (nnz1 * nnz2 >= 256) {
+                            // dense x dense
                             float sum_upper = 0, sum_lower = 0;
 
                             for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1) {
@@ -317,6 +318,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                             atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper);
                             atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
                         } else {
+                            // sparse x sparse
                             nzlist nzlist1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
                             nzlist nzlist2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
 
