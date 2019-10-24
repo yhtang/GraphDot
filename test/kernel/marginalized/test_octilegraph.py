@@ -16,7 +16,7 @@ class MockArray(np.ndarray):
 def test_octile():
     assert(Octile.dtype.isalignedstruct)
 
-    octile = Octile(0, 0, 0, np.zeros(64).view(MockArray))
+    octile = Octile(0, 0, 0, 0, np.zeros(64).view(MockArray))
     assert(octile.upper == 0)
     assert(octile.left == 0)
     assert(octile.nzmask == 0)
