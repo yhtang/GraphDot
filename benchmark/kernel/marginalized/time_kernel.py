@@ -20,7 +20,7 @@ def make_graphs(batch, size):
         g = newman_watts_strogatz_graph(size, k=5, p=0.05, seed=0)
         # assign vertex label
         for i in range(size):
-            g.node[i]['label'] = np.random.randint(0, 9)
+            g.nodes[i]['label'] = np.random.randint(0, 9)
         # assign edge weight and label
         for ij in g.edges:
             g.edges[ij]['label'] = np.random.randint(0, 9)
