@@ -1,18 +1,19 @@
-#include <marginalized/kernel.h>
-#include <misc/numpy_type.h>
+#include <graph.h>
+#include <marginalized_kernel.h>
+#include <numpy_type.h>
 
-using namespace graphdot;
-using namespace numpy_type;
+//using namespace graphdot;
+using namespace graphdot::numpy_type;
 
 ${node_kernel}
 ${edge_kernel}
 using node_t = ${node_t};
 using edge_t = ${edge_t};
 
-using graph_t   = graphdot::marginalized::graph_t<node_t, edge_t>;
+using graph_t   = graphdot::graph_t<node_t, edge_t>;
 using scratch_t = graphdot::marginalized::pcg_scratch_t;
 using job_t     = graphdot::marginalized::job_t;
-using solver_t  = graphdot::marginalized::octile_block_solver<graph_t>;
+using solver_t  = graphdot::marginalized::labeled_compact_block_dynsched_pcg<graph_t>;
 
 __constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
 

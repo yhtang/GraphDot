@@ -17,6 +17,12 @@ __inline__ __device__ int laneid() {
     #endif
 }
 
+__inline__ __device__ unsigned int lanemask_lt() {
+    unsigned int lanemask32_lt;
+    asm volatile("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask32_lt));
+    return (lanemask32_lt);
+}
+
 template<class T> __device__ T warp_sum( T value ) {
 #pragma unroll
     for ( int p = ( warp_size >> 1 ); p >= 1 ; p >>= 1 ) value += __shfl_xor_sync( 0xFFFFFFFF, value, p );
