@@ -74,7 +74,8 @@ class OctileGraph(object):
                               for i, j in edges['!ij']], axis=0)
         uniq_oct = np.unique(np.vstack((uniq_oct, uniq_oct[:, -1::-1])),
                              axis=0)
-        octile_dict = {(upper, left): [np.uint64(), np.uint64(), umzeros(64, edge_type)]
+        octile_dict = {(upper, left): [np.uint64(), np.uint64(),
+                                       umzeros(64, edge_type)]
                        for upper, left in uniq_oct}
 
         for index, row in edges.iterrows():
