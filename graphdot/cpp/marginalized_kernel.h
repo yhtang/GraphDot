@@ -281,25 +281,22 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                             float sum_upper = 0, sum_lower = 0;
 
                             #if 0
-                            uint nzmask1 = (o1.nzmask_r[i1_upper] << 8) | o1.nzmask_r[i1_lower];
-                            uint nzmask2 =  o2.nzmask_r[i2];
-
-                            for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1, nzmask1 >>= 1) {
+                            for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1) {
                                 auto e1_upper = octile1 (i1_upper, j1);
                                 auto e1_lower = octile1 (i1_lower, j1);
-                                bool m1_upper = nzmask1 & 0x1;
-                                bool m1_lower = nzmask1 & 0x100;
-                    
+                                bool m1_upper = 1 & o1.nzmask >> (i1_upper + j1 * octile_h);
+                                bool m1_lower = 1 & o1.nzmask >> (i1_lower + j1 * octile_h);
+
+                                uint rowmask2 = o2.nzmask_r[i2];
                                 #pragma unroll (octile_w)
-                                for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
-                                    auto e2 = octile2 (i2, j2);
-                                    auto r  = rhs (j1, j2);
-                                    bool m2 = nzmask2 & mask;
-                                    if (m1_upper && m2) {
-                                        sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                                    }
-                                    if (m1_lower && m2) {
-                                        sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                                for (uint j2 = 0, sel = 1; j2 < octile_w; ++j2, sel <<= 1) {
+                                    // bool m2 = 1 & o2.nzmask >> (i2 + j2 * octile_h);
+                                    bool m2 = rowmask2 & sel;
+                                    if (m2) {
+                                        auto e2 = octile2 (i2, j2);
+                                        auto r  = rhs (j1, j2);
+                                        if (m1_upper) sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                                        if (m1_lower) sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
                                     }
                                 }
                             }
@@ -309,30 +306,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                 auto e1_lower = octile1 (i1_lower, j1);
                                 auto m1_upper = 1ULL << (i1_upper + j1 * octile_h);
                                 auto m1_lower = 1ULL << (i1_lower + j1 * octile_h);
-                                // auto m1_upper = 1ULL << (i1_upper + j1 * octile_h);
-                                // auto m1_lower = 1ULL << (i1_lower + j1 * octile_h);
-                                // uint mask1 = 1 << (i1_upper * octile_w);
-
-                                // int k2 = i2 / 4;
-
-                                #if 0
+                    
                                 #pragma unroll (octile_w)
-                                for (uint j2 = 0; j2 < octile_w; ++j2) {
-                                    auto m2 = 1ULL << (i2 + j2 * octile_h);
-                                    if (o2.nzmask & m2) {
-                                        auto e2 = octile2 (i2, j2);
-                                        auto r  = rhs (j1, j2);
-                                        if (o1.nzmask_r[0] & mask1) {
-                                            sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                                        }
-                                        if (o1.nzmask_r[1] & mask1) {
-                                            sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
-                                        }
-                                    }
-                                }
-                                #else
-                                #pragma unroll (octile_w)
-                                for (uint j2 = 0; j2 < octile_w; ++j2) {
+                                for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
                                     auto e2 = octile2 (i2, j2);
                                     auto r  = rhs (j1, j2);
                                     auto m2 = 1ULL << (i2 + j2 * octile_h);
@@ -343,27 +319,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                         sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
                                     }
                                 }
-                                // auto x2 = o2.nzmask >> i2;
-                                // #pragma unroll (octile_w)
-                                // for (uint j2 = 0; j2 < octile_w; ++j2) {
-                                //     // auto m2 = 1ULL << (i2 + j2 * octile_h);
-                                //     // if (o2.nzmask & m2) {
-                                //     if (x2 & 1) {
-                                //         auto e2 = octile2 (i2, j2);
-                                //         auto r  = rhs (j1, j2);
-                                //         if (o1.nzmask & m1_upper) {
-                                //             sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
-                                //         }
-                                //         if (o1.nzmask & m1_lower) {
-                                //             sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
-                                //         }
-                                //     }
-
-                                //     x2 >>= 8;
-                                // }
-                                #endif
-
-                                // mask1 <<= 1;
                             }
                             #endif
 
