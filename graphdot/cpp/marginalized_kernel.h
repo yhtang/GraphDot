@@ -138,6 +138,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         const int n1             = g1.padded_size();
         const int n2             = g2.padded_size();
         const int N              = n1 * n2;
+        const int i1_upper       =  lane              / octile_h;
+        const int i1_lower       = (lane + warp_size) / octile_h;
+        const int i2             =  lane              % octile_h;
 
         octile octilex {p_shared + warp_id_local * shmem_bytes_per_warp};
 
@@ -167,7 +170,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             scratch.z(i) = z0;
             // p0 = z0
             scratch.p(i) = z0;
-            //Ap0 = diag(A . p0)
+            // Ap = diag(A . p0)
             //    = Dx . Vx^-1 . p0
             //    = Dx . Vx^-1 . Vx . qx
             //    = Dx . qx
@@ -179,22 +182,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
         int k;
         for (k = 0; k < N; ++k) {
-
-            #if 0
-            __syncthreads();
-            if (threadIdx.x == 0) {
-                for (int ij = 0; ij < N; ++ij) {
-                    int i1 = ij / n2;
-                    int i2 = ij % n2;
-                    if (i1 < g1.n_node && i2 < g2.n_node)
-                        printf ("iteration %d begin solution x[%d, %d] = %.7f, Ap[%d, %d] = %.7f\n", k, i1, i2, scratch.x(ij), i1, i2, scratch.Ap(ij));
-                }
-            }
-            #endif
-
-            const int i1_upper =  lane              / octile_h;
-            const int i1_lower = (lane + warp_size) / octile_h;
-            const int i2       =  lane              % octile_h;
 
             // Ap = A * p, off-diagonal part
             for (int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local) {
@@ -269,8 +256,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         const int p1 = t / nt2;
                         const int p2 = t % nt2;
 
-                        //if ( lane == 0 ) printf("computing %d-%d\n", p1, p2 );
-
                         auto      o1   = g1.octile[O1 + p1];
                         auto      o2   = g2.octile[O2 + p2];
                         const int nnz1 = __popcll(o1.nzmask);
@@ -291,17 +276,63 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         rhs (j1 + warp_size / octile_w, j2) = scratch.p ((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
                         if (nnz1 * nnz2 >= 256) {
+
                             // dense x dense
                             float sum_upper = 0, sum_lower = 0;
 
+                            #if 0
+                            uint nzmask1 = (o1.nzmask_r[i1_upper] << 8) | o1.nzmask_r[i1_lower];
+                            uint nzmask2 =  o2.nzmask_r[i2];
+
+                            for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1, nzmask1 >>= 1) {
+                                auto e1_upper = octile1 (i1_upper, j1);
+                                auto e1_lower = octile1 (i1_lower, j1);
+                                bool m1_upper = nzmask1 & 0x1;
+                                bool m1_lower = nzmask1 & 0x100;
+                    
+                                #pragma unroll (octile_w)
+                                for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
+                                    auto e2 = octile2 (i2, j2);
+                                    auto r  = rhs (j1, j2);
+                                    bool m2 = nzmask2 & mask;
+                                    if (m1_upper && m2) {
+                                        sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                                    }
+                                    if (m1_lower && m2) {
+                                        sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                                    }
+                                }
+                            }
+                            #else
                             for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1) {
                                 auto e1_upper = octile1 (i1_upper, j1);
                                 auto e1_lower = octile1 (i1_lower, j1);
                                 auto m1_upper = 1ULL << (i1_upper + j1 * octile_h);
                                 auto m1_lower = 1ULL << (i1_lower + j1 * octile_h);
-                    
+                                // auto m1_upper = 1ULL << (i1_upper + j1 * octile_h);
+                                // auto m1_lower = 1ULL << (i1_lower + j1 * octile_h);
+                                // uint mask1 = 1 << (i1_upper * octile_w);
+
+                                // int k2 = i2 / 4;
+
+                                #if 0
                                 #pragma unroll (octile_w)
-                                for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
+                                for (uint j2 = 0; j2 < octile_w; ++j2) {
+                                    auto m2 = 1ULL << (i2 + j2 * octile_h);
+                                    if (o2.nzmask & m2) {
+                                        auto e2 = octile2 (i2, j2);
+                                        auto r  = rhs (j1, j2);
+                                        if (o1.nzmask_r[0] & mask1) {
+                                            sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                                        }
+                                        if (o1.nzmask_r[1] & mask1) {
+                                            sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                                        }
+                                    }
+                                }
+                                #else
+                                #pragma unroll (octile_w)
+                                for (uint j2 = 0; j2 < octile_w; ++j2) {
                                     auto e2 = octile2 (i2, j2);
                                     auto r  = rhs (j1, j2);
                                     auto m2 = 1ULL << (i2 + j2 * octile_h);
@@ -312,12 +343,35 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                         sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
                                     }
                                 }
-                            }
+                                // auto x2 = o2.nzmask >> i2;
+                                // #pragma unroll (octile_w)
+                                // for (uint j2 = 0; j2 < octile_w; ++j2) {
+                                //     // auto m2 = 1ULL << (i2 + j2 * octile_h);
+                                //     // if (o2.nzmask & m2) {
+                                //     if (x2 & 1) {
+                                //         auto e2 = octile2 (i2, j2);
+                                //         auto r  = rhs (j1, j2);
+                                //         if (o1.nzmask & m1_upper) {
+                                //             sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                                //         }
+                                //         if (o1.nzmask & m1_lower) {
+                                //             sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                                //         }
+                                //     }
 
-                            // printf("threadIdx %d sum_upper  %d %f sum_lower %d %f\n", threadIdx.x, (I1 + i1_upper) * n2 + (I2 + i2), sum_upper, (I1 + i1_lower) * n2 + (I2 + i2), sum_lower);
+                                //     x2 >>= 8;
+                                // }
+                                #endif
+
+                                // mask1 <<= 1;
+                            }
+                            #endif
+
                             atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper);
                             atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
+
                         } else {
+
                             // sparse x sparse
                             nzlist nzlist1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
                             nzlist nzlist2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
@@ -370,6 +424,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                 rTr += scratch.r(i) * scratch.r(i);
                 rTz_next += scratch.r(i) * scratch.z(i);
             }
+
+            // rTr      = block_sum(rTr);
+            // rTz_next = block_sum(rTz_next);
             __shared__ float sum1, sum2;
             if (threadIdx.x == 0) sum1 = 0, sum2 = 0;
             #pragma unroll
@@ -386,26 +443,12 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTr      = sum1;
             rTz_next = sum2;
 
-            // rTr = block_sum(rTr);
-            // rTz_next = block_sum(rTz_next);
-
-            #if 0
-            __syncthreads();
-            if ( threadIdx.x == 0 && blockIdx.x == 0 ) {
-                for ( int ij = 0; ij < N; ++ij ) {
-                    printf( "iteration %d solution x[%d] = %.7f\n", k, ij, scratch.x( ij ) );
-                }
-                // printf("rTr %e\n", rTr);
-            }
-            #endif
-
             if (rTr < 1e-20f * N * N) break;
 
             auto beta = rTz_next / rTz;
 
             // p = r + beta * p;
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                //scratch.p(i) = scratch.r(i) + beta * scratch.p(i);
                 int i1 = i / n2;
                 int i2 = i % n2;
                 if (i1 < g1.n_node && i2 < g2.n_node) {
@@ -428,7 +471,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             if (i1 < g1.n_node && i2 < g2.n_node) {
                 auto r = scratch.x(i);
                 if (lmin == 1) {
-                    r -=  NodeKernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+                    r -= NodeKernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
                 vr[i1 * g2.n_node + i2] = r;
             }

@@ -8,13 +8,14 @@ __all__ = ['OctileGraph']
 
 # only works with python >= 3.6
 # @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
-@cpptype([('p_elements', np.uintp), ('nzmask', '<u8'),
+@cpptype([('p_elements', np.uintp), ('nzmask', '<u8'), ('nzmask_r', '<u8'),
           ('upper', np.int32), ('left', np.int32)])
 class Octile(object):
-    def __init__(self, upper, left, nzmask, elements):
+    def __init__(self, upper, left, nzmask, nzmask_r, elements):
         self.upper = upper
         self.left = left
         self.nzmask = nzmask
+        self.nzmask_r = nzmask_r
         self.elements = elements
 
     @property
@@ -73,7 +74,7 @@ class OctileGraph(object):
                               for i, j in edges['!ij']], axis=0)
         uniq_oct = np.unique(np.vstack((uniq_oct, uniq_oct[:, -1::-1])),
                              axis=0)
-        octile_dict = {(upper, left): [np.uint64(), umzeros(64, edge_type)]
+        octile_dict = {(upper, left): [np.uint64(), np.uint64(), umzeros(64, edge_type)]
                        for upper, left in uniq_oct}
 
         for index, row in edges.iterrows():
@@ -88,13 +89,15 @@ class OctileGraph(object):
             upper = i - r
             left = j - c
             octile_dict[(upper, left)][0] |= np.uint64(1 << (r + c * 8))
-            octile_dict[(upper, left)][1][r + c * 8] = edge
+            octile_dict[(upper, left)][1] |= np.uint64(1 << (c + r * 8))
+            octile_dict[(upper, left)][2][r + c * 8] = edge
             octile_dict[(left, upper)][0] |= np.uint64(1 << (c + r * 8))
-            octile_dict[(left, upper)][1][c + r * 8] = edge
+            octile_dict[(left, upper)][1] |= np.uint64(1 << (r + c * 8))
+            octile_dict[(left, upper)][2][c + r * 8] = edge
 
         ''' create edge octiles on GPU '''
-        self.octile_list = [Octile(upper, left, nzmask, elements)
-                            for (upper, left), (nzmask, elements)
+        self.octile_list = [Octile(upper, left, nzmask, nzmask_r, elements)
+                            for (upper, left), (nzmask, nzmask_r, elements)
                             in octile_dict.items()]
         # compact the tiles
         for o in self.octile_list:

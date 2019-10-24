@@ -17,6 +17,9 @@ template<class Node, class Edge> struct graph_t {
             std::uint32_t nzmask_halves[2];  // one byte for each column
             std::uint8_t  nzmask_bytes[8];   // one byte for each column
         };
+        union {
+            std::uint32_t nzmask_r[2];
+        };
         int upper, left;
     };
 
