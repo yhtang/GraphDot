@@ -150,7 +150,8 @@ class MarginalizedGraphKernel:
             self._module, self._compiler_message = self._compile(self.source)
         return self._module
 
-    def _launch_kernel(self, graphs, jobs, starts, R, nodal, lmin):
+    def _launch_kernel(self, graphs, jobs, starts, R, R_stride,
+                       nodal, lmin, symm):
         if lmin != 0 and lmin != 1:
             raise ValueError('lmin must be 0 or 1')
 
@@ -232,10 +233,11 @@ class MarginalizedGraphKernel:
             R,
             i_job_global.base,
             np.uint32(len(jobs)),
-            np.uint32(starts[-1]),
+            np.uint32(R_stride),
             np.float32(self.q),
             np.float32(self.q),  # placeholder for q0
             np.int32(lmin),
+            np.int32(symm),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,
@@ -283,12 +285,23 @@ class MarginalizedGraphKernel:
             sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
             starts = umzeros(len(X) + 1, dtype=np.uint32)
             np.cumsum(sizes, out=starts[1:])
-            R = umzeros(int(starts[-1]**2), np.float32)
+            n_nodes_X = int(starts[-1])
+            R = umzeros(n_nodes_X**2, np.float32)
         else:
-            pass
-            # jobs = [Job(i, len(X) + j, umempty(len(g1.nodes) * len(g2.nodes)))
-            #         for i, g1 in enumerate(X)
-            #         for j, g2 in enumerate(Y)]
+            I, J = np.indices((len(X), len(Y)), dtype=np.uint32)
+            J += len(X)
+            jobs = umarray(
+                np.column_stack((I.ravel(), J.ravel()))
+                .ravel()
+                .view(np.dtype([('i', np.uint32), ('j', np.uint32)]))
+            )
+            sizes = np.array([len(g.nodes) for g in X + Y], dtype=np.uint32)
+            starts = umzeros(len(X) + len(Y) + 1, dtype=np.uint32)
+            np.cumsum(sizes, out=starts[1:])
+            n_nodes_X = int(starts[len(X)])
+            starts[len(X):] -= n_nodes_X
+            n_nodes_Y = int(starts[-1])
+            R = umzeros(n_nodes_X * n_nodes_Y, np.float32)
         self.timer.toc('generating jobs')
 
         ''' assign starting probabilities '''
@@ -305,26 +318,28 @@ class MarginalizedGraphKernel:
                             jobs,
                             starts,
                             R,
-                            nodal, lmin)
+                            n_nodes_X,
+                            nodal, lmin, Y is None)
         self.ctx.synchronize()
         self.timer.toc('calling GPU kernel (overall)')
         
         ''' collect result '''
         self.timer.tic('collecting result')
         if Y is None:
-            R = R.reshape(int(starts[-1]), -1)
+            R = R.reshape(n_nodes_X, -1, order='F')
         else:
-            N = len(X)
-            M = len(Y)
-            R = np.empty((N, M), np.object)
-            for job in jobs:
-                r = job.vr.reshape(len(X[job.i].nodes), -1)
-                pi = P[job.i]
-                pj = P[job.j]
-                if nodal is True:
-                    R[job.i, job.j - N] = pi[:, None] * r * pj[None, :]
-                else:
-                    R[job.i, job.j - N] = pi.dot(r).dot(pj)
+            R = R.reshape(n_nodes_X, -1, order='F')
+            # N = len(X)
+            # M = len(Y)
+            # R = np.empty((N, M), np.object)
+            # for job in jobs:
+            #     r = job.vr.reshape(len(X[job.i].nodes), -1)
+            #     pi = P[job.i]
+            #     pj = P[job.j]
+            #     if nodal is True:
+            #         R[job.i, job.j - N] = pi[:, None] * r * pj[None, :]
+            #     else:
+            #         R[job.i, job.j - N] = pi.dot(r).dot(pj)
         self.timer.toc('collecting result')
 
         if timer:

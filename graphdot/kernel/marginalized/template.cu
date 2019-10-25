@@ -2,7 +2,6 @@
 #include <marginalized_kernel.h>
 #include <numpy_type.h>
 
-//using namespace graphdot;
 using namespace graphdot::numpy_type;
 
 ${node_kernel}
@@ -12,7 +11,6 @@ using edge_t = ${edge_t};
 
 using graph_t   = graphdot::graph_t<node_t, edge_t>;
 using scratch_t = graphdot::marginalized::pcg_scratch_t;
-// using job_t     = graphdot::marginalized::job_t;
 using solver_t  = graphdot::marginalized::labeled_compact_block_dynsched_pcg<graph_t>;
 
 __constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
@@ -29,7 +27,8 @@ extern "C" {
         const unsigned  R_stride,
         const float     q,
         const float     q0,
-        const int       lmin
+        const int       lmin,
+        const int       symmetric
     ) {
         extern __shared__ char shmem[];
         __shared__ unsigned int i_job;
@@ -49,6 +48,7 @@ extern "C" {
             solver_t::compute<node_kernel, edge_kernel>(g1, g2, scratch, shmem, q, q0);
             __syncthreads();
 
+            // post-processing and write to output matrix
             const int         n1 = g1.padded_size();
             const int         n2 = g2.padded_size();
             const int          N = n1 * n2;
@@ -63,7 +63,7 @@ extern "C" {
                         r -= node_kernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                     }
                     R[(I1 + i1) + (I2 + i2) * R_stride] = r;
-                    if (job.x != job.y) {
+                    if (symmetric && job.x != job.y) {
                         R[(I2 + i2) + (I1 + i1) * R_stride] = r;
                     }
                 }
