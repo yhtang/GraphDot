@@ -20,7 +20,7 @@ class Octile(object):
 
     @property
     def p_elements(self):
-        return self.elements.ptr
+        return int(self.elements.base)
 
 
 # only works with python >= 3.6
@@ -112,7 +112,7 @@ class OctileGraph(object):
 
         ''' collect edge octile structures into continuous buffer '''
         self.octile_hdr = umlike(np.array([x.state for x in self.octile_list],
-                                          Octile.dtype))
+                                           Octile.dtype))
 
     @property
     def p_octile(self):
@@ -120,7 +120,7 @@ class OctileGraph(object):
 
     @property
     def p_degree(self):
-        return self.degree.ptr
+        return int(self.degree.base)
 
     @property
     def p_node(self):

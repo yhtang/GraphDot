@@ -10,26 +10,14 @@ from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype, decltype
 import graphdot.cuda
-from graphdot.cuda.array import umarray, umlike
+from graphdot.cuda.array import umempty, umlike, umzeros, umarray
+from graphdot.cuda.resizable_array import ResizableArray
 from graphdot.util import Timer
 from ._scratch import BlockScratch
 from ._octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
-
-# only works with python >= 3.6
-# @cpptype(i=np.int32, j=np.int32)
-@cpptype([('i', np.int32), ('j', np.int32), ('p_vr', np.uintp)])
-class Job:
-    def __init__(self, i, j, vr):
-        self.i = i
-        self.j = j
-        self.vr = vr
-
-    @property
-    def p_vr(self):
-        return self.vr.ptr
 
 
 class MarginalizedGraphKernel:
@@ -130,6 +118,22 @@ class MarginalizedGraphKernel:
         else:
             return p
 
+    def _compile(self, src):
+        with warnings.catch_warnings(record=True) as w:
+            module = SourceModule(
+                src,
+                options=['-std=c++14',
+                            '-O4',
+                            '--use_fast_math',
+                            '--expt-relaxed-constexpr',
+                            '--maxrregcount=64',
+                            '-Xptxas', '-v',
+                            '-lineinfo',
+                            ] + self.nvcc_extra,
+                no_extern_c=True,
+                include_dirs=cpp.__path__)
+        return module, [str(rec.message) for rec in w]
+
     @property
     def source(self):
         return self._source
@@ -143,23 +147,10 @@ class MarginalizedGraphKernel:
     @property
     def module(self):
         if not self._module:
-            with warnings.catch_warnings(record=True) as w:
-                self._module = SourceModule(
-                    self.source,
-                    options=['-std=c++14',
-                             '-O4',
-                             '--use_fast_math',
-                             '--expt-relaxed-constexpr',
-                             '--maxrregcount=64',
-                             '-Xptxas', '-v',
-                             '-lineinfo',
-                             ] + self.nvcc_extra,
-                    no_extern_c=True,
-                    include_dirs=cpp.__path__)
-                self._compiler_message = [str(rec.message) for rec in w]
+            self._module, self._compiler_message = self._compile(self.source)
         return self._module
 
-    def _launch_kernel(self, graphs, jobs, nodal, lmin):
+    def _launch_kernel(self, graphs, jobs, starts, R, nodal, lmin):
         if lmin != 0 and lmin != 1:
             raise ValueError('lmin must be 0 or 1')
 
@@ -171,11 +162,11 @@ class MarginalizedGraphKernel:
                                        OctileGraph.dtype))
         self.timer.toc('transferring graphs to GPU')
 
-        ''' upload work item list to GPU '''
-        self.timer.tic('uploading work item list to GPU')
-        jobs_d = umlike(np.array([j.state for j in jobs], Job.dtype))
-        i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
-        self.timer.toc('uploading work item list to GPU')
+        ''' allocate global job counter '''
+        self.timer.tic('allocate global job counter')
+        # i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
+        i_job_global = umzeros(1, np.uint32)
+        self.timer.toc('allocate global job counter')
 
         ''' code generation '''
         self.timer.tic('code generation')
@@ -236,9 +227,12 @@ class MarginalizedGraphKernel:
         kernel(
             oct_graphs_d.base,
             self.scratch_d.base,
-            jobs_d.base,
-            i_job_global,
+            jobs,
+            starts,
+            R,
+            i_job_global.base,
             np.uint32(len(jobs)),
+            np.uint32(starts[-1]),
             np.float32(self.q),
             np.float32(self.q),  # placeholder for q0
             np.int32(lmin),
@@ -280,13 +274,21 @@ class MarginalizedGraphKernel:
         ''' generate jobs '''
         self.timer.tic('generating jobs')
         if Y is None:
-            jobs = [Job(i, i + j, umarray(len(g1.nodes) * len(g2.nodes)))
-                    for i, g1 in enumerate(X)
-                    for j, g2 in enumerate(X[i:])]
+            jobs = umarray(
+                np.column_stack(np.triu_indices(len(X)))
+                .astype(np.uint32)
+                .ravel()
+                .view(np.dtype([('i', np.uint32), ('j', np.uint32)]))
+            )
+            sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
+            starts = umzeros(len(X) + 1, dtype=np.uint32)
+            np.cumsum(sizes, out=starts[1:])
+            R = umzeros(int(starts[-1]**2), np.float32)
         else:
-            jobs = [Job(i, len(X) + j, umarray(len(g1.nodes) * len(g2.nodes)))
-                    for i, g1 in enumerate(X)
-                    for j, g2 in enumerate(Y)]
+            pass
+            # jobs = [Job(i, len(X) + j, umempty(len(g1.nodes) * len(g2.nodes)))
+            #         for i, g1 in enumerate(X)
+            #         for j, g2 in enumerate(Y)]
         self.timer.toc('generating jobs')
 
         ''' assign starting probabilities '''
@@ -299,23 +301,18 @@ class MarginalizedGraphKernel:
 
         ''' call GPU kernel '''
         self.timer.tic('calling GPU kernel (overall)')
-        self._launch_kernel(X + Y if Y is not None else X, jobs, nodal, lmin)
+        self._launch_kernel(X + Y if Y is not None else X,
+                            jobs,
+                            starts,
+                            R,
+                            nodal, lmin)
+        self.ctx.synchronize()
         self.timer.toc('calling GPU kernel (overall)')
-
+        
         ''' collect result '''
         self.timer.tic('collecting result')
         if Y is None:
-            N = len(X)
-            R = np.empty((N, N), np.object)
-            for job in jobs:
-                r = job.vr.reshape(len(X[job.i].nodes), -1)
-                pi = P[job.i]
-                pj = P[job.j]
-                if nodal is True:
-                    R[job.i, job.j] = pi[:, None] * r * pj[None, :]
-                    R[job.j, job.i] = R[job.i, job.j].T
-                else:
-                    R[job.i, job.j] = R[job.j, job.i] = pi.dot(r).dot(pj)
+            R = R.reshape(int(starts[-1]), -1)
         else:
             N = len(X)
             M = len(Y)
@@ -334,7 +331,7 @@ class MarginalizedGraphKernel:
             self.timer.report(unit='ms')
         self.timer.reset()
 
-        return np.block(R.tolist())
+        return R
 
     def diag(self, X, nodal=False, lmin=0):
         """Compute the self-similarities for a list of graphs
@@ -366,7 +363,7 @@ class MarginalizedGraphKernel:
         """
 
         ''' generate jobs '''
-        jobs = [Job(i, i, umarray(len(g1.nodes)**2)) for i, g1 in enumerate(X)]
+        jobs = [Job(i, i, umempty(len(g1.nodes)**2)) for i, g1 in enumerate(X)]
 
         ''' assign starting probabilities '''
         p_func = self._get_starting_probability(self.p)

@@ -126,9 +126,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         scratch_t      scratch,
         char * const   p_shared,
         const float    q,
-        const float    q0,
-        const int      lmin,
-        float *        vr) {
+        const float    q0) {
 
         using namespace graphdot::cuda;
 
@@ -412,19 +410,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             __syncthreads();
 
             rTz = rTz_next;
-        }
-        __syncthreads();
-
-        for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            int i1 = i / n2;
-            int i2 = i % n2;
-            if (i1 < g1.n_node && i2 < g2.n_node) {
-                auto r = scratch.x(i);
-                if (lmin == 1) {
-                    r -= NodeKernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
-                }
-                vr[i1 * g2.n_node + i2] = r;
-            }
         }
 
         #if 0
