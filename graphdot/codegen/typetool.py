@@ -75,9 +75,7 @@ def cpptype(dtype=[]):
                             "Cannot set attribute '{}' (C++ type {}) "
                             "with value {} of {}".format(name, t,
                                                          value, type(value)))
-                # super().__setattr__(name, value)
-                # for python2/3 compat
-                super(Class, self).__setattr__(name, value)
+                super().__setattr__(name, value)
 
             # TODO: need a nicer __repr__
 
