@@ -1,6 +1,7 @@
 #include <graph.h>
 #include <marginalized_kernel.h>
 #include <numpy_type.h>
+#include <util_cuda.h>
 
 using namespace graphdot::numpy_type;
 
@@ -27,6 +28,7 @@ extern "C" {
         const unsigned  R_stride,
         const float     q,
         const float     q0,
+        const int       nodal,
         const int       lmin,
         const int       symmetric
     ) {
@@ -44,6 +46,18 @@ extern "C" {
             auto const job = jobs[i_job];
             auto const g1  = graphs[job.x];
             auto const g2  = graphs[job.y];
+            const std::size_t I1 = starts[job.x];
+            const std::size_t I2 = starts[job.y];
+
+            // flush output to zero for later atomic accumulations
+            if (!nodal) {
+                if (threadIdx.x == 0) {
+                    R[I1 + I2 * R_stride] = 0.f;
+                    if (symmetric && job.x != job.y) {
+                        R[I2 + I1 * R_stride] = 0.f;
+                    }
+                }
+            }
 
             solver_t::compute<node_kernel, edge_kernel>(g1, g2, scratch, shmem, q, q0);
             __syncthreads();
@@ -52,22 +66,42 @@ extern "C" {
             const int         n1 = g1.padded_size();
             const int         n2 = g2.padded_size();
             const int          N = n1 * n2;
-            const std::size_t I1 = starts[job.x];
-            const std::size_t I2 = starts[job.y];
-            for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                int i1 = i / n2;
-                int i2 = i % n2;
-                if (i1 < g1.n_node && i2 < g2.n_node) {
-                    auto r = scratch.x(i);
-                    if (lmin == 1) {
-                        r -= node_kernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
-                    }
-                    R[(I1 + i1) + (I2 + i2) * R_stride] = r;
-                    if (symmetric && job.x != job.y) {
-                        R[(I2 + i2) + (I1 + i1) * R_stride] = r;
+            if (nodal) {
+                for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                    int i1 = i / n2;
+                    int i2 = i % n2;
+                    if (i1 < g1.n_node && i2 < g2.n_node) {
+                        auto r = scratch.x(i);
+                        if (lmin == 1) {
+                            r -= node_kernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+                        }
+                        R[(I1 + i1) + (I2 + i2) * R_stride] = r;
+                        if (symmetric && job.x != job.y) {
+                            R[(I2 + i2) + (I1 + i1) * R_stride] = r;
+                        }
                     }
                 }
-            }    
+            } else {
+                float sum = 0;
+                for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                    int i1 = i / n2;
+                    int i2 = i % n2;
+                    if (i1 < g1.n_node && i2 < g2.n_node) {
+                        auto r = scratch.x(i);
+                        if (lmin == 1) {
+                            r -= node_kernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+                        }
+                        sum += r;
+                    }
+                }
+                sum = graphdot::cuda::warp_sum(sum);
+                if (graphdot::cuda::laneid() == 0) {
+                    atomicAdd(R + I1 + I2 * R_stride, sum);
+                    if (symmetric && job.x != job.y) {
+                        atomicAdd(R + I2 + I1 * R_stride, sum);
+                    }
+                }
+            }
         }
     }
 }
