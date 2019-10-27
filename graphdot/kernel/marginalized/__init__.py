@@ -373,8 +373,9 @@ class MarginalizedGraphKernel:
         nodal: bool
             If True, returns a vector containing nodal self similarties; if
             False, returns a vector containing graphs' overall self
-            similarities; if 'block', return a list of square matrices, each
-            being a pairwise nodal similarity matrix within a graph.
+            similarities; if 'block', return a list of square matrices which
+            forms a block-diagonal matrix, where each diagonal block represents
+            the pairwise nodal similarities within a graph.
         lmin: 0 or 1
             Number of steps to skip in each random walk path before similarity
             is computed.
@@ -413,8 +414,8 @@ class MarginalizedGraphKernel:
             starts[:] = np.arange(len(X) + 1)
             output_length = len(X)
         elif nodal == 'block':
-            sizes = np.array([len(g.nodes)**2 for g in X], dtype=np.uint32)
-            np.cumsum(sizes, out=starts[1:])
+            sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
+            np.cumsum(sizes**2, out=starts[1:])
             output_length = int(starts[-1])
         else:
             raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
@@ -434,6 +435,14 @@ class MarginalizedGraphKernel:
                             traits)
         self.ctx.synchronize()
         self.timer.toc('calling GPU kernel (overall)')
+
+        ''' post processing '''
+        self.timer.tic('collecting result')
+        if nodal == 'block':
+            print(len(output))
+            output = [output[s:s + n**2].reshape(n, n)
+                      for s, n in zip(starts[:-1], sizes)]
+        self.timer.toc('collecting result')
 
         if timer:
             self.timer.report(unit='ms')
