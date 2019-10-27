@@ -92,7 +92,7 @@ def decltype(type, name=''):
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
-            return 'constexpr static numpy_type::_empty {} {{}}'.format(name)
+            return 'constexpr static _empty {} {{}}'.format(name)
     # elif type.subdtype is not None:
     #     return Template(r'''${type} ${name}${dim}''').render(
     #         type=type.name, name=
