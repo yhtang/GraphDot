@@ -177,8 +177,8 @@ def test_mlgk_self_similarity(caseitem):
         assert(np.count_nonzero(R - R.T) == 0)
         assert(R[0, 0] == pytest.approx(MLGK(G[0], knode, kedge, q, q), 1e-5))
         assert(R[1, 1] == pytest.approx(MLGK(G[1], knode, kedge, q, q), 1e-5))
-        assert(K[0, 0] == pytest.approx(1, 1e-7))
-        assert(K[1, 1] == pytest.approx(1, 1e-7))
+        assert(K[0, 0] == pytest.approx(1, 2e-7))
+        assert(K[1, 1] == pytest.approx(1, 2e-7))
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
@@ -242,7 +242,7 @@ def test_mlgk_diag(caseitem):
             for r1, r2 in zip(sub, gnd):
                 assert(r1 == pytest.approx(r2, 1e-5))
         for i in range(N[-1]):
-            assert(K_nodal[i, i] == pytest.approx(1, 1e-7))
+            assert(K_nodal[i, i] == pytest.approx(1, 2e-7))
 
         '''check block-diags'''
         D_nodal = mlgk.diag(G, nodal=True)
