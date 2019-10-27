@@ -4,14 +4,12 @@ import os
 import uuid
 import warnings
 import numpy as np
-import pycuda
 from pycuda.compiler import SourceModule
 from graphdot import cpp
 from graphdot.codegen import Template
-from graphdot.codegen.typetool import cpptype, decltype
+from graphdot.codegen.typetool import decltype
 import graphdot.cuda
-from graphdot.cuda.array import umempty, umlike, umzeros, umarray
-from graphdot.cuda.resizable_array import ResizableArray
+from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.util import Timer
 from ._scratch import BlockScratch
 from ._octilegraph import OctileGraph
@@ -142,13 +140,13 @@ class MarginalizedGraphKernel:
             module = SourceModule(
                 src,
                 options=['-std=c++14',
-                            '-O4',
-                            '--use_fast_math',
-                            '--expt-relaxed-constexpr',
-                            '--maxrregcount=64',
-                            '-Xptxas', '-v',
-                            '-lineinfo',
-                            ] + self.nvcc_extra,
+                         '-O4',
+                         '--use_fast_math',
+                         '--expt-relaxed-constexpr',
+                         '--maxrregcount=64',
+                         '-Xptxas', '-v',
+                         '-lineinfo',
+                         ] + self.nvcc_extra,
                 no_extern_c=True,
                 include_dirs=cpp.__path__)
         return module, [str(rec.message) for rec in w]
@@ -311,13 +309,13 @@ class MarginalizedGraphKernel:
         self.timer.toc('generating jobs')
 
         ''' create output buffer '''
-        self.timer.tic('creating output buffer')        
+        self.timer.tic('creating output buffer')
         if Y is None:
             starts = umzeros(len(X) + 1, dtype=np.uint32)
             if nodal is True:
                 sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
                 np.cumsum(sizes, out=starts[1:])
-                n_nodes_X = int(starts[-1]) 
+                n_nodes_X = int(starts[-1])
                 output_shape = (n_nodes_X, n_nodes_X)
             else:
                 starts[:] = np.arange(len(X) + 1)
@@ -404,7 +402,7 @@ class MarginalizedGraphKernel:
         self.timer.toc('generating jobs')
 
         ''' create output buffer '''
-        self.timer.tic('creating output buffer')        
+        self.timer.tic('creating output buffer')
         starts = umzeros(len(X) + 1, dtype=np.uint32)
         if nodal is True:
             sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)

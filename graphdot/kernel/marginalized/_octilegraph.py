@@ -112,7 +112,7 @@ class OctileGraph(object):
 
         ''' collect edge octile structures into continuous buffer '''
         self.octile_hdr = umlike(np.array([x.state for x in self.octile_list],
-                                           Octile.dtype))
+                                          Octile.dtype))
 
     @property
     def p_octile(self):
