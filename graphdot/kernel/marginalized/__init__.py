@@ -49,6 +49,20 @@ class MarginalizedGraphKernel:
         block_size: int
             Tunes the GPU kernel.
     """
+    class _Traits:
+        NODAL = 1
+        SYMMETRIC = 2
+        LMIN1 = 4
+        DIAGONAL = 8
+
+        @classmethod
+        def create(cls, **kwargs):
+            traits = 0
+            traits |= cls.NODAL if kwargs.pop('nodal', False) else 0
+            traits |= cls.SYMMETRIC if kwargs.pop('symmetric', False) else 0
+            traits |= cls.LMIN1 if kwargs.pop('lmin1', False) else 0
+            traits |= cls.DIAGONAL if kwargs.pop('diagonal', False) else 0
+            return traits
 
     _template = os.path.join(os.path.dirname(__file__), 'template.cu')
 
@@ -60,7 +74,7 @@ class MarginalizedGraphKernel:
         self.scratch_capacity = 0
         self.graph_cache = {}
 
-        self.p = kwargs.pop('p', 'default')
+        self.p = self._get_starting_probability(kwargs.pop('p', 'default'))
         self.q = kwargs.pop('q', 0.01)
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
@@ -79,8 +93,8 @@ class MarginalizedGraphKernel:
                 self.scratch[0].capacity < capacity):
             self.ctx.synchronize()
             self.scratch = [BlockScratch(capacity) for _ in range(count)]
-            self.scratch_d = umlike(np.array([s.state for s in self.scratch],
-                                             BlockScratch.dtype))
+            self.scratch_d = umarray(np.array([s.state for s in self.scratch],
+                                              BlockScratch.dtype))
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
@@ -99,18 +113,20 @@ class MarginalizedGraphKernel:
                                 str(e))
 
     def _convert_to_octilegraph(self, graph):
-        if hasattr(graph, 'uuid') and graph.uuid in self.graph_cache:
-            return self.graph_cache[graph.uuid]
-        else:
-            if not hasattr(graph, 'uuid'):
-                graph.uuid = uuid.uuid4()
+        if not hasattr(graph, 'uuid'):
+            graph.uuid = uuid.uuid4()
+        if graph.uuid not in self.graph_cache:
+            # convert to GPU format
             og = OctileGraph(graph)
-            self.graph_cache[graph.uuid] = og
-            return og
+            # assign starting probabilities
+            p = umarray(np.array([self.p(n) for n in graph.nodes.iterrows()],
+                                 dtype=np.float32))
+            self.graph_cache[graph.uuid] = (og, p)
+        return self.graph_cache[graph.uuid]
 
     def _get_starting_probability(self, p):
-        if isinstance(self.p, str):
-            if self.p == 'uniform' or self.p == 'default':
+        if isinstance(p, str):
+            if p == 'uniform' or p == 'default':
                 return lambda n: 1.0
             else:
                 raise ValueError('Unknown starting probability distribution %s'
@@ -151,16 +167,20 @@ class MarginalizedGraphKernel:
         return self._module
 
     def _launch_kernel(self, graphs, jobs, starts, output, output_shape,
-                       nodal, lmin, symm):
-        if lmin != 0 and lmin != 1:
-            raise ValueError('lmin must be 0 or 1')
-
-        ''' transfer graphs to GPU '''
+                       traits):
+        ''' transfer graphs and starting probabilities to GPU '''
         self.timer.tic('transferring graphs to GPU')
-        oct_graphs = [self._convert_to_octilegraph(g) for g in graphs]
+        oct_graphs = []
+        starting_p = []
+        for g in graphs:
+            og, p = self._convert_to_octilegraph(g)
+            oct_graphs.append(og)
+            starting_p.append(p)
         self._assert_homegeneous(oct_graphs)
-        oct_graphs_d = umlike(np.array([g.state for g in oct_graphs],
-                                       OctileGraph.dtype))
+        oct_graphs_d = umarray(np.array([g.state for g in oct_graphs],
+                                        OctileGraph.dtype))
+        starting_p = umarray(np.array([int(p.base) for p in starting_p],
+                                      np.uintp))
         self.timer.toc('transferring graphs to GPU')
 
         ''' allocate global job counter '''
@@ -226,19 +246,18 @@ class MarginalizedGraphKernel:
         ''' GPU kernel execution '''
         self.timer.tic('GPU kernel execution')
         kernel(
-            oct_graphs_d.base,
-            self.scratch_d.base,
+            oct_graphs_d,
+            starting_p,
+            self.scratch_d,
             jobs,
             starts,
             output,
-            i_job_global.base,
+            i_job_global,
             np.uint32(len(jobs)),
             np.uint32(output_shape[0]),
             np.float32(self.q),
             np.float32(self.q),  # placeholder for q0
-            np.int32(nodal),
-            np.int32(lmin),
-            np.int32(symm),
+            np.uint32(traits),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,
@@ -273,17 +292,16 @@ class MarginalizedGraphKernel:
             similarities between the graphs in X; otherwise, returns a matrix
             containing similarities across graphs in X and Y.
         """
-
         ''' generate jobs '''
         self.timer.tic('generating jobs')
         if Y is None:
-            I, J = np.triu_indices(len(X))
-            I, J = I.astype(np.uint32), J.astype(np.uint32)
+            i, j = np.triu_indices(len(X))
+            i, j = i.astype(np.uint32), j.astype(np.uint32)
         else:
-            I, J = np.indices((len(X), len(Y)), dtype=np.uint32)
-            J += len(X)
+            i, j = np.indices((len(X), len(Y)), dtype=np.uint32)
+            j += len(X)
         jobs = umarray(
-            np.column_stack((I.ravel(), J.ravel()))
+            np.column_stack((i.ravel(), j.ravel()))
             .ravel()
             .view(np.dtype([('i', np.uint32), ('j', np.uint32)]))
         )
@@ -317,24 +335,17 @@ class MarginalizedGraphKernel:
         output = umempty(output_shape[0] * output_shape[1], np.float32)
         self.timer.toc('creating output buffer')
 
-        ''' assign starting probabilities '''
-        self.timer.tic('assigning starting probabilities')
-        p_func = self._get_starting_probability(self.p)
-        P = [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in X]
-        if Y is not None:
-            P += [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in Y]
-        self.timer.toc('assigning starting probabilities')
-
         ''' call GPU kernel '''
         self.timer.tic('calling GPU kernel (overall)')
+        traits = self._Traits.create(symmetric=Y is None,
+                                     nodal=nodal,
+                                     lmin1=lmin == 1)
         self._launch_kernel(X + Y if Y is not None else X,
                             jobs,
                             starts,
                             output,
                             output_shape,
-                            nodal,
-                            lmin,
-                            Y is None)
+                            np.uint32(traits))
         self.ctx.synchronize()
         self.timer.toc('calling GPU kernel (overall)')
 
@@ -356,11 +367,10 @@ class MarginalizedGraphKernel:
         ----------
         X: list of N graphs
             The graphs must all have same node attributes and edge attributes.
-        nodal: bool or 'block'
+        nodal: bool
             If True, returns a vector containing nodal self similarties;
             if False, returns a vector containing graphs' overall self
-            similarities; if 'block', return a list of square matrices, each
-            being a pairwise nodal similarity matrix within a graph.
+            similarities.
         lmin: 0 or 1
             Number of steps to skip in each random walk path before similarity
             is computed.
@@ -379,31 +389,42 @@ class MarginalizedGraphKernel:
         """
 
         ''' generate jobs '''
-        jobs = [Job(i, i, umempty(len(g1.nodes)**2)) for i, g1 in enumerate(X)]
+        self.timer.tic('generating jobs')
+        i = np.arange(len(X), dtype=np.uint32)
+        jobs = umarray(
+            np.column_stack((i, i))
+            .ravel()
+            .view(np.dtype([('i', np.uint32), ('j', np.uint32)]))
+        )
+        self.timer.toc('generating jobs')
 
-        ''' assign starting probabilities '''
-        p_func = self._get_starting_probability(self.p)
-        P = [np.array([p_func(n) for n in g.nodes.iterrows()]) for g in X]
+        ''' create output buffer '''
+        self.timer.tic('creating output buffer')        
+        starts = umzeros(len(X) + 1, dtype=np.uint32)
+        if nodal is True:
+            sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
+            np.cumsum(sizes, out=starts[1:])
+            n_nodes_X = int(starts[-1])
+            output_length = n_nodes_X
+        else:
+            starts[:] = np.arange(len(X) + 1)
+            output_length = len(X)
+        output = umempty(output_length, np.float32)
+        self.timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
-        self._launch_kernel(X, jobs, nodal, lmin)
+        self.timer.tic('calling GPU kernel (overall)')
+        traits = self._Traits.create(diagonal=True,
+                                     nodal=nodal,
+                                     lmin1=lmin == 1)
+        self._launch_kernel(X,
+                            jobs,
+                            starts,
+                            output,
+                            (output_length, 1),
+                            traits)
+        self.ctx.synchronize()
+        self.timer.toc('calling GPU kernel (overall)')
 
         ''' collect result '''
-        N = [len(x.nodes) for x in X]
-        if nodal is True:
-            return np.concatenate(
-                [p**2 * job.vr[::n + 1]
-                 for job, p, n in zip(jobs, P, N)]
-            )
-        elif nodal is False:
-            return np.array(
-                [p.dot(job.vr.reshape(n, -1)).dot(p)
-                 for job, p, n in zip(jobs, P, N)]
-            )
-        elif nodal == 'block':
-            return list(
-                p[:, None] * job.vr.reshape(n, -1) * p[None, :]
-                for job, p, n in zip(jobs, P, N)
-            )
-        else:
-            raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
+        return output
