@@ -72,8 +72,8 @@ extern "C" {
             __syncthreads();
 
             /********* post-processing *********/
-            const int  n1 = g1.padded_size();
-            const int  n2 = g2.padded_size();
+            const int  n1 = g1.n_node;
+            const int  n2 = g2.n_node;
             const int   N = n1 * n2;
             auto const p1 = p[job.x];
             auto const p2 = p[job.y];
@@ -82,13 +82,11 @@ extern "C" {
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
                 int i1 = i / n2;
                 int i2 = i % n2;
-                if (i1 < g1.n_node && i2 < g2.n_node) {
-                    auto r = scratch.x(i);
-                    if (traits & trait_t::LMIN1) {
-                        r -= node_kernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
-                    }
-                    scratch.x(i) = r * p1[i1] * p2[i2];
+                auto r = scratch.x(i);
+                if (traits & trait_t::LMIN1) {
+                    r -= node_kernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
+                scratch.x(i) = r * p1[i1] * p2[i2];
             }
 
             // write to output buffer
@@ -97,10 +95,8 @@ extern "C" {
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
-                        if (i1 < g1.n_node && i2 < g2.n_node) {
-                            auto r = scratch.x(i);
-                            R[I1 + i1 + i2 * g1.n_node] = r;
-                        }
+                        auto r = scratch.x(i);
+                        R[I1 + i1 + i2 * g1.n_node] = r;
                     }
                 } else if (traits & trait_t::DIAGONAL) {
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
@@ -112,23 +108,17 @@ extern "C" {
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
-                        if (i1 < g1.n_node && i2 < g2.n_node) {
-                            auto r = scratch.x(i);
-                            R[(I1 + i1) + (I2 + i2) * R_stride] = r;
-                            if ((traits & trait_t::SYMMETRIC) && job.x != job.y) {
-                                R[(I2 + i2) + (I1 + i1) * R_stride] = r;
-                            }
+                        auto r = scratch.x(i);
+                        R[(I1 + i1) + (I2 + i2) * R_stride] = r;
+                        if ((traits & trait_t::SYMMETRIC) && job.x != job.y) {
+                            R[(I2 + i2) + (I1 + i1) * R_stride] = r;
                         }
                     }
                 }
             } else {
                 float32 sum = 0;
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                    int i1 = i / n2;
-                    int i2 = i % n2;
-                    if (i1 < g1.n_node && i2 < g2.n_node) {
-                        sum += scratch.x(i);
-                    }
+                    sum += scratch.x(i);
                 }
                 sum = graphdot::cuda::warp_sum(sum);
                 if (graphdot::cuda::laneid() == 0) {

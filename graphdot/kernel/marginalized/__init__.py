@@ -242,7 +242,7 @@ class MarginalizedGraphKernel:
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
-        max_graph_size = np.max([g.padded_size for g in oct_graphs])
+        max_graph_size = np.max([g.n_node for g in oct_graphs])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
         self.timer.toc('calculating launch configuration')
 

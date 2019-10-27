@@ -133,8 +133,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         const int warp_id_local  = threadIdx.x / warp_size;
         const int warp_num_local = blockDim.x / warp_size;
         const int lane           = laneid();
-        const int n1             = g1.padded_size();
-        const int n2             = g2.padded_size();
+        const int n1             = g1.n_node;
+        const int n2             = g2.n_node;
         const int N              = n1 * n2;
         const int i1_upper       =  lane              / octile_h;
         const int i1_lower       = (lane + warp_size) / octile_h;
@@ -158,10 +158,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             //    = Vx . Dx^-1 . b
             //    = Vx . Dx^-1 . Dx . qx
             //    = Vx . qx
-            float z0 =
-                i1 < g1.n_node && i2 < g2.n_node ?
-                NodeKernel::compute( g1.node[i1], g2.node[i2] ) * q * q / (q0 * q0) :
-                0;
+            float z0 = NodeKernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
             // x0 = 0
             scratch.x(i) = 0;
             scratch.r(i) = r0;
@@ -270,8 +267,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         // load RHS
                         int j1 = lane / octile_w;
                         int j2 = lane % octile_w;
-                        rhs (j1,                        j2) = scratch.p((J1 + j1                       ) * n2 + (J2 + j2));
-                        rhs (j1 + warp_size / octile_w, j2) = scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
+                        if (J1 + j1                        < n1 && J2 + j2 < n2) rhs (j1,                        j2) = scratch.p((J1 + j1                       ) * n2 + (J2 + j2));
+                        if (J1 + j1 + warp_size / octile_w < n1 && J2 + j2 < n2) rhs (j1 + warp_size / octile_w, j2) = scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
 
                         if (nnz1 * nnz2 >= 256) {
                             // dense x dense
@@ -362,13 +359,11 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                 scratch.r(i) -= alpha * scratch.Ap(i);
                 int i1 = i / n2;
                 int i2 = i % n2;
-                if (i1 < g1.n_node && i2 < g2.n_node) {
-                    float d1 = g1.degree[i1] / (1 - q);
-                    float d2 = g2.degree[i2] / (1 - q);
-                    float D  = d1 * d2;
-                    float V  = NodeKernel::compute(g1.node[i1], g2.node[i2]);
-                    scratch.z(i) = scratch.r(i) / (D / V);
-                }
+                float d1 = g1.degree[i1] / (1 - q);
+                float d2 = g2.degree[i2] / (1 - q);
+                float D  = d1 * d2;
+                float V  = NodeKernel::compute(g1.node[i1], g2.node[i2]);
+                scratch.z(i) = scratch.r(i) / (D / V);
                 rTr += scratch.r(i) * scratch.r(i);
                 rTz_next += scratch.r(i) * scratch.z(i);
             }
@@ -399,13 +394,11 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
                 int i1 = i / n2;
                 int i2 = i % n2;
-                if (i1 < g1.n_node && i2 < g2.n_node) {
-                    float p       = scratch.z(i) + beta * scratch.p(i);
-                    float d1      = g1.degree[i1] / (1 - q);
-                    float d2      = g2.degree[i2] / (1 - q);
-                    scratch.p(i)  = p;
-                    scratch.Ap(i) = d1 * d2 / NodeKernel::compute(g1.node[i1], g2.node[i2]) * p;
-                }
+                float p       = scratch.z(i) + beta * scratch.p(i);
+                float d1      = g1.degree[i1] / (1 - q);
+                float d2      = g2.degree[i2] / (1 - q);
+                scratch.p(i)  = p;
+                scratch.Ap(i) = d1 * d2 / NodeKernel::compute(g1.node[i1], g2.node[i2]) * p;
             }
             __syncthreads();
 
