@@ -18,9 +18,10 @@ __constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
 
 struct trait_t {
     constexpr static uint32 NODAL     = 1;
-    constexpr static uint32 SYMMETRIC = 2;
-    constexpr static uint32 LMIN1     = 4;
-    constexpr static uint32 DIAGONAL  = 8;
+    constexpr static uint32 BLOCK     = 2;
+    constexpr static uint32 SYMMETRIC = 4;
+    constexpr static uint32 LMIN1     = 8;
+    constexpr static uint32 DIAGONAL  = 16;
 };
 
 extern "C" {
@@ -92,7 +93,16 @@ extern "C" {
 
             // write to output buffer
             if (traits & trait_t::NODAL) {
-                if (traits & trait_t::DIAGONAL) {
+                if (traits & trait_t::BLOCK) {
+                    for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                        int i1 = i / n2;
+                        int i2 = i % n2;
+                        if (i1 < g1.n_node && i2 < g2.n_node) {
+                            auto r = scratch.x(i);
+                            R[I1 + i1 + i2 * g1.n_node] = r;
+                        }
+                    }
+                } else if (traits & trait_t::DIAGONAL) {
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
                         auto i = i1 + i1 * n2;
                         auto r = scratch.x(i);

@@ -51,14 +51,17 @@ class MarginalizedGraphKernel:
     """
     class _Traits:
         NODAL = 1
-        SYMMETRIC = 2
-        LMIN1 = 4
-        DIAGONAL = 8
+        BLOCK = 2
+        SYMMETRIC = 4
+        LMIN1 = 8
+        DIAGONAL = 16
 
         @classmethod
         def create(cls, **kwargs):
             traits = 0
-            traits |= cls.NODAL if kwargs.pop('nodal', False) else 0
+            nodal = kwargs.pop('nodal', False)
+            traits |= cls.NODAL if nodal is not False else 0
+            traits |= cls.BLOCK if nodal == 'block' else 0
             traits |= cls.SYMMETRIC if kwargs.pop('symmetric', False) else 0
             traits |= cls.LMIN1 if kwargs.pop('lmin1', False) else 0
             traits |= cls.DIAGONAL if kwargs.pop('diagonal', False) else 0
@@ -360,7 +363,7 @@ class MarginalizedGraphKernel:
 
         return output
 
-    def diag(self, X, nodal=False, lmin=0):
+    def diag(self, X, nodal=False, lmin=0, timer=False):
         """Compute the self-similarities for a list of graphs
 
         Parameters
@@ -368,9 +371,10 @@ class MarginalizedGraphKernel:
         X: list of N graphs
             The graphs must all have same node attributes and edge attributes.
         nodal: bool
-            If True, returns a vector containing nodal self similarties;
-            if False, returns a vector containing graphs' overall self
-            similarities.
+            If True, returns a vector containing nodal self similarties; if
+            False, returns a vector containing graphs' overall self
+            similarities; if 'block', return a list of square matrices, each
+            being a pairwise nodal similarity matrix within a graph.
         lmin: 0 or 1
             Number of steps to skip in each random walk path before similarity
             is computed.
@@ -404,11 +408,16 @@ class MarginalizedGraphKernel:
         if nodal is True:
             sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
             np.cumsum(sizes, out=starts[1:])
-            n_nodes_X = int(starts[-1])
-            output_length = n_nodes_X
-        else:
+            output_length = int(starts[-1])
+        elif nodal is False:
             starts[:] = np.arange(len(X) + 1)
             output_length = len(X)
+        elif nodal == 'block':
+            sizes = np.array([len(g.nodes)**2 for g in X], dtype=np.uint32)
+            np.cumsum(sizes, out=starts[1:])
+            output_length = int(starts[-1])
+        else:
+            raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
         output = umempty(output_length, np.float32)
         self.timer.toc('creating output buffer')
 
@@ -426,5 +435,8 @@ class MarginalizedGraphKernel:
         self.ctx.synchronize()
         self.timer.toc('calling GPU kernel (overall)')
 
-        ''' collect result '''
+        if timer:
+            self.timer.report(unit='ms')
+        self.timer.reset()
+
         return output
