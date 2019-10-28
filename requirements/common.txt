@@ -9,4 +9,3 @@ pymatgen
 pysmiles
 mendeleev
 pycuda
-ctypes

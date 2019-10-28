@@ -39,7 +39,7 @@ setup(
     license='BSD',
     author='Yu-Hang Tang',
     tests_require=['tox'],
-    install_requires=['numpy', 'scipy', 'numba', 'pandas', 'pycuda', 'ctypes',
+    install_requires=['numpy', 'scipy', 'numba', 'pandas', 'pycuda',
                       'networkx'] +
                      ['ase', 'pymatgen', 'pysmiles', 'mendeleev'],
     extras_require={
