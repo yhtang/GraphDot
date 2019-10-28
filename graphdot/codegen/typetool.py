@@ -75,9 +75,7 @@ def cpptype(dtype=[]):
                             "Cannot set attribute '{}' (C++ type {}) "
                             "with value {} of {}".format(name, t,
                                                          value, type(value)))
-                # super().__setattr__(name, value)
-                # for python2/3 compat
-                super(Class, self).__setattr__(name, value)
+                super().__setattr__(name, value)
 
             # TODO: need a nicer __repr__
 
@@ -94,7 +92,7 @@ def decltype(type, name=''):
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
-            return 'constexpr static numpy_type::_empty {} {{}}'.format(name)
+            return 'constexpr static _empty {} {{}}'.format(name)
     # elif type.subdtype is not None:
     #     return Template(r'''${type} ${name}${dim}''').render(
     #         type=type.name, name=

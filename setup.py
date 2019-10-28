@@ -40,9 +40,9 @@ setup(
     author='Yu-Hang Tang',
     tests_require=['tox'],
     install_requires=['numpy', 'scipy', 'numba', 'pandas', 'pycuda',
-                      'networkx'],
+                      'networkx'] +
+                     ['ase', 'pymatgen', 'pysmiles', 'mendeleev'],
     extras_require={
-        'molecular': ['ase', 'pymatgen', 'pysmiles', 'mendeleev'],
         'docs': ['sphinx', 'sphinx-rtd-theme'],
     },
     cmdclass={'test': Tox},

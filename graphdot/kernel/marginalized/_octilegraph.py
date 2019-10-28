@@ -20,7 +20,7 @@ class Octile(object):
 
     @property
     def p_elements(self):
-        return self.elements.ptr
+        return int(self.elements.base)
 
 
 # only works with python >= 3.6
@@ -52,7 +52,7 @@ class OctileGraph(object):
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
-        self.degree = degree = umzeros(self.padded_size, dtype=np.float32)
+        self.degree = degree = umzeros(self.n_node, dtype=np.float32)
         edge_label_type = rowtype(edges, exclude=['!ij', '!w'])
         if '!w' in edges.columns:  # weighted graph
             self.weighted = True
@@ -120,12 +120,8 @@ class OctileGraph(object):
 
     @property
     def p_degree(self):
-        return self.degree.ptr
+        return int(self.degree.base)
 
     @property
     def p_node(self):
         return self.node.ptr
-
-    @property
-    def padded_size(self):
-        return (self.n_node + 7) & ~7
