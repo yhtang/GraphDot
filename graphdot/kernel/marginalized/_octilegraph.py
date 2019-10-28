@@ -41,8 +41,12 @@ class OctileGraph(object):
         if len(nodes.columns) == 0:
             nodes = nodes.assign(labeled=lambda _: False)
 
-        if len(edges.columns) == 1:
-            assert(edges.columns[0] == '!ij')
+        print('edges.i\n', edges['!i'], sep='')
+        print('edges.j\n', edges['!j'], sep='')
+
+        assert(len(edges.columns) >= 2)
+        if len(edges.columns) == 2:
+            assert('!i' in edges.columns and '!j' in edges.columns)
             edges = edges.assign(labeled=lambda _: False)
 
         ''' determine node type '''
@@ -53,25 +57,25 @@ class OctileGraph(object):
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
         self.degree = degree = umzeros(self.n_node, dtype=np.float32)
-        edge_label_type = rowtype(edges, exclude=['!ij', '!w'])
+        edge_label_type = rowtype(edges, exclude=['!i', '!j', '!w'])
         if '!w' in edges.columns:  # weighted graph
             self.weighted = True
             edge_type = np.dtype([('weight', np.float32),
                                   ('label', edge_label_type)], align=True)
             self.edge_type = edge_type
-            for (i, j), w in zip(edges['!ij'], edges['!w']):
+            for i, j, w in zip(edges['!i'], edges['!j'], edges['!w']):
                 degree[i] += w
                 degree[j] += w
         else:
             self.weighted = False
             self.edge_type = edge_type = edge_label_type
-            for i, j in edges['!ij']:
+            for i, j in zip(edges['!i'], edges['!j']):
                 degree[i] += 1.0
                 degree[j] += 1.0
 
         ''' collect non-zero edge octiles '''
         uniq_oct = np.unique([(i - i % 8, j - j % 8)
-                              for i, j in edges['!ij']], axis=0)
+                              for i, j in zip(edges['!i'], edges['!i'])], axis=0)
         uniq_oct = np.unique(np.vstack((uniq_oct, uniq_oct[:, -1::-1])),
                              axis=0)
         octile_dict = {(upper, left): [np.uint64(), np.uint64(),
@@ -79,7 +83,7 @@ class OctileGraph(object):
                        for upper, left in uniq_oct}
 
         for index, row in edges.iterrows():
-            i, j = row['!ij']
+            i, j = row['!i'], row['!j']
             if self.weighted:
                 edge = (row['!w'], tuple(row[key]
                                          for key in edge_type['label'].names))

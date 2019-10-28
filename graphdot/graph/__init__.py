@@ -125,7 +125,7 @@ class Graph:
                                 'inconsistent with {}'.format(edge_attr))
 
         edge_df = pd.DataFrame(index=range(graph.number_of_edges()))
-        edge_df['!ij'] = list(graph.edges.keys())
+        edge_df['!i'], edge_df['!j'] = zip(*graph.edges.keys())
         if weight is not None:
             edge_df['!w'] = [edge[weight] for edge in graph.edges.values()]
         for key in edge_attr:
@@ -179,9 +179,9 @@ class Graph:
                 if w > 0 and ((i, j) not in edge_data or
                               edge_data[(i, j)][1] > r):
                     edge_data[(i, j)] = (w, r)
-        edge_data = [((i, j), w, r) for (i, j), (w, r) in edge_data.items()]
+        edge_data = [(i, j, w, r) for (i, j), (w, r) in edge_data.items()]
 
-        edges = pd.DataFrame(edge_data, columns=['!ij', '!w', 'length'])
+        edges = pd.DataFrame(edge_data, columns=['!i', '!j', '!w', 'length'])
         edges = edges.astype(dict(length=np.float32))
 
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
