@@ -1,3 +1,6 @@
+## 0.2.4 (2019-10-29)
+- Improved the performance of graph format conversion for the GPU kernel by 3 times.
+
 ## 0.2.3 (2019-10-24)
 - Incorporated many new optimizations as detailed in https://arxiv.org/abs/1910.06310.
 - Preparing for faster memory allocation and job creation.
