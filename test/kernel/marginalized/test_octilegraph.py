@@ -3,25 +3,8 @@
 import numpy as np
 import pytest
 import pycuda.autoinit
-from graphdot.kernel.marginalized._octilegraph import OctileGraph, Octile
+from graphdot.kernel.marginalized._octilegraph import OctileGraph
 from graphdot import Graph
-
-
-class MockArray(np.ndarray):
-    @property
-    def ptr(self):
-        return 1
-
-
-def test_octile():
-    assert(Octile.dtype.isalignedstruct)
-
-    octile = Octile(0, 0, 0, 0, np.zeros(64).view(MockArray))
-    assert(octile.upper == 0)
-    assert(octile.left == 0)
-    assert(octile.nzmask == 0)
-    assert(octile.p_elements != 0)
-    assert(octile.state)
 
 
 def test_octile_graph_unweighted():
@@ -31,14 +14,12 @@ def test_octile_graph_unweighted():
     dfg = Graph(nodes={'index': [0, 1, 2],
                        'columns': ['charge', 'conjugate', 'hybridization'],
                        'data': [[1, False, 2], [-1, True, 3], [2, True, 1]]},
-                edges={'index': [0, 1], 'columns': ['!ij', 'length', 'order'],
-                       'data': [[(0, 1), 0.5, 1], [(0, 2), 1.0, 2]]},
+                edges={'index': [0, 1], 'columns': ['!i', '!j', 'length', 'order'],
+                       'data': [[0, 1, 0.5, 1], [0, 2, 1.0, 2]]},
                 title='H2O')
 
     og = OctileGraph(dfg)
     assert(og.n_node == len(dfg.nodes))
-    assert(og.padded_size >= og.n_node and og.padded_size % 8 == 0)
-    assert(og.n_octile == (og.padded_size // 8)**2)
     assert(og.p_octile != 0)
     assert(og.p_degree != 0)
     assert(og.p_node != 0)
@@ -58,7 +39,7 @@ def test_octile_graph_unweighted():
     assert(og.edge_type.isalignedstruct)
     for name in og.edge_type.names:
         assert(name in dfg.edges.columns)
-    for name in dfg.edges.drop(['!ij'], axis=1).columns:
+    for name in dfg.edges.drop(['!i', '!j'], axis=1).columns:
         assert(name in og.edge_type.names)
 
 
@@ -69,14 +50,12 @@ def test_octile_graph_weighted():
     dfg = Graph(nodes={'index': [0, 1, 2],
                        'columns': ['charge', 'conjugate', 'hybridization'],
                        'data': [[1, False, 2], [-1, True, 3], [2, True, 1]]},
-                edges={'index': [0, 1], 'columns': ['!ij', 'length', '!w'],
-                       'data': [[(0, 1), 0.5, 1.0], [(0, 2), 1.0, 2.0]]},
+                edges={'index': [0, 1], 'columns': ['!i', '!j', 'length', '!w'],
+                       'data': [[0, 1, 0.5, 1.0], [0, 2, 1.0, 2.0]]},
                 title='H2O')
 
     og = OctileGraph(dfg)
     assert(og.n_node == len(dfg.nodes))
-    assert(og.padded_size >= og.n_node and og.padded_size % 8 == 0)
-    assert(og.n_octile == (og.padded_size // 8)**2)
     assert(og.p_octile != 0)
     assert(og.p_degree != 0)
     assert(og.p_node != 0)
@@ -100,7 +79,7 @@ def test_octile_graph_weighted():
 
     for name in og.edge_type['label'].names:
         assert(name in dfg.edges.columns)
-    for name in dfg.edges.drop(['!ij', '!w'], axis=1).columns:
+    for name in dfg.edges.drop(['!i', '!j', '!w'], axis=1).columns:
         assert(name in og.edge_type['label'].names)
 
     # from pycuda.compiler import SourceModule
