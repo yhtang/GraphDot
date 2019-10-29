@@ -27,8 +27,8 @@ def MLGK(G, knode, kedge, q, q0, nodal=False):
                                G.edges.drop(['!i', '!j', '!w'], axis=1,
                                             errors='ignore').iterrows()):
         for i2, j2, (_, e2) in zip(G.edges['!i'], G.edges['!j'],
-                                     G.edges.drop(['!i', '!j', '!w'], axis=1,
-                                                  errors='ignore').iterrows()):
+                                   G.edges.drop(['!i', '!j', '!w'], axis=1,
+                                                errors='ignore').iterrows()):
             Ex[i1 * N + i2, j1 * N + j2] = kedge(e1, e2)
             Ex[i1 * N + j2, j1 * N + i2] = kedge(e1, e2)
             Ex[j1 * N + j2, i1 * N + i2] = kedge(e1, e2)

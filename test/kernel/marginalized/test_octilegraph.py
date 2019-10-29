@@ -11,12 +11,13 @@ def test_octile_graph_unweighted():
 
     assert(OctileGraph.dtype.isalignedstruct)
 
-    dfg = Graph(nodes={'index': [0, 1, 2],
-                       'columns': ['charge', 'conjugate', 'hybridization'],
-                       'data': [[1, False, 2], [-1, True, 3], [2, True, 1]]},
-                edges={'index': [0, 1], 'columns': ['!i', '!j', 'length', 'order'],
-                       'data': [[0, 1, 0.5, 1], [0, 2, 1.0, 2]]},
-                title='H2O')
+    dfg = Graph(
+        nodes={'index': [0, 1, 2],
+               'columns': ['charge', 'conjugate', 'hybridization'],
+               'data': [[1, False, 2], [-1, True, 3], [2, True, 1]]},
+        edges={'index': [0, 1], 'columns': ['!i', '!j', 'length', 'order'],
+               'data': [[0, 1, 0.5, 1], [0, 2, 1.0, 2]]},
+        title='H2O')
 
     og = OctileGraph(dfg)
     assert(og.n_node == len(dfg.nodes))

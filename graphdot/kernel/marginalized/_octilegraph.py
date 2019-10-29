@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from graphdot.codegen.typetool import cpptype, rowtype
-from graphdot.cuda.array import umlike, umzeros, umempty
+from graphdot.cuda.array import umzeros, umempty
 
 __all__ = ['OctileGraph']
 
@@ -24,7 +24,6 @@ class OctileGraph(object):
             self.nzmask_r = nzmask_r
             self.elements = elements
 
-    @profile
     def __init__(self, graph):
 
         nodes = graph.nodes
