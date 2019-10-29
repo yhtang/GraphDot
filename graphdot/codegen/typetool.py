@@ -75,9 +75,7 @@ def cpptype(dtype=[]):
                             "Cannot set attribute '{}' (C++ type {}) "
                             "with value {} of {}".format(name, t,
                                                          value, type(value)))
-                # super().__setattr__(name, value)
-                # for python2/3 compat
-                super(Class, self).__setattr__(name, value)
+                super().__setattr__(name, value)
 
             # TODO: need a nicer __repr__
 
@@ -94,7 +92,7 @@ def decltype(type, name=''):
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
-            return 'constexpr static numpy_type::_empty {} {{}}'.format(name)
+            return 'constexpr static _empty {} {{}}'.format(name)
     # elif type.subdtype is not None:
     #     return Template(r'''${type} ${name}${dim}''').render(
     #         type=type.name, name=
@@ -105,12 +103,12 @@ def decltype(type, name=''):
 
 def rowtype(df, pack=True, exclude=None):
     if pack is True:
-        order = np.argsort([-df.dtypes[key].itemsize for key in df.columns])
+        order = np.argsort([-df[key].dtype.itemsize for key in df.columns])
         packed_attributes = df.columns[order].to_list()
     else:
         packed_attributes = df.columns.to_list()
     if exclude:
         packed_attributes = [a for a in packed_attributes if a not in exclude]
-    packed_dtype = np.dtype([(key, df.dtypes[key].newbyteorder('='))
+    packed_dtype = np.dtype([(key, df[key].dtype.newbyteorder('='))
                              for key in packed_attributes], align=True)
     return packed_dtype

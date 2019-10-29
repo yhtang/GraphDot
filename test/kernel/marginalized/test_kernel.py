@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+import scipy.sparse as sp
 import pytest
 import networkx as nx
 from graphdot import Graph
@@ -22,25 +23,25 @@ def MLGK(G, knode, kedge, q, q0, nodal=False):
         for j, n2 in G.nodes.iterrows():
             Vx[i*N+j] = knode(n1, n2)
 
-    for (i1, j1), (_, e1) in zip(G.edges['!ij'],
-                                 G.edges.drop(['!ij', '!w'], axis=1,
-                                              errors='ignore').iterrows()):
-        for (i2, j2), (_, e2) in zip(G.edges['!ij'],
-                                     G.edges.drop(['!ij', '!w'], axis=1,
-                                                  errors='ignore').iterrows()):
+    for i1, j1, (_, e1) in zip(G.edges['!i'], G.edges['!j'],
+                               G.edges.drop(['!i', '!j', '!w'], axis=1,
+                                            errors='ignore').iterrows()):
+        for i2, j2, (_, e2) in zip(G.edges['!i'], G.edges['!j'],
+                                   G.edges.drop(['!i', '!j', '!w'], axis=1,
+                                                errors='ignore').iterrows()):
             Ex[i1 * N + i2, j1 * N + j2] = kedge(e1, e2)
             Ex[i1 * N + j2, j1 * N + i2] = kedge(e1, e2)
             Ex[j1 * N + j2, i1 * N + i2] = kedge(e1, e2)
             Ex[j1 * N + i2, i1 * N + j2] = kedge(e1, e2)
 
     if '!w' in G.edges:
-        for (i, j), w in zip(G.edges['!ij'], G.edges['!w']):
+        for i, j, w in zip(G.edges['!i'], G.edges['!j'], G.edges['!w']):
             D[i] += w
             D[j] += w
             A[i, j] = w
             A[j, i] = w
     else:
-        for i, j in G.edges['!ij']:
+        for i, j in zip(G.edges['!i'], G.edges['!j']):
             D[i] += 1.0
             D[j] += 1.0
             A[i, j] = 1.0
@@ -51,7 +52,8 @@ def MLGK(G, knode, kedge, q, q0, nodal=False):
 
     rhs = Dx * np.ones(N * N) * q * q / q0 / q0
     linsys = np.diag(Dx / Vx) - Ax * Ex
-    solution = np.linalg.solve(linsys, rhs)
+    solution, _ = sp.linalg.cg(linsys, rhs, atol=1e-7,
+                               M=sp.diags([Vx / Dx], [0]))
 
     if nodal is True:
         return solution.reshape(N, -1)
@@ -177,8 +179,8 @@ def test_mlgk_self_similarity(caseitem):
         assert(np.count_nonzero(R - R.T) == 0)
         assert(R[0, 0] == pytest.approx(MLGK(G[0], knode, kedge, q, q), 1e-5))
         assert(R[1, 1] == pytest.approx(MLGK(G[1], knode, kedge, q, q), 1e-5))
-        assert(K[0, 0] == pytest.approx(1, 1e-7))
-        assert(K[1, 1] == pytest.approx(1, 1e-7))
+        assert(K[0, 0] == pytest.approx(1, 2e-7))
+        assert(K[1, 1] == pytest.approx(1, 2e-7))
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
@@ -242,7 +244,7 @@ def test_mlgk_diag(caseitem):
             for r1, r2 in zip(sub, gnd):
                 assert(r1 == pytest.approx(r2, 1e-5))
         for i in range(N[-1]):
-            assert(K_nodal[i, i] == pytest.approx(1, 1e-7))
+            assert(K_nodal[i, i] == pytest.approx(1, 2e-7))
 
         '''check block-diags'''
         D_nodal = mlgk.diag(G, nodal=True)
@@ -310,41 +312,24 @@ def test_mlgk_starting_probability(caseitem):
                     assert(r1 == pytest.approx(r2, 1e-5))
 
 
-# def test_mlgk_large():
-#     g = nx.Graph()
-#     n = 24
-#     for i, row in enumerate(np.random.randint(0, 2, (n, n))):
-#         g.add_node(i, type=0)
-#         for j, pred in enumerate(row[:i]):
-#             if pred:
-#                 g.add_edge(i, j, weight=1)
-#
-#     dfg = Graph.from_networkx(g, weight='weight')
-#
-#     q = 0.5
-#     node_kernel = TensorProduct(type=KroneckerDelta(1.0, 1.0))
-#     edge_kernel = Constant(1.0)
-#     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
-#
-#     dot = mlgk([dfg])
-#     gold = MLGK(dfg, node_kernel, edge_kernel, q)
-#
-#     assert(dot.shape == (1, 1))
-#     assert(dot.item() == pytest.approx(gold))
+def test_mlgk_large():
+    g = nx.Graph()
+    n = 24
+    for i, row in enumerate(np.random.randint(0, 2, (n, n))):
+        g.add_node(i, type=0)
+        for j, pred in enumerate(row[:i]):
+            if pred:
+                g.add_edge(i, j, weight=1)
 
-    #
-    #
-    # q = 0.1
-    # node_kernel = TensorProduct(hybridization=KroneckerDelta(0.3, 1.0),
-    #                             charge=SquareExponential(1.0))
-    #
-    # edge_kernel = TensorProduct(order=KroneckerDelta(0.3, 1.0),
-    #                             length=SquareExponential(0.05))
-    # mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
-    #
-    # R = mlgk(G)
-    #
-    # assert(R.shape == (2, 2))
-    # assert(np.count_nonzero(R - R.T) == 0)
-    # assert(R[0, 0] == pytest.approx(MLGK(G[0], node_kernel, edge_kernel, q)))
-    # assert(R[1, 1] == pytest.approx(MLGK(G[1], node_kernel, edge_kernel, q)))
+    dfg = Graph.from_networkx(g, weight='weight')
+
+    q = 0.5
+    node_kernel = TensorProduct(type=KroneckerDelta(1.0, 1.0))
+    edge_kernel = Constant(1.0)
+    mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
+
+    dot = mlgk([dfg])
+    gold = MLGK(dfg, node_kernel, edge_kernel, q, q)
+
+    assert(dot.shape == (1, 1))
+    assert(dot.item() == pytest.approx(gold))

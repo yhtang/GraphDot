@@ -2,26 +2,9 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from graphdot.codegen.typetool import cpptype, rowtype
-from graphdot.cuda.array import umlike, umzeros
+from graphdot.cuda.array import umzeros, umempty
 
 __all__ = ['OctileGraph']
-
-# only works with python >= 3.6
-# @cpptype(upper=np.int32, left=np.int32, nzmask=np.int64, elements=np.uintp)
-@cpptype([('p_elements', np.uintp), ('nzmask', '<u8'), ('nzmask_r', '<u8'),
-          ('upper', np.int32), ('left', np.int32)])
-class Octile(object):
-    def __init__(self, upper, left, nzmask, nzmask_r, elements):
-        self.upper = upper
-        self.left = left
-        self.nzmask = nzmask
-        self.nzmask_r = nzmask_r
-        self.elements = elements
-
-    @property
-    def p_elements(self):
-        return self.elements.ptr
-
 
 # only works with python >= 3.6
 # @cpptype(n_node=np.int32, n_octile=np.int32, degree=np.uintp,
@@ -31,101 +14,107 @@ class Octile(object):
 class OctileGraph(object):
     """ Python counterpart of C++ class graphdot::graph_t """
 
+    @cpptype([('elements', np.uintp), ('nzmask', '<u8'), ('nzmask_r', '<u8'),
+              ('upper', np.int32), ('left', np.int32)])
+    class Octile(object):
+        def __init__(self, upper, left, nzmask, nzmask_r, elements):
+            self.upper = upper
+            self.left = left
+            self.nzmask = nzmask
+            self.nzmask_r = nzmask_r
+            self.elements = elements
+
     def __init__(self, graph):
 
         nodes = graph.nodes
         edges = graph.edges
         self.n_node = len(nodes)
+        nnz = len(edges)
 
         ''' add phantom label if none exists to facilitate C++ interop '''
         if len(nodes.columns) == 0:
             nodes = nodes.assign(labeled=lambda _: False)
 
-        if len(edges.columns) == 1:
-            assert(edges.columns[0] == '!ij')
+        assert(len(edges.columns) >= 2)
+        if len(edges.columns) == 2:
+            assert('!i' in edges.columns and '!j' in edges.columns)
             edges = edges.assign(labeled=lambda _: False)
 
         ''' determine node type '''
         self.node_type = node_type = rowtype(nodes)
-        self.node = umlike(nodes[list(node_type.names)]
-                           .to_records(index=False).astype(node_type))
+        self.node = umempty(len(nodes), dtype=node_type)
+        self.node[:] = list(zip(*[nodes[key] for key in node_type.names]))
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
-        self.degree = degree = umzeros(self.padded_size, dtype=np.float32)
-        edge_label_type = rowtype(edges, exclude=['!ij', '!w'])
+        self.degree = degree = umzeros(self.n_node, dtype=np.float32)
+        edge_label_type = rowtype(edges, exclude=['!i', '!j', '!w'])
         if '!w' in edges.columns:  # weighted graph
             self.weighted = True
             edge_type = np.dtype([('weight', np.float32),
                                   ('label', edge_label_type)], align=True)
             self.edge_type = edge_type
-            for (i, j), w in zip(edges['!ij'], edges['!w']):
-                degree[i] += w
-                degree[j] += w
+            np.add.at(degree, edges['!i'], edges['!w'])
+            np.add.at(degree, edges['!j'], edges['!w'])
+
+            if edge_label_type.itemsize != 0:
+                labels = zip(*[edges[t] for t in edge_label_type.names])
+            else:
+                labels = [None] * len(edges)
+            edge_aos = np.fromiter(zip(edges['!w'], labels), dtype=edge_type,
+                                   count=nnz)
         else:
             self.weighted = False
             self.edge_type = edge_type = edge_label_type
-            for i, j in edges['!ij']:
-                degree[i] += 1.0
-                degree[j] += 1.0
+            np.add.at(degree, edges['!i'], 1.0)
+            np.add.at(degree, edges['!j'], 1.0)
+            edge_aos = np.fromiter(zip(*[edges[t] for t in edge_type.names]),
+                                   dtype=edge_type, count=nnz)
 
         ''' collect non-zero edge octiles '''
-        uniq_oct = np.unique([(i - i % 8, j - j % 8)
-                              for i, j in edges['!ij']], axis=0)
-        uniq_oct = np.unique(np.vstack((uniq_oct, uniq_oct[:, -1::-1])),
-                             axis=0)
-        octile_dict = {(upper, left): [np.uint64(), np.uint64(),
-                                       umzeros(64, edge_type)]
-                       for upper, left in uniq_oct}
+        indices = np.empty((4, nnz * 2), dtype=np.uint32, order='C')
+        i, j, up, lf = indices
+        i[:nnz] = edges['!i']
+        j[:nnz] = edges['!j']
+        # replicate & swap i and j for the lower triangular part
+        indices[[0, 1], nnz:] = indices[[1, 0], :nnz]
+        # get upper left corner of owner octiles
+        up[:] = i - i % 8
+        lf[:] = j - j % 8
 
-        for index, row in edges.iterrows():
-            i, j = row['!ij']
-            if self.weighted:
-                edge = (row['!w'], tuple(row[key]
-                                         for key in edge_type['label'].names))
-            else:
-                edge = tuple(row[key] for key in edge_type.names)
-            r = i % 8
-            c = j % 8
-            upper = i - r
-            left = j - c
-            octile_dict[(upper, left)][0] |= np.uint64(1 << (r + c * 8))
-            octile_dict[(upper, left)][1] |= np.uint64(1 << (c + r * 8))
-            octile_dict[(upper, left)][2][r + c * 8] = edge
-            octile_dict[(left, upper)][0] |= np.uint64(1 << (c + r * 8))
-            octile_dict[(left, upper)][1] |= np.uint64(1 << (r + c * 8))
-            octile_dict[(left, upper)][2][c + r * 8] = edge
+        perm = np.lexsort(indices, axis=0)
+        indices[:, :] = indices[:, perm]
+        self.edge_aos = umempty(nnz * 2, edge_type)
+        self.edge_aos[:] = edge_aos[perm % nnz]  # mod nnz due to symmetry
 
-        ''' create edge octiles on GPU '''
-        self.octile_list = [Octile(upper, left, nzmask, nzmask_r, elements)
-                            for (upper, left), (nzmask, nzmask_r, elements)
-                            in octile_dict.items()]
-        # compact the tiles
-        for o in self.octile_list:
-            k = 0
-            for i in range(64):
-                if o.nzmask & np.uint64(1 << i):
-                    o.elements[k] = o.elements[i]
-                    k += 1
+        diff = np.empty(nnz * 2)
+        diff[1:] = (up[:-1] != up[1:]) | (lf[:-1] != lf[1:])
+        diff[:1] = True
+        oct_offset = np.flatnonzero(diff)
+        self.n_octile = len(oct_offset)
 
-        self.n_octile = len(self.octile_list)
+        nzmasks = np.bitwise_or.reduceat(
+            1 << (i - up + (j - lf) * 8).astype(np.uint64), oct_offset)
+        nzmasks_r = np.bitwise_or.reduceat(
+            1 << (j - lf + (i - up) * 8).astype(np.uint64), oct_offset)
 
-        ''' collect edge octile structures into continuous buffer '''
-        self.octile_hdr = umlike(np.array([x.state for x in self.octile_list],
-                                          Octile.dtype))
+        self.octiles = octiles = umempty(self.n_octile, self.Octile.dtype)
+        octiles[:] = list(
+            zip(int(self.edge_aos.base) + oct_offset * edge_type.itemsize,
+                nzmasks,
+                nzmasks_r,
+                up[oct_offset],
+                lf[oct_offset])
+        )
 
     @property
     def p_octile(self):
-        return self.octile_hdr.ptr
+        return int(self.octiles.base)
 
     @property
     def p_degree(self):
-        return self.degree.ptr
+        return int(self.degree.base)
 
     @property
     def p_node(self):
-        return self.node.ptr
-
-    @property
-    def padded_size(self):
-        return (self.n_node + 7) & ~7
+        return int(self.node.base)

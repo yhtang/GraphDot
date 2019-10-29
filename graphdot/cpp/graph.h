@@ -30,10 +30,6 @@ template<class Node, class Edge> struct graph_t {
     real_t * degree;
     node_t * node;
     octile_t * octile;
-
-    constexpr __inline__ __host__ __device__ int padded_size() const {
-        return (n_node + 7) & ~7U;
-    }
 };
 
 }

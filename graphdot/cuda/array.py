@@ -11,15 +11,21 @@ class ManagedArray(np.ndarray):
         return int(self.base.base)
 
 
-def umarray(size, dtype=np.float32):
-    return managed_empty(size, dtype, 'C', ma_flags.GLOBAL).view(ManagedArray)
+def umempty(size, dtype=np.float32):
+    return managed_empty(size, dtype, 'C', ma_flags.GLOBAL)
 
 
 def umzeros(size, dtype=np.float32):
-    return managed_zeros(size, dtype, 'C', ma_flags.GLOBAL).view(ManagedArray)
+    return managed_zeros(size, dtype, 'C', ma_flags.GLOBAL)
 
 
 def umlike(array):
-    u = managed_empty_like(array, ma_flags.GLOBAL).view(ManagedArray)
+    u = managed_empty_like(array, ma_flags.GLOBAL)
+    u[:] = array[:]
+    return u
+
+
+def umarray(array):
+    u = managed_empty_like(array, ma_flags.GLOBAL)
     u[:] = array[:]
     return u
