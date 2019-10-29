@@ -23,25 +23,25 @@ def MLGK(G, knode, kedge, q, q0, nodal=False):
         for j, n2 in G.nodes.iterrows():
             Vx[i*N+j] = knode(n1, n2)
 
-    for (i1, j1), (_, e1) in zip(G.edges['!ij'],
-                                 G.edges.drop(['!ij', '!w'], axis=1,
-                                              errors='ignore').iterrows()):
-        for (i2, j2), (_, e2) in zip(G.edges['!ij'],
-                                     G.edges.drop(['!ij', '!w'], axis=1,
-                                                  errors='ignore').iterrows()):
+    for i1, j1, (_, e1) in zip(G.edges['!i'], G.edges['!j'],
+                               G.edges.drop(['!i', '!j', '!w'], axis=1,
+                                            errors='ignore').iterrows()):
+        for i2, j2, (_, e2) in zip(G.edges['!i'], G.edges['!j'],
+                                   G.edges.drop(['!i', '!j', '!w'], axis=1,
+                                                errors='ignore').iterrows()):
             Ex[i1 * N + i2, j1 * N + j2] = kedge(e1, e2)
             Ex[i1 * N + j2, j1 * N + i2] = kedge(e1, e2)
             Ex[j1 * N + j2, i1 * N + i2] = kedge(e1, e2)
             Ex[j1 * N + i2, i1 * N + j2] = kedge(e1, e2)
 
     if '!w' in G.edges:
-        for (i, j), w in zip(G.edges['!ij'], G.edges['!w']):
+        for i, j, w in zip(G.edges['!i'], G.edges['!j'], G.edges['!w']):
             D[i] += w
             D[j] += w
             A[i, j] = w
             A[j, i] = w
     else:
-        for i, j in G.edges['!ij']:
+        for i, j in zip(G.edges['!i'], G.edges['!j']):
             D[i] += 1.0
             D[j] += 1.0
             A[i, j] = 1.0

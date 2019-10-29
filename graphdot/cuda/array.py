@@ -20,7 +20,7 @@ def umzeros(size, dtype=np.float32):
 
 
 def umlike(array):
-    u = managed_empty_like(array, ma_flags.GLOBAL).view(ManagedArray)
+    u = managed_empty_like(array, ma_flags.GLOBAL)
     u[:] = array[:]
     return u
 

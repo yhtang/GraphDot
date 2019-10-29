@@ -19,7 +19,8 @@ def test_empty_init():
 
 def test_dict_init():
     G = Graph(nodes={'order': {0: 1, 1: -2}, 'conjugate': {0: True, 1: False}},
-              edges={'!ij': {0: (0, 1)}, 'length': {0: 3.2}, 'weight': {0: 1}},
+              edges={'!i': {0: 0}, '!j': {0: 1}, 'length': {0: 3.2},
+                     'weight': {0: 1}},
               title='graph')
 
     for g in [G, eval(repr(G).strip('><'))]:
@@ -27,20 +28,7 @@ def test_dict_init():
         assert(len(g.nodes) == 2)
         assert(len(g.nodes.columns) == 2)
         assert(len(g.edges) == 1)
-        assert(len(g.edges.columns) == 3)
-
-
-def test_empty_from_networkx():
-    nxg = nx.Graph(title='Null')
-
-    G = Graph.from_networkx(nxg)
-
-    for g in [G, eval(repr(G).strip('><'))]:
-        assert(g.title == 'Null')
-        assert(len(g.nodes) == 0)
-        assert(len(g.nodes.columns) == 0)
-        assert(len(g.edges) == 0)
-        assert(len(g.edges.columns) == 1)  # +1 for the hidden edge index
+        assert(len(g.edges.columns) == 4)
 
 
 def test_simple_from_networkx():
@@ -59,7 +47,7 @@ def test_simple_from_networkx():
         assert(len(g.nodes) == 4)
         assert(len(g.nodes.columns) == 0)
         assert(len(g.edges) == 2)
-        assert(len(g.edges.columns) == 1)  # +1 for the hidden edge index
+        assert(len(g.edges.columns) == 2)  # +2 for the hidden !i & !j index
 
 
 def test_weighted_from_networkx():
@@ -75,8 +63,9 @@ def test_weighted_from_networkx():
         assert(len(g.nodes) == 2)
         assert(len(g.nodes.columns) == 0)
         assert(len(g.edges) == 1)
-        assert(len(g.edges.columns) == 2)  # +2 for edge index and weight
-        assert('!ij' in g.edges.columns)
+        assert(len(g.edges.columns) == 3)  # +3 for edge endpoints and weight
+        assert('!i' in g.edges.columns)
+        assert('!j' in g.edges.columns)
         assert('!w' in g.edges.columns)
 
 
@@ -95,7 +84,7 @@ def test_molecule_from_networkx():
         assert(len(g.nodes) == 3)
         assert(len(g.nodes.columns) == 3)
         assert(len(g.edges) == 2)
-        assert(len(g.edges.columns) == 3+1)  # +1 for the hidden edge index
+        assert(len(g.edges.columns) == 3+2)  # +2 for the hidden !i & !j index
 
 
 def test_attribute_consistency_from_networkx():
