@@ -133,15 +133,16 @@ class OctileGraph(object):
 
         print('edge_type.itemsize', edge_type.itemsize)
 
-        octiles[:] = list(zip(up[octile_starts],
-                         lf[octile_starts],
-                         nzmasks,
-                         nzmasks_r,
-                         int(elements.base) + octile_starts * edge_type.itemsize))
+        octiles[:] = list(zip(int(elements.base) + octile_starts * edge_type.itemsize,
+                              nzmasks,
+                              nzmasks_r,
+                              up[octile_starts],
+                              lf[octile_starts])
+                              )
         
         print('octiles')
         for octile in octiles:
-            print('%4d %4d %016X %016X %24d' % tuple(octile))
+            print('OCTILE %4d %4d %016X %016X %24d' % tuple(octile))
 
         # # octile_dict = {(upper, left): [np.uint64(), np.uint64(),
         # #                                umzeros(64, edge_type)]
@@ -185,12 +186,15 @@ class OctileGraph(object):
 
     @property
     def p_octile(self):
+        print('int(self.octiles.base) %x' % int(self.octiles.base))
         return int(self.octiles.base)
 
     @property
     def p_degree(self):
+        print('int(self.degree.base) %x' % int(self.degree.base))
         return int(self.degree.base)
 
     @property
     def p_node(self):
+        print('int(self.node.base) %x' % int(self.node.base))
         return int(self.node.base)
