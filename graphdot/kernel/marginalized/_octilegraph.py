@@ -57,9 +57,14 @@ class OctileGraph(object):
             np.add.at(degree, edges['!i'], edges['!w'])
             np.add.at(degree, edges['!j'], edges['!w'])
 
-            edge_aos = np.fromiter(zip(edges['!w'],
-                                       zip(*[edges[t] for t in edge_label_type.names])
-                                       ), dtype=edge_type)
+            # print('edge_label_type', edge_label_type)
+            if edge_label_type.itemsize != 0:
+                edge_aos = np.fromiter(zip(edges['!w'],
+                                        zip(*[edges[t] for t in edge_label_type.names])
+                                        ), dtype=edge_type)
+            else:
+                edge_aos = np.fromiter(zip(edges['!w'], [None] * len(edges)), dtype=edge_type)
+            # print('edge_aos\n', edge_aos, sep='')
 
         else:
             self.weighted = False
@@ -74,7 +79,7 @@ class OctileGraph(object):
         #                       for i, j in zip(edges['!i'], edges['!j'])], axis=0)
 
         nnz = len(edges)
-        print('edges\n', edges, sep='')
+        # print('edges\n', edges, sep='')
 
         indices = np.empty((4, nnz * 2), dtype=np.uint32, order='C')
         i, j, up, lf = indices
@@ -85,9 +90,9 @@ class OctileGraph(object):
         order = np.lexsort(indices, axis=0)
         perm = order % nnz
         indices[:, :] = indices[:, order]
-        print(order)
-        print(perm)
-        print('indices.T\n', indices.T, sep='')
+        # print(order)
+        # print(perm)
+        # print('indices.T\n', indices.T, sep='')
 
         diff = np.empty(nnz * 2)
         diff[0] = True
@@ -95,7 +100,7 @@ class OctileGraph(object):
 
         octile_starts = np.flatnonzero(diff)
 
-        print(octile_starts)
+        # print(octile_starts)
 
         # compose nzmasks
 
@@ -104,34 +109,34 @@ class OctileGraph(object):
         nzmasks = np.bitwise_or.reduceat(1 << (i - up + (j - lf) * 8).astype(np.uint64), octile_starts)
         nzmasks_r = np.bitwise_or.reduceat(1 << (j - lf + (i - up) * 8).astype(np.uint64), octile_starts)
 
-        print('i - up\n', i - up, sep='')
-        print('j - lf\n', j - lf, sep='')
+        # print('i - up\n', i - up, sep='')
+        # print('j - lf\n', j - lf, sep='')
 
-        print('i - up + (j - lf) * 8\n', i - up + (j - lf) * 8, sep='')
-        print('1 << (i - up + (j - lf) * 8)\n', 1 << (i - up + (j - lf) * 8), sep='')
-        print('i j mask\n', np.column_stack((i, j, 1 << np.array(i - up + (j - lf) * 8, dtype=np.uint64))), sep='')
+        # print('i - up + (j - lf) * 8\n', i - up + (j - lf) * 8, sep='')
+        # print('1 << (i - up + (j - lf) * 8)\n', 1 << (i - up + (j - lf) * 8), sep='')
+        # print('i j mask\n', np.column_stack((i, j, 1 << np.array(i - up + (j - lf) * 8, dtype=np.uint64))), sep='')
 
-        print('nzmasks')
-        import sys
-        for m in nzmasks:
-            print('%016X' % m)
-            for r in range(8):
-                for c in range(8):
-                    sys.stdout.write('# ' if m & np.uint64(1 << (r + c * 8)) else '. ')
-                sys.stdout.write('\n')
+        # print('nzmasks')
+        # import sys
+        # for m in nzmasks:
+        #     print('%016X' % m)
+        #     for r in range(8):
+        #         for c in range(8):
+        #             sys.stdout.write('# ' if m & np.uint64(1 << (r + c * 8)) else '. ')
+        #         sys.stdout.write('\n')
 
         self.n_octile = n_octile = len(octile_starts)
         self.elements = elements = umempty(nnz * 2, edge_type)
         self.octiles = octiles = umempty(n_octile, self.Octile.dtype)
 
-        print(type(elements.base))
-        print(int(elements.base))
+        # print(type(elements.base))
+        # print(int(elements.base))
 
         elements[:] = edge_aos[perm]
 
-        print('elements\n', elements, sep='')
+        # print('elements\n', elements, sep='')
 
-        print('edge_type.itemsize', edge_type.itemsize)
+        # print('edge_type.itemsize', edge_type.itemsize)
 
         octiles[:] = list(zip(int(elements.base) + octile_starts * edge_type.itemsize,
                               nzmasks,
@@ -140,9 +145,9 @@ class OctileGraph(object):
                               lf[octile_starts])
                               )
         
-        print('octiles')
-        for octile in octiles:
-            print('OCTILE %4d %4d %016X %016X %24d' % tuple(octile))
+        # print('octiles')
+        # for octile in octiles:
+        #     print('OCTILE %4d %4d %016X %016X %24d' % tuple(octile))
 
         # # octile_dict = {(upper, left): [np.uint64(), np.uint64(),
         # #                                umzeros(64, edge_type)]
@@ -186,15 +191,15 @@ class OctileGraph(object):
 
     @property
     def p_octile(self):
-        print('int(self.octiles.base) %x' % int(self.octiles.base))
+        # print('int(self.octiles.base) %x' % int(self.octiles.base))
         return int(self.octiles.base)
 
     @property
     def p_degree(self):
-        print('int(self.degree.base) %x' % int(self.degree.base))
+        # print('int(self.degree.base) %x' % int(self.degree.base))
         return int(self.degree.base)
 
     @property
     def p_node(self):
-        print('int(self.node.base) %x' % int(self.node.base))
+        # print('int(self.node.base) %x' % int(self.node.base))
         return int(self.node.base)
