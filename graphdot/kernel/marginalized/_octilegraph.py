@@ -82,15 +82,15 @@ class OctileGraph(object):
         # get upper left corner of owner octiles
         up[:] = i - i % 8
         lf[:] = j - j % 8
-        
-        order = np.lexsort(indices, axis=0)
-        indices[:, :] = indices[:, order]
+
+        perm = np.lexsort(indices, axis=0)
+        indices[:, :] = indices[:, perm]
         self.edge_aos = umempty(nnz * 2, edge_type)
-        self.edge_aos[:] = edge_aos[order % nnz]  # mod nnz due to symmetry
+        self.edge_aos[:] = edge_aos[perm % nnz]  # mod nnz due to symmetry
 
         diff = np.empty(nnz * 2)
-        diff[:1] = True
         diff[1:] = (up[:-1] != up[1:]) | (lf[:-1] != lf[1:])
+        diff[:1] = True
         oct_offset = np.flatnonzero(diff)
         self.n_octile = len(oct_offset)
 
