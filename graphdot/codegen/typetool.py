@@ -100,7 +100,7 @@ def decltype(type, name=''):
     else:
         return '{} {}'.format(str(type.name), name)
 
-# @profile
+@profile
 def rowtype(df, pack=True, exclude=None):
     if pack is True:
         order = np.argsort([-df[key].dtype.itemsize for key in df.columns])

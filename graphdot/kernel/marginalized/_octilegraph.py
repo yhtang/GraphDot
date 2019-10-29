@@ -24,7 +24,7 @@ class OctileGraph(object):
             self.nzmask_r = nzmask_r
             self.elements = elements
 
-    # @profile
+    @profile
     def __init__(self, graph):
 
         nodes = graph.nodes
@@ -43,8 +43,8 @@ class OctileGraph(object):
 
         ''' determine node type '''
         self.node_type = node_type = rowtype(nodes)
-        self.node = umlike(nodes[list(node_type.names)]
-                           .to_records(index=False).astype(node_type))
+        self.node = umempty(len(nodes), dtype=node_type)
+        self.node[:] = list(zip(*[nodes[key] for key in node_type.names]))
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
