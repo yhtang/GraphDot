@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """ The GraphDot library for graph similarity comparison """
 from .graph import Graph
 

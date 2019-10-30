@@ -41,7 +41,7 @@ class OctileGraph(object):
             edges = edges.assign(labeled=lambda _: False)
 
         ''' determine node type '''
-        self.node_type = node_type = rowtype(nodes)
+        self.node_type = node_type = rowtype(nodes, exclude=['!i'])
         self.node = umempty(len(nodes), dtype=node_type)
         self.node[:] = list(zip(*[nodes[key] for key in node_type.names]))
 

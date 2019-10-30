@@ -9,24 +9,19 @@ graph formats.
 import uuid
 from itertools import product
 import numpy as np
-import pandas as pd
 from scipy.spatial import cKDTree
 from graphdot.graph.adjacency.atomic import AtomicAdjacency
+from graphdot.minipandas import DataFrame
 
 __all__ = ['Graph']
 
 
 def _from_dict(d):
-    if isinstance(d, pd.DataFrame):
+    if isinstance(d, DataFrame):
         return d
-    elif all([key in d for key in ['index', 'columns', 'data']]):
-        # format of pandas.DataFrame.to_dict('split')
-        return pd.DataFrame(d['data'],
-                            index=d['index'],
-                            columns=d['columns'])
     else:
-        # format of pandas.DataFrame.to_dict('dict') i.e. the default style
-        return pd.DataFrame(d)
+        # dict of column name-data pairs
+        return DataFrame(d)
 
 
 class Graph:
@@ -51,8 +46,8 @@ class Graph:
     def __repr__(self):
         return '<{}(nodes={}, edges={}, title={})>'.\
             format(type(self).__name__,
-                   self.nodes.to_dict('split'),
-                   self.edges.to_dict('split'),
+                   repr(self.nodes),
+                   repr(self.edges),
                    repr(self.title))
 
     # @classmethod
@@ -110,7 +105,7 @@ class Graph:
                                 'attributes {} '.format(node.keys()) +
                                 'inconsistent with {}'.format(node_attr))
 
-        node_df = pd.DataFrame(index=range(graph.number_of_nodes()))
+        node_df = DataFrame({'!i': range(len(graph.nodes))})
         for key in node_attr:
             node_df[key] = [node[key] for node in graph.nodes.values()]
 
@@ -124,7 +119,7 @@ class Graph:
                                 'attributes {} '.format(edge.keys()) +
                                 'inconsistent with {}'.format(edge_attr))
 
-        edge_df = pd.DataFrame(index=range(graph.number_of_edges()))
+        edge_df = DataFrame()
         edge_df['!i'], edge_df['!j'] = zip(*graph.edges.keys())
         if weight is not None:
             edge_df['!w'] = [edge[weight] for edge in graph.edges.values()]
@@ -157,7 +152,7 @@ class Graph:
         if adjacency == 'default':
             adjacency = AtomicAdjacency()
 
-        nodes = pd.DataFrame()
+        nodes = DataFrame({'!i': range(len(atoms))})
         nodes['element'] = atoms.get_atomic_numbers().astype(np.int8)
 
         pbc = np.logical_and(atoms.pbc, use_pbc)
@@ -171,20 +166,23 @@ class Graph:
         cutoff = adjacency.cutoff(atoms.get_atomic_numbers())
         nl = cKDTree(x).sparse_distance_matrix(cKDTree(x_images), cutoff)
 
-        edge_data = {}
+        edgedict = {}
         for (i, j), r in nl.items():
             j = j_images[j]
             if j > i:
                 w = adjacency(atoms[i].number, atoms[j].number, r)
-                if w > 0 and ((i, j) not in edge_data or
-                              edge_data[(i, j)][1] > r):
-                    edge_data[(i, j)] = (w, r)
-        edge_data = [(i, j, w, r) for (i, j), (w, r) in edge_data.items()]
+                if w > 0 and ((i, j) not in edgedict or
+                              edgedict[(i, j)][1] > r):
+                    edgedict[(i, j)] = (w, r)
+        i, j, w, r = list(zip(*[(i, j, w, r)
+                                for (i, j), (w, r) in edgedict.items()]))
 
-        edges = pd.DataFrame(edge_data, columns=['!i', '!j', '!w', 'length'])
-        edges = edges.astype({'!i': np.uint32,
-                              '!j': np.uint32,
-                              'length': np.float32})
+        edges = DataFrame({
+            '!i': np.array(i, dtype=np.uint32),
+            '!j': np.array(j, dtype=np.uint32),
+            '!w': np.array(w, dtype=np.float32),
+            'length': np.array(r, dtype=np.float32),
+        })
 
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
                    formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
@@ -235,11 +233,10 @@ class Graph:
         for _, n in m.nodes.items():
             n['element'] = element(n['element']).atomic_number
         graph = cls.from_networkx(m)
-        graph.nodes = graph.nodes.astype(dict(aromatic=np.bool_,
-                                              charge=np.float32,
-                                              element=np.int8,
-                                              hcount=np.int8))
-        graph.edges = graph.edges.astype(dict(order=np.float32))
+        for attr, dtype in zip(['aromatic', 'charge', 'element', 'hcount'],
+                               [np.bool_, np.float32, np.int8, np.int8]):
+            graph.nodes[attr] = graph.nodes[attr].astype(dtype)
+        graph.edges['order'] = graph.edges['order'].astype(np.float32)
         return graph
 
     # @classmethod
