@@ -101,7 +101,7 @@ def decltype(type, name=''):
         return '{} {}'.format(str(type.name), name)
 
 
-def rowtype(df, pack=True, exclude=None):
+def rowtype(df, pack=True, exclude=[]):
     selection = np.array([key for key in df.columns if key not in exclude])
     if pack is True:
         perm = np.argsort([-df[key].dtype.itemsize for key in selection])
