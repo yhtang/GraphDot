@@ -102,13 +102,10 @@ def decltype(type, name=''):
 
 
 def rowtype(df, pack=True, exclude=None):
+    selection = np.array([key for key in df.columns if key not in exclude])
     if pack is True:
-        perm = np.argsort([-df[key].dtype.itemsize for key in df.columns])
-        packed_attributes = np.array(list(df.columns))[perm]
-    else:
-        packed_attributes = list(df.columns)
-    if exclude:
-        packed_attributes = [a for a in packed_attributes if a not in exclude]
+        perm = np.argsort([-df[key].dtype.itemsize for key in selection])
+        selection = selection[perm]
     packed_dtype = np.dtype([(key, df[key].dtype.newbyteorder('='))
-                             for key in packed_attributes], align=True)
+                             for key in selection], align=True)
     return packed_dtype
