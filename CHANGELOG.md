@@ -1,3 +1,6 @@
+## 0.2.5 (2019-10-30)
+- Improved the performance of successive graph kernel evaluations
+
 ## 0.2.4 (2019-10-29)
 - Improved the performance of graph format conversion for the GPU kernel by 3 times.
 
