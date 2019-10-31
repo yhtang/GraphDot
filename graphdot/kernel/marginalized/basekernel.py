@@ -70,15 +70,15 @@ class Kernel:
                                                  k2=self.k2.gen_constexpr(x, y),
                                                  op=opstr)
 
-            def gen_expr(self, theta_prefix, x, y):
+            def gen_expr(self, x, y, theta_prefix=''):
                 return '({k1} {op} {k2})'.format(
-                    k1=self.k1.gen_expr(theta_prefix + 'k1.', x, y),
-                    k2=self.k2.gen_expr(theta_prefix + 'k2.', x, y),
+                    k1=self.k1.gen_expr(x, y, theta_prefix + 'k1.'),
+                    k2=self.k2.gen_expr(x, y, theta_prefix + 'k2.'),
                     op=opstr)
 
             @property
             def theta(self):
-                return [self.k1.theta, self.k2.theta]
+                return (self.k1.theta, self.k2.theta)
 
             @theta.setter
             def theta(self, seq):
@@ -122,12 +122,12 @@ def Constant(constant):
         def gen_constexpr(self, x, y):
             return '{:f}f'.format(self.constant)
 
-        def gen_expr(self, theta_prefix, x, y):
+        def gen_expr(self, x, y, theta_prefix=''):
             return '{}constant'.format(theta_prefix)
 
         @property
         def theta(self):
-            return [self.constant]
+            return (self.constant,)
 
         @theta.setter
         def theta(self, seq):
@@ -175,12 +175,12 @@ def KroneckerDelta(h0, h1=1.0):
         def gen_constexpr(self, x, y):
             return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.h1, self.h0)
 
-        def gen_expr(self, theta_prefix, x, y):
+        def gen_expr(self, x, y, theta_prefix=''):
             return '({} == {} ? {p}h1 : {p}h0)'.format(x, y, p=theta_prefix)
 
         @property
         def theta(self):
-            return [self.h0, self.h1]
+            return (self.h0, self.h1)
 
         @theta.setter
         def theta(self, seq):
@@ -227,9 +227,9 @@ def SquareExponential(length_scale):
 
         def gen_constexpr(self, x, y):
             return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
-                -0.5 / self.length_scale**2, x, y, x, y)
+                self.nrsql, x, y, x, y)
 
-        def gen_expr(self, theta_prefix, x, y):
+        def gen_expr(self, x, y, theta_prefix=''):
             return 'expf({p}nrsql * ({x} - {y}) * ({x} - {y}))'.format(
                 p=theta_prefix, x=x, y=y)
 
@@ -239,7 +239,7 @@ def SquareExponential(length_scale):
 
         @property
         def theta(self):
-            return [self.length_scale]
+            return (self.length_scale,)
 
         @theta.setter
         def theta(self, seq):
@@ -267,12 +267,12 @@ class _Multiply(Kernel):
     def gen_constexpr(self, x, y):
         return '({} * {})'.format(x, y)
 
-    def gen_expr(self, theta_prefix, x, y):
+    def gen_expr(self, x, y, theta_prefix=''):
         return '({} * {})'.format(x, y)
 
     @property
     def theta(self):
-        return []
+        return tuple()
 
     @theta.setter
     def theta(self, seq):
@@ -321,6 +321,9 @@ def TensorProduct(**kw_kernels):
         def __init__(self, **kw_kernels):
             self.kw_kernels = kw_kernels
 
+        def __getattr__(self, attr):
+            return self.kw_kernels[attr]
+
         def __call__(self, object1, object2):
             prod = 1.0
             for key, kernel in self.kw_kernels.items():
@@ -342,16 +345,16 @@ def TensorProduct(**kw_kernels):
                                 '%s.%s' % (y, key))
                       for key, k in self.kw_kernels.items()])
 
-        def gen_expr(self, theta_prefix, x, y):
+        def gen_expr(self, x, y, theta_prefix=''):
             return Template('(${expr*})').render(
-                expr=[k.gen_expr('%s%s.' % (theta_prefix, key),
-                                '%s.%s' % (x, key),
-                                '%s.%s' % (y, key))
+                expr=[k.gen_expr('%s.%s' % (x, key),
+                                 '%s.%s' % (y, key),
+                                 '%s%s.' % (theta_prefix, key))
                       for key, k in self.kw_kernels.items()])
 
         @property
         def theta(self):
-            return [k.theta for k in self.kw_kernels.values()]
+            return tuple(k.theta for k in self.kw_kernels.values())
 
         @theta.setter
         def theta(self, seq):

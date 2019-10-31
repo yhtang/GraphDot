@@ -4,6 +4,7 @@ import os
 import uuid
 import warnings
 import numpy as np
+import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 from graphdot import cpp
 from graphdot.codegen import Template
@@ -210,27 +211,39 @@ class MarginalizedGraphKernel:
             edge_kernel = self.edge_kernel
 
         node_kernel_src = Template(r'''
-        struct node_kernel {
+        using node_theta_t = ${theta_t};
+
+        struct node_kernel_t : node_theta_t {
             template<class V> __device__ __inline__
-            static auto compute(V const &v1, V const &v2) {
-                return ${node_expr};
+            auto operator() (V const &v1, V const &v2) const {
+                return ${expr};
             }
         };
-        ''').render(node_expr=self.node_kernel.gen_constexpr('v1', 'v2'))
+
+        __constant__ node_kernel_t node_kernel;
+        ''').render(
+            theta_t=decltype(self.node_kernel),
+            expr=self.node_kernel.gen_expr('v1', 'v2')
+        )
 
         edge_kernel_src = Template(r'''
-        struct edge_kernel {
+        using edge_theta_t = ${theta_t};
+
+        struct edge_kernel_t : edge_theta_t {
             template<class T> __device__ __inline__
-            static auto compute(T const &e1, T const &e2) {
-                return ${edge_expr};
+            auto operator() (T const &e1, T const &e2) const {
+                return ${expr};
             }
         };
-        ''').render(edge_expr=edge_kernel.gen_constexpr('e1', 'e2'))
+
+        __constant__ edge_kernel_t edge_kernel;
+        ''').render(
+            theta_t=decltype(edge_kernel),
+            expr=edge_kernel.gen_expr('e1', 'e2')
+        )
 
         self.source = self.template.render(node_kernel=node_kernel_src,
                                            edge_kernel=edge_kernel_src,
-                                           node_theta_t=decltype(self.node_kernel),
-                                           edge_theta_t=decltype(self.edge_kernel),
                                            node_t=decltype(node_type),
                                            edge_t=decltype(edge_type))
         self.timer.toc('code generation')
@@ -250,6 +263,15 @@ class MarginalizedGraphKernel:
 
         max_graph_size = np.max([len(g.nodes) for g in graphs])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
+
+        p_node_kernel, _ = self.module.get_global('node_kernel')
+        cuda.memcpy_htod(p_node_kernel, np.array([self.node_kernel.state],
+                                                 dtype=self.node_kernel.dtype))
+
+        p_edge_kernel, _ = self.module.get_global('edge_kernel')
+        cuda.memcpy_htod(p_edge_kernel, np.array([self.edge_kernel.state],
+                                                 dtype=self.edge_kernel.dtype))
+        
         self.timer.toc('calculating launch configuration')
 
         ''' GPU kernel execution '''
@@ -445,7 +467,6 @@ class MarginalizedGraphKernel:
         ''' post processing '''
         self.timer.tic('collecting result')
         if nodal == 'block':
-            print(len(output))
             output = [output[s:s + n**2].reshape(n, n)
                       for s, n in zip(starts[:-1], sizes)]
         self.timer.toc('collecting result')
