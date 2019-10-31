@@ -121,6 +121,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
     template<class NodeKernel, class EdgeKernel>
     __inline__ __device__ static void compute(
+        NodeKernel const node_kernel,
+        EdgeKernel const edge_kernel,
         Graph const    g1,
         Graph const    g2,
         scratch_t      scratch,
@@ -158,7 +160,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             //    = Vx . Dx^-1 . b
             //    = Vx . Dx^-1 . Dx . qx
             //    = Vx . qx
-            float z0 = NodeKernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+            float z0 = node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
             // x0 = 0
             scratch.x(i) = 0;
             scratch.r(i) = r0;
@@ -286,8 +288,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                     if (o2.nzmask_r_bytes[i2] & colmask2) {
                                         auto e2 = octile2(i2, j2);
                                         auto r  = rhs(j1, j2);
-                                        sum_upper -= r * (m1_upper ? EdgeKernel::compute(e1_upper, e2) : 0.f);
-                                        sum_lower -= r * (m1_lower ? EdgeKernel::compute(e1_lower, e2) : 0.f);
+                                        sum_upper -= r * (m1_upper ? edge_kernel(e1_upper, e2) : 0.f);
+                                        sum_lower -= r * (m1_lower ? edge_kernel(e1_lower, e2) : 0.f);
                                     }
                                 }
                             }
@@ -304,10 +306,10 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                     auto r  = rhs (j1, j2);
                                     auto m2 = 1ULL << (i2 + j2 * octile_h);
                                     if ((o1.nzmask & m1_upper) && (o2.nzmask & m2)) {
-                                        sum_upper -= EdgeKernel::compute(e1_upper, e2) * r;
+                                        sum_upper -= edge_kernel(e1_upper, e2) * r;
                                     }
                                     if ((o1.nzmask & m1_lower) && (o2.nzmask & m2)) {
-                                        sum_lower -= EdgeKernel::compute(e1_lower, e2) * r ;
+                                        sum_lower -= edge_kernel(e1_lower, e2) * r ;
                                     }
                                 }
                             }
@@ -333,7 +335,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                 auto e1 = octile1(p1);
                                 auto e2 = octile2(p2);
                                 auto r  = rhs(j1, j2);
-                                atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2)), -EdgeKernel::compute(e1, e2) * r);
+                                atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2)), -edge_kernel(e1, e2) * r);
                             }
                         }
                     }
@@ -362,7 +364,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                 float d1 = g1.degree[i1] / (1 - q);
                 float d2 = g2.degree[i2] / (1 - q);
                 float D  = d1 * d2;
-                float V  = NodeKernel::compute(g1.node[i1], g2.node[i2]);
+                float V  = node_kernel(g1.node[i1], g2.node[i2]);
                 scratch.z(i) = scratch.r(i) / (D / V);
                 rTr += scratch.r(i) * scratch.r(i);
                 rTz_next += scratch.r(i) * scratch.z(i);
@@ -398,7 +400,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                 float d1      = g1.degree[i1] / (1 - q);
                 float d2      = g2.degree[i2] / (1 - q);
                 scratch.p(i)  = p;
-                scratch.Ap(i) = d1 * d2 / NodeKernel::compute(g1.node[i1], g2.node[i2]) * p;
+                scratch.Ap(i) = d1 * d2 / node_kernel(g1.node[i1], g2.node[i2]) * p;
             }
             __syncthreads();
 

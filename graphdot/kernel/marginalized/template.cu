@@ -7,6 +7,7 @@ using namespace graphdot::numpy_type;
 
 ${node_kernel}
 ${edge_kernel}
+
 using node_t = ${node_t};
 using edge_t = ${edge_t};
 
@@ -68,7 +69,7 @@ extern "C" {
                 }
             }
 
-            solver_t::compute<node_kernel, edge_kernel>(g1, g2, scratch, shmem, q, q0);
+            solver_t::compute(node_kernel, edge_kernel, g1, g2, scratch, shmem, q, q0);
             __syncthreads();
 
             /********* post-processing *********/
@@ -84,7 +85,7 @@ extern "C" {
                 int i2 = i % n2;
                 auto r = scratch.x(i);
                 if (traits & trait_t::LMIN1) {
-                    r -= node_kernel::compute(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+                    r -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
                 scratch.x(i) = r * p1[i1] * p2[i2];
             }
