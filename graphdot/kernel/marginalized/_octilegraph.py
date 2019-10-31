@@ -32,13 +32,14 @@ class OctileGraph(object):
         nnz = len(edges)
 
         ''' add phantom label if none exists to facilitate C++ interop '''
-        if len(nodes.columns) == 0:
-            nodes = nodes.assign(labeled=lambda _: False)
+        assert(len(edges.columns) >= 1)
+        if len(nodes.columns) == 1:
+            nodes['labeled'] = np.zeros(len(nodes), np.bool_)
 
         assert(len(edges.columns) >= 2)
         if len(edges.columns) == 2:
             assert('!i' in edges.columns and '!j' in edges.columns)
-            edges = edges.assign(labeled=lambda _: False)
+            edges['labeled'] = np.zeros(len(edges), np.bool_)
 
         ''' determine node type '''
         self.node_type = node_type = rowtype(nodes, exclude=['!i'])
