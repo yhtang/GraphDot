@@ -175,28 +175,28 @@ class MarginalizedGraphKernel:
         ''' transfer graphs and starting probabilities to GPU '''
         self.timer.tic('transferring graphs to GPU')
 
-        idx_header = np.empty(len(graphs), np.uint32)
-        oct_graphs = np.empty(len(graphs), np.object)
+        og_last = None
+        og_indices = np.empty(len(graphs), np.uint32)
         starting_p = umempty(len(graphs), np.uintp)
 
         for i, g in enumerate(graphs):
             idx, p, og = self._register_graph(g)
-            idx_header[i] = idx
-            oct_graphs[i] = og
+            if i > 0:
+                self._assert_homogeneous(og_last, og)
+            og_last = og
+            og_indices[i] = idx
             starting_p[i] = int(p.base)
-            self._assert_homogeneous(oct_graphs[0], og)
 
-        idx_header_d = umlike(self.graph_cpp[idx_header])
+        og_indices_d = umlike(self.graph_cpp[og_indices])
 
-        weighted = oct_graphs[0].weighted
-        node_type = oct_graphs[0].node_type
-        edge_type = oct_graphs[0].edge_type
+        weighted = og_last.weighted
+        node_type = og_last.node_type
+        edge_type = og_last.edge_type
 
         self.timer.toc('transferring graphs to GPU')
 
         ''' allocate global job counter '''
         self.timer.tic('allocate global job counter')
-        # i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
         i_job_global = umzeros(1, np.uint32)
         self.timer.toc('allocate global job counter')
 
@@ -253,7 +253,7 @@ class MarginalizedGraphKernel:
         ''' GPU kernel execution '''
         self.timer.tic('GPU kernel execution')
         kernel(
-            idx_header_d,
+            og_indices_d,
             starting_p,
             self.scratch_d,
             jobs,
