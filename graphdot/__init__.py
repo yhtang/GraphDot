@@ -1,9 +1,11 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """ The GraphDot library for graph similarity comparison """
 from .graph import Graph
 
 __all__ = ['Graph']
 
-__version__ = '0.2.4'
+__version__ = '0.2.5'
 __author__ = 'Yu-Hang "Maxin" Tang, Oguz Selvitopi'
 __maintainer__ = 'Yu-Hang "Maxin" Tang'
 __email__ = 'Tang.Maxin@gmail.com'

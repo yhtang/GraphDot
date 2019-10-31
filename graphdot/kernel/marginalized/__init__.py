@@ -9,7 +9,8 @@ from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import decltype
 import graphdot.cuda
-from graphdot.cuda.array import umempty, umzeros, umarray
+from graphdot.cuda.array import umempty, umzeros, umarray, umlike
+from graphdot.cuda.resizable_array import ResizableArray
 from graphdot.util import Timer
 from ._scratch import BlockScratch
 from ._octilegraph import OctileGraph
@@ -74,6 +75,7 @@ class MarginalizedGraphKernel:
         self.scratch = None
         self.scratch_capacity = 0
         self.graph_cache = {}
+        self.graph_cpp = ResizableArray(OctileGraph.dtype, allocator='numpy')
 
         self.p = self._get_starting_probability(kwargs.pop('p', 'default'))
         self.q = kwargs.pop('q', 0.01)
@@ -103,37 +105,38 @@ class MarginalizedGraphKernel:
         """scikit-learn compatibility method"""
         pass
 
-    def _assert_homegeneous(self, X):
-        for x1, x2 in zip(X[:-1], X[1:]):
-            try:
-                assert(x1.weighted == x2.weighted)
-                assert(x1.node_type == x2.node_type)
-                assert(x1.edge_type == x2.edge_type)
-            except AssertionError as e:
-                raise TypeError('All graphs must be of the same type: %s' %
-                                str(e))
-
-    def _convert_to_octilegraph(self, graph):
+    def _register_graph(self, graph):
         if not hasattr(graph, 'uuid'):
             graph.uuid = uuid.uuid4()
         if graph.uuid not in self.graph_cache:
             # convert to GPU format
             og = OctileGraph(graph)
             # assign starting probabilities
-            p = umarray(np.array([self.p(n) for n in graph.nodes.iterrows()],
+            p = umarray(np.array([self.p(*r) for r in graph.nodes.iterrows()],
                                  dtype=np.float32))
-            self.graph_cache[graph.uuid] = (og, p)
+            i = len(self.graph_cpp)
+            self.graph_cache[graph.uuid] = (i, p, og)
+            self.graph_cpp.append(og.state)
         return self.graph_cache[graph.uuid]
 
     def _get_starting_probability(self, p):
         if isinstance(p, str):
             if p == 'uniform' or p == 'default':
-                return lambda n: 1.0
+                return lambda i, n: 1.0
             else:
                 raise ValueError('Unknown starting probability distribution %s'
                                  % self.p)
         else:
             return p
+
+    def _assert_homogeneous(self, x, y):
+        try:
+            assert(x.weighted == y.weighted)
+            assert(x.node_type == y.node_type)
+            assert(x.edge_type == y.edge_type)
+        except AssertionError as e:
+            raise TypeError('All graphs must be of the same type: %s' %
+                            str(e))
 
     def _compile(self, src):
         with warnings.catch_warnings(record=True) as w:
@@ -171,31 +174,34 @@ class MarginalizedGraphKernel:
                        traits):
         ''' transfer graphs and starting probabilities to GPU '''
         self.timer.tic('transferring graphs to GPU')
-        oct_graphs = []
-        starting_p = []
-        for g in graphs:
-            og, p = self._convert_to_octilegraph(g)
-            oct_graphs.append(og)
-            starting_p.append(p)
-        self._assert_homegeneous(oct_graphs)
-        oct_graphs_d = umarray(np.array([g.state for g in oct_graphs],
-                                        OctileGraph.dtype))
-        starting_p = umarray(np.array([int(p.base) for p in starting_p],
-                                      np.uintp))
+
+        og_last = None
+        og_indices = np.empty(len(graphs), np.uint32)
+        starting_p = umempty(len(graphs), np.uintp)
+
+        for i, g in enumerate(graphs):
+            idx, p, og = self._register_graph(g)
+            if i > 0:
+                self._assert_homogeneous(og_last, og)
+            og_last = og
+            og_indices[i] = idx
+            starting_p[i] = int(p.base)
+
+        og_indices_d = umlike(self.graph_cpp[og_indices])
+
+        weighted = og_last.weighted
+        node_type = og_last.node_type
+        edge_type = og_last.edge_type
+
         self.timer.toc('transferring graphs to GPU')
 
         ''' allocate global job counter '''
         self.timer.tic('allocate global job counter')
-        # i_job_global = pycuda.gpuarray.zeros(1, np.uint32)
         i_job_global = umzeros(1, np.uint32)
         self.timer.toc('allocate global job counter')
 
         ''' code generation '''
         self.timer.tic('code generation')
-        x = next(iter(oct_graphs))
-        weighted = x.weighted
-        node_type = x.node_type
-        edge_type = x.edge_type
 
         if weighted:
             edge_kernel = TensorProduct(weight=_Multiply(),
@@ -240,14 +246,14 @@ class MarginalizedGraphKernel:
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
-        max_graph_size = np.max([g.n_node for g in oct_graphs])
+        max_graph_size = np.max([len(g.nodes) for g in graphs])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
         self.timer.toc('calculating launch configuration')
 
         ''' GPU kernel execution '''
         self.timer.tic('GPU kernel execution')
         kernel(
-            oct_graphs_d,
+            og_indices_d,
             starting_p,
             self.scratch_d,
             jobs,

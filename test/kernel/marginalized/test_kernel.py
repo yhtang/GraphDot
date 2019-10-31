@@ -23,12 +23,8 @@ def MLGK(G, knode, kedge, q, q0, nodal=False):
         for j, n2 in G.nodes.iterrows():
             Vx[i*N+j] = knode(n1, n2)
 
-    for i1, j1, (_, e1) in zip(G.edges['!i'], G.edges['!j'],
-                               G.edges.drop(['!i', '!j', '!w'], axis=1,
-                                            errors='ignore').iterrows()):
-        for i2, j2, (_, e2) in zip(G.edges['!i'], G.edges['!j'],
-                                   G.edges.drop(['!i', '!j', '!w'], axis=1,
-                                                errors='ignore').iterrows()):
+    for i1, j1, e1 in zip(G.edges['!i'], G.edges['!j'], G.edges.rows()):
+        for i2, j2, e2 in zip(G.edges['!i'], G.edges['!j'], G.edges.rows()):
             Ex[i1 * N + i2, j1 * N + j2] = kedge(e1, e2)
             Ex[i1 * N + j2, j1 * N + i2] = kedge(e1, e2)
             Ex[j1 * N + j2, i1 * N + i2] = kedge(e1, e2)
@@ -292,7 +288,7 @@ def test_mlgk_starting_probability(caseitem):
     for q in case['q']:
 
         mlgk = MarginalizedGraphKernel(knode, kedge, q=q,
-                                       p=lambda node: 2.0)
+                                       p=lambda i, node: 2.0)
         R = mlgk(G)
         R_nodal = mlgk(G, nodal=True)
         gnd_R00 = MLGK(G[0], knode, kedge, q, q) * 2.0**2

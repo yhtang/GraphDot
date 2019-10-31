@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import numpy as np
 import pytest
+import numpy as np
 import pycuda.autoinit
 from graphdot.kernel.marginalized._octilegraph import OctileGraph
 from graphdot import Graph
@@ -12,11 +12,18 @@ def test_octile_graph_unweighted():
     assert(OctileGraph.dtype.isalignedstruct)
 
     dfg = Graph(
-        nodes={'index': [0, 1, 2],
-               'columns': ['charge', 'conjugate', 'hybridization'],
-               'data': [[1, False, 2], [-1, True, 3], [2, True, 1]]},
-        edges={'index': [0, 1], 'columns': ['!i', '!j', 'length', 'order'],
-               'data': [[0, 1, 0.5, 1], [0, 2, 1.0, 2]]},
+        nodes={
+            '!i': [0, 1, 2],
+            'charge': [1, -1, 2],
+            'conjugate': [False, True, True],
+            'hybridization': [2, 3, 1]
+        },
+        edges={
+            '!i': [0, 0],
+            '!j': [1, 2],
+            'length': [0.5, 1.0],
+            'order': [1, 2]
+        },
         title='H2O')
 
     og = OctileGraph(dfg)
@@ -34,13 +41,16 @@ def test_octile_graph_unweighted():
     assert(og.node_type.isalignedstruct)
     for name in og.node_type.names:
         assert(name in dfg.nodes.columns)
-    for name in dfg.nodes.columns:
-        assert(name in og.node_type.names)
+    assert('charge' in og.node_type.names)
+    assert('conjugate' in og.node_type.names)
+    assert('hybridization' in og.node_type.names)
 
     assert(og.edge_type.isalignedstruct)
     for name in og.edge_type.names:
         assert(name in dfg.edges.columns)
-    for name in dfg.edges.drop(['!i', '!j'], axis=1).columns:
+    for name in dfg.edges.columns:
+        if name in ['!i', '!j']:
+            continue
         assert(name in og.edge_type.names)
 
 
@@ -48,12 +58,20 @@ def test_octile_graph_weighted():
 
     assert(OctileGraph.dtype.isalignedstruct)
 
-    dfg = Graph(nodes={'index': [0, 1, 2],
-                       'columns': ['charge', 'conjugate', 'hybridization'],
-                       'data': [[1, False, 2], [-1, True, 3], [2, True, 1]]},
-                edges={'index': [0, 1], 'columns': ['!i', '!j', 'length', '!w'],
-                       'data': [[0, 1, 0.5, 1.0], [0, 2, 1.0, 2.0]]},
-                title='H2O')
+    dfg = Graph(
+        nodes={
+            '!i': [0, 1, 2],
+            'charge': [1, -1, 2],
+            'conjugate': [False, True, True],
+            'hybridization': [2, 3, 1]
+        },
+        edges={
+            '!i': [0, 0],
+            '!j': [1, 2],
+            'length': [0.5, 1.0],
+            '!w': [1.0, 2.0]
+        },
+        title='H2O')
 
     og = OctileGraph(dfg)
     assert(og.n_node == len(dfg.nodes))
@@ -70,8 +88,9 @@ def test_octile_graph_weighted():
     assert(og.node_type.isalignedstruct)
     for name in og.node_type.names:
         assert(name in dfg.nodes.columns)
-    for name in dfg.nodes.columns:
-        assert(name in og.node_type.names)
+    assert('charge' in og.node_type.names)
+    assert('conjugate' in og.node_type.names)
+    assert('hybridization' in og.node_type.names)
 
     assert(og.edge_type.isalignedstruct)
     assert(len(og.edge_type.names) == 2)
@@ -80,7 +99,9 @@ def test_octile_graph_weighted():
 
     for name in og.edge_type['label'].names:
         assert(name in dfg.edges.columns)
-    for name in dfg.edges.drop(['!i', '!j', '!w'], axis=1).columns:
+    for name in dfg.edges.columns:
+        if name in ['!i', '!j', '!w']:
+            continue
         assert(name in og.edge_type['label'].names)
 
     # from pycuda.compiler import SourceModule

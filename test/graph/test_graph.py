@@ -7,7 +7,7 @@ from graphdot.graph import Graph
 
 
 def test_empty_init():
-    G = Graph(nodes=[], edges=[])
+    G = Graph(nodes={}, edges={})
 
     for g in [G, eval(repr(G).strip('><'))]:
         assert(g.title == '')
@@ -18,17 +18,18 @@ def test_empty_init():
 
 
 def test_dict_init():
-    G = Graph(nodes={'order': {0: 1, 1: -2}, 'conjugate': {0: True, 1: False}},
-              edges={'!i': {0: 0}, '!j': {0: 1}, 'length': {0: 3.2},
-                     'weight': {0: 1}},
+    G = Graph(nodes={'!i': [0, 1], 'order': [1, -2],
+                     'conjugate': [True, False]},
+              edges={'!i': [0], '!j': [1], 'length': [3.2],
+                     'weight': [1]},
               title='graph')
 
     for g in [G, eval(repr(G).strip('><'))]:
         assert(g.title == 'graph')
         assert(len(g.nodes) == 2)
-        assert(len(g.nodes.columns) == 2)
+        assert(len(g.nodes.columns) == 3)  # +1 for the hidden !i index
         assert(len(g.edges) == 1)
-        assert(len(g.edges.columns) == 4)
+        assert(len(g.edges.columns) == 4)  # +2 for the hidden !i, !j index
 
 
 def test_simple_from_networkx():
@@ -45,9 +46,9 @@ def test_simple_from_networkx():
     for g in [G, eval(repr(G).strip('><'))]:
         assert(g.title == 'Simple')
         assert(len(g.nodes) == 4)
-        assert(len(g.nodes.columns) == 0)
+        assert(len(g.nodes.columns) == 1)  # +1 for the hidden !i index
         assert(len(g.edges) == 2)
-        assert(len(g.edges.columns) == 2)  # +2 for the hidden !i & !j index
+        assert(len(g.edges.columns) == 2)  # +2 for the hidden !i, !j index
 
 
 def test_weighted_from_networkx():
@@ -61,9 +62,9 @@ def test_weighted_from_networkx():
     for g in [G, eval(repr(G).strip('><'))]:
         assert(g.title == 'Simple')
         assert(len(g.nodes) == 2)
-        assert(len(g.nodes.columns) == 0)
+        assert(len(g.nodes.columns) == 1)  # +1 for the hidden !i index
         assert(len(g.edges) == 1)
-        assert(len(g.edges.columns) == 3)  # +3 for edge endpoints and weight
+        assert(len(g.edges.columns) == 3)  # +2 for the hidden !i, !j index
         assert('!i' in g.edges.columns)
         assert('!j' in g.edges.columns)
         assert('!w' in g.edges.columns)
@@ -82,9 +83,9 @@ def test_molecule_from_networkx():
     for g in [G, eval(repr(G).strip('><'))]:
         assert(g.title == 'H2O')
         assert(len(g.nodes) == 3)
-        assert(len(g.nodes.columns) == 3)
+        assert(len(g.nodes.columns) == 4)  # +1 for the hidden !i index
         assert(len(g.edges) == 2)
-        assert(len(g.edges.columns) == 3+2)  # +2 for the hidden !i & !j index
+        assert(len(g.edges.columns) == 3+2)  # +2 for the hidden !i, !j index
 
 
 def test_attribute_consistency_from_networkx():
