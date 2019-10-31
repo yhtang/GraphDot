@@ -271,7 +271,7 @@ class MarginalizedGraphKernel:
         p_edge_kernel, _ = self.module.get_global('edge_kernel')
         cuda.memcpy_htod(p_edge_kernel, np.array([self.edge_kernel.state],
                                                  dtype=self.edge_kernel.dtype))
-        
+
         self.timer.toc('calculating launch configuration')
 
         ''' GPU kernel execution '''

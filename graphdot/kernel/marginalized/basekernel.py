@@ -341,8 +341,7 @@ def TensorProduct(**kw_kernels):
 
         def gen_constexpr(self, x, y):
             return Template('(${expr*})').render(
-                expr=[k.gen_constexpr('%s.%s' % (x, key),
-                                '%s.%s' % (y, key))
+                expr=[k.gen_constexpr('%s.%s' % (x, key), '%s.%s' % (y, key))
                       for key, k in self.kw_kernels.items()])
 
         def gen_expr(self, x, y, theta_prefix=''):
@@ -366,20 +365,21 @@ def TensorProduct(**kw_kernels):
 # class Convolution(Kernel):
 #     def __init__(self, kernel):
 #         self.kernel = kernel
-#
+
 #     def __call__(self, object1, object2):
 #         sum = 0.0
 #         for part1 in object1:
 #             for part2 in object2:
 #                 sum += self.kernel(part1, part2)
 #         return sum
-#
+
 #     def __repr__(self):
 #         return 'ΣΣ{}'.format(repr(self.kernel))
-#
+
 #     @property
 #     def theta(self):
 #         return self.kernel.theta
-#
+
 #     def gen_constexpr(self, X, Y):
-#         return ' + '.join([self.kernel.gen_constexpr(x, y) for x in X for y in Y])
+#         return ' + '.join([self.kernel.gen_constexpr(x, y)
+#                            for x in X for y in Y])
