@@ -41,7 +41,7 @@ def test_simple_kernel(kernel):
     ''' representation meaningness '''
     assert(eval(repr(kernel)).theta == kernel.theta)
     ''' hyperparameter retrieval '''
-    assert(isinstance(kernel.theta, list))
+    assert(isinstance(kernel.theta, tuple))
     assert(len(kernel.theta) > 0)
     kernel.theta = kernel.theta
     another = copy.copy(kernel)
@@ -89,7 +89,7 @@ def test_kronecker_delta_kernel():
 
 def test_square_exponential_kernel():
     kernel = SquareExponential(1.0)
-    assert(kernel.neg_half_inv_l2 == pytest.approx(-0.5))
+    assert(kernel.nrsql == pytest.approx(-0.5))
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
     assert(kernel(1, 1) == 1)
@@ -117,7 +117,7 @@ def test_multiply_quasikernel():
     ''' representation generation '''
     assert(isinstance(str(kernel), str))
     assert(isinstance(repr(kernel), str))
-    assert(kernel.theta == [])
+    assert(kernel.theta == tuple())
     kernel.theta = kernel.theta
     ''' representation meaningness '''
     assert(eval(repr(kernel)).theta == kernel.theta)
