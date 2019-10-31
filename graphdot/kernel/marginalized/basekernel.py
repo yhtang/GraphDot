@@ -65,10 +65,16 @@ class Kernel:
                     o=opstr,
                     k2=repr(k2))
 
-            def gencode(self, x, y):
-                return '({k1} {op} {k2})'.format(k1=self.k1.gencode(x, y),
-                                                 k2=self.k2.gencode(x, y),
+            def gen_constexpr(self, x, y):
+                return '({k1} {op} {k2})'.format(k1=self.k1.gen_constexpr(x, y),
+                                                 k2=self.k2.gen_constexpr(x, y),
                                                  op=opstr)
+
+            def gen_expr(self, theta_prefix, x, y):
+                return '({k1} {op} {k2})'.format(
+                    k1=self.k1.gen_expr(theta_prefix + 'k1.', x, y),
+                    k2=self.k2.gen_expr(theta_prefix + 'k2.', x, y),
+                    op=opstr)
 
             @property
             def theta(self):
@@ -113,8 +119,11 @@ def Constant(constant):
         def __repr__(self):
             return 'Constant({})'.format(self.constant)
 
-        def gencode(self, x, y):
+        def gen_constexpr(self, x, y):
             return '{:f}f'.format(self.constant)
+
+        def gen_expr(self, theta_prefix, x, y):
+            return '{}constant'.format(theta_prefix)
 
         @property
         def theta(self):
@@ -163,8 +172,11 @@ def KroneckerDelta(h0, h1=1.0):
         def __repr__(self):
             return 'KroneckerDelta({}, {})'.format(self.h0, self.h1)
 
-        def gencode(self, x, y):
+        def gen_constexpr(self, x, y):
             return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.h1, self.h0)
+
+        def gen_expr(self, theta_prefix, x, y):
+            return '({} == {} ? {p}h1 : {p}h0)'.format(x, y, p=theta_prefix)
 
         @property
         def theta(self):
@@ -198,8 +210,8 @@ def SquareExponential(length_scale):
     """
 
     # only works with python >= 3.6
-    # @cpptype(neg_half_inv_l2=np.float32)
-    @cpptype([('neg_half_inv_l2', np.float32)])
+    # @cpptype(nrsql=np.float32)
+    @cpptype([('nrsql', np.float32)])
     class SquareExponentialKernel(Kernel):
         def __init__(self, length_scale):
             self.length_scale = length_scale
@@ -213,12 +225,16 @@ def SquareExponential(length_scale):
         def __repr__(self):
             return 'SquareExponential({})'.format(self.length_scale)
 
-        def gencode(self, x, y):
+        def gen_constexpr(self, x, y):
             return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
                 -0.5 / self.length_scale**2, x, y, x, y)
 
+        def gen_expr(self, theta_prefix, x, y):
+            return 'expf({p}nrsql * ({x} - {y}) * ({x} - {y}))'.format(
+                p=theta_prefix, x=x, y=y)
+
         @property
-        def neg_half_inv_l2(self):
+        def nrsql(self):
             return -0.5 / self.length_scale**2
 
         @property
@@ -248,7 +264,10 @@ class _Multiply(Kernel):
     def __repr__(self):
         return '_Multiply()'
 
-    def gencode(self, x, y):
+    def gen_constexpr(self, x, y):
+        return '({} * {})'.format(x, y)
+
+    def gen_expr(self, theta_prefix, x, y):
         return '({} * {})'.format(x, y)
 
     @property
@@ -274,8 +293,8 @@ class _Multiply(Kernel):
 #         def __repr__(self):
 #             return ' * '.join([repr(k) for k in self.kernels])
 #
-#         def gencode(self, x, y):
-#             return ' * '.join([k.gencode(x, y) for k in self.kernels])
+#         def gen_constexpr(self, x, y):
+#             return ' * '.join([k.gen_constexpr(x, y) for k in self.kernels])
 #
 #         @property
 #         def theta(self):
@@ -317,9 +336,16 @@ def TensorProduct(**kw_kernels):
                 kwexpr=['{}={}'.format(kw, repr(k))
                         for kw, k in self.kw_kernels.items()])
 
-        def gencode(self, x, y):
+        def gen_constexpr(self, x, y):
             return Template('(${expr*})').render(
-                expr=[k.gencode('%s.%s' % (x, key),
+                expr=[k.gen_constexpr('%s.%s' % (x, key),
+                                '%s.%s' % (y, key))
+                      for key, k in self.kw_kernels.items()])
+
+        def gen_expr(self, theta_prefix, x, y):
+            return Template('(${expr*})').render(
+                expr=[k.gen_expr('%s%s.' % (theta_prefix, key),
+                                '%s.%s' % (x, key),
                                 '%s.%s' % (y, key))
                       for key, k in self.kw_kernels.items()])
 
@@ -352,5 +378,5 @@ def TensorProduct(**kw_kernels):
 #     def theta(self):
 #         return self.kernel.theta
 #
-#     def gencode(self, X, Y):
-#         return ' + '.join([self.kernel.gencode(x, y) for x in X for y in Y])
+#     def gen_constexpr(self, X, Y):
+#         return ' + '.join([self.kernel.gen_constexpr(x, y) for x in X for y in Y])

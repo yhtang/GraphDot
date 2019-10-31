@@ -216,7 +216,7 @@ class MarginalizedGraphKernel:
                 return ${node_expr};
             }
         };
-        ''').render(node_expr=self.node_kernel.gencode('v1', 'v2'))
+        ''').render(node_expr=self.node_kernel.gen_constexpr('v1', 'v2'))
 
         edge_kernel_src = Template(r'''
         struct edge_kernel {
@@ -225,10 +225,12 @@ class MarginalizedGraphKernel:
                 return ${edge_expr};
             }
         };
-        ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
+        ''').render(edge_expr=edge_kernel.gen_constexpr('e1', 'e2'))
 
         self.source = self.template.render(node_kernel=node_kernel_src,
                                            edge_kernel=edge_kernel_src,
+                                           node_theta_t=decltype(self.node_kernel),
+                                           edge_theta_t=decltype(self.edge_kernel),
                                            node_t=decltype(node_type),
                                            edge_t=decltype(edge_type))
         self.timer.toc('code generation')
