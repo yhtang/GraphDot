@@ -120,7 +120,7 @@ class MarginalizedGraphKernel:
             # convert to GPU format
             og = OctileGraph(graph)
             # assign starting probabilities
-            p = umarray(np.array([self.p(n) for n in graph.nodes.iterrows()],
+            p = umarray(np.array([self.p(*r) for r in graph.nodes.iterrows()],
                                  dtype=np.float32))
             self.graph_cache[graph.uuid] = (og, p)
         return self.graph_cache[graph.uuid]
@@ -128,7 +128,7 @@ class MarginalizedGraphKernel:
     def _get_starting_probability(self, p):
         if isinstance(p, str):
             if p == 'uniform' or p == 'default':
-                return lambda n: 1.0
+                return lambda i, n: 1.0
             else:
                 raise ValueError('Unknown starting probability distribution %s'
                                  % self.p)
