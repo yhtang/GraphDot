@@ -1,8 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import warnings
+import numpy as np
 from pycuda.driver import managed_empty
 from pycuda.driver import mem_attach_flags as ma_flags
+
+
+def managed_allocator(count, dtype):
+    return managed_empty(count, dtype, 'C', ma_flags.GLOBAL)
+
+
+def numpy_allocator(count, dtype):
+    return np.empty(count, dtype)
 
 
 class ResizableArray:
@@ -11,15 +20,26 @@ class ResizableArray:
     to reduce kernel launch delay.
     """
 
-    def __init__(self, dtype, count=0, allocator=managed_empty):
+    def __init__(self, dtype, count=0, allocator='managed'):
         self.dtype = dtype
-        self.allocator = allocator
+        self.allocator = self._choose_allocator(allocator)
         self._ptr = None
         self._active = None
         self._size = 0
         self._capacity = 0
         if count:
             self.resize(count)
+
+    def _choose_allocator(self, allocator):
+        if isinstance(allocator, str):
+            if allocator == 'managed':
+                return managed_allocator
+            elif allocator == 'numpy':
+                return numpy_allocator
+            else:
+                raise ValueError('Unknown allocator "%s"' % allocator)
+        else:
+            return allocator
 
     def append(self, value):
         if self._size == self._capacity:
@@ -40,7 +60,7 @@ class ResizableArray:
         if count <= self._size:
             warnings.warn('Reserving no more than current size has no effect')
             return
-        _new = self.allocator(count, self.dtype, 'C', ma_flags.GLOBAL)
+        _new = self.allocator(count, self.dtype)
         if self._size > 0:  # copy data to new buffer
             _new[:self._size] = self._ptr[:self._size]
         self._ptr = _new

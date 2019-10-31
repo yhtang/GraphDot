@@ -6,29 +6,32 @@ import pycuda.autoinit
 from graphdot.cuda.resizable_array import ResizableArray
 
 
-def test_resizable_array_init_empty():
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
+def test_resizable_array_init_empty(allocator):
 
-    arr = ResizableArray(np.float32)
+    arr = ResizableArray(np.float32, allocator=allocator)
 
     assert(arr.data is None)
     assert(arr.capacity == 0)
     assert(len(arr) == 0)
 
 
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 8, 15, 412, 651825, 8182512])
-def test_resizable_array_init(count):
+def test_resizable_array_init(allocator, count):
 
-    arr = ResizableArray(np.float32, count)
+    arr = ResizableArray(np.float32, count, allocator=allocator)
 
     assert(arr.data is not None)
     assert(len(arr) == count)
     assert(arr.capacity >= count)
 
 
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 8, 15, 412, 651825, 8182512])
-def test_resizable_array_append(count):
+def test_resizable_array_append(allocator, count):
 
-    arr = ResizableArray(np.float32)
+    arr = ResizableArray(np.float32, allocator=allocator)
 
     for _ in range(count):
         arr.append(0.0)
@@ -37,7 +40,8 @@ def test_resizable_array_append(count):
     assert(arr.capacity >= count)
 
 
-def test_resizable_array_iadd():
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
+def test_resizable_array_iadd(allocator):
 
     np.random.seed(0)
     N = np.minimum(8192, 1 + np.random.pareto(0.2, 10)).astype(np.int32)
@@ -46,7 +50,7 @@ def test_resizable_array_iadd():
     for n in N:
         for m in M:
 
-            arr = ResizableArray(np.float32, n)
+            arr = ResizableArray(np.float32, n, allocator=allocator)
             arr[:] = -1
             arr += range(m)
 
@@ -60,9 +64,10 @@ def test_resizable_array_iadd():
                 assert(arr[-(i + 1)] == m - (i + 1))
 
 
-def test_resizable_array_resize():
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
+def test_resizable_array_resize(allocator):
 
-    arr = ResizableArray(np.float64)
+    arr = ResizableArray(np.float64, allocator=allocator)
 
     np.random.seed(0)
     N = np.minimum(1048576, 1 + np.random.pareto(0.1, 100)).astype(np.int32)
@@ -79,7 +84,8 @@ def test_resizable_array_resize():
             assert(y == pytest.approx(arr[-1]))
 
 
-def test_resizable_array_reseve():
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
+def test_resizable_array_reseve(allocator):
 
     np.random.seed(0)
     N = np.minimum(1048576, 1 + np.random.pareto(0.1, 100)).astype(np.int32)
@@ -87,7 +93,7 @@ def test_resizable_array_reseve():
 
     for n in N:
         for m in M:
-            arr = ResizableArray(np.int32, n)
+            arr = ResizableArray(np.int32, n, allocator=allocator)
             arr[-1] = 12345
             if m > n:
                 arr.reserve(m)
@@ -100,10 +106,11 @@ def test_resizable_array_reseve():
             assert(arr.capacity >= len(arr))
 
 
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 8, 15, 412, 651825, 8182512])
-def test_resizable_array_clear(count):
+def test_resizable_array_clear(allocator, count):
 
-    arr = ResizableArray(np.int16, count)
+    arr = ResizableArray(np.int16, count, allocator=allocator)
 
     previous_capacity = arr.capacity
     arr.clear()
@@ -111,10 +118,11 @@ def test_resizable_array_clear(count):
     assert(arr.capacity == previous_capacity)
 
 
+@pytest.mark.parametrize('allocator', ['managed', 'numpy'])
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 8, 15, 412, 651825])
-def test_resizable_array_get_set(count):
+def test_resizable_array_get_set(allocator, count):
 
-    arr = ResizableArray(np.int64, count)
+    arr = ResizableArray(np.int64, count, allocator=allocator)
 
     for i in range(count):
         arr[i] = count - i
