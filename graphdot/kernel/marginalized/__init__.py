@@ -3,6 +3,7 @@
 import os
 import uuid
 import warnings
+import copy
 import numpy as np
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
@@ -18,6 +19,27 @@ from ._octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
+
+
+def flatten(iterable):
+    for item in iterable:
+        if hasattr(item, '__iter__'):
+            yield from flatten(item)
+        else:
+            yield item
+
+
+def fold_like(flat, example):
+    folded = []
+    for item in example:
+        if hasattr(item, '__iter__'):
+            n = len(list(flatten(item)))
+            folded.append(fold_like(flat[:n], item))
+            flat = flat[n:]
+        else:
+            folded.append(flat[0])
+            flat = flat[1:]
+    return tuple(folded)
 
 
 class MarginalizedGraphKernel:
@@ -80,6 +102,7 @@ class MarginalizedGraphKernel:
 
         self.p = self._get_starting_probability(kwargs.pop('p', 'default'))
         self.q = kwargs.pop('q', 0.01)
+        self.q_bounds = kwargs.pop('q_bounds', (0, 1))
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -101,10 +124,6 @@ class MarginalizedGraphKernel:
                                               BlockScratch.dtype))
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
-
-    def clone_with_theta(self):
-        """scikit-learn compatibility method"""
-        pass
 
     def _register_graph(self, graph):
         if not hasattr(graph, 'uuid'):
@@ -476,3 +495,49 @@ class MarginalizedGraphKernel:
         self.timer.reset()
 
         return output
+
+    """scikit-learn interoperability methods"""
+
+    def is_stationary(self):
+        return False
+
+    @property
+    def n_dims(self):
+        '''p.theta + q + node_kernel.theta + edge_kernel.theta'''
+        return len(self.theta)
+
+    @property
+    def theta_folded(self):
+        return [self.q,
+                self.node_kernel.theta,
+                self.edge_kernel.theta
+                ]
+
+    @property
+    def theta(self):
+        return np.log(np.fromiter(flatten(self.theta_folded), np.float))
+
+    @theta.setter
+    def theta(self, value):
+        (self.q,
+         self.node_kernel.theta,
+         self.edge_kernel.theta
+         ) = fold_like(np.exp(value), self.theta_folded)
+
+    @property
+    def bounds_folded(self):
+        return (self.q_bounds,
+                self.node_kernel.bounds,
+                self.edge_kernel.bounds)
+
+    @property
+    def bounds(self):
+        return np.log(np.fromiter(flatten(self.bounds_folded),
+                                  np.float)).reshape(-1, 2, order='C')
+
+    def clone_with_theta(self, theta):
+        cloned = copy.copy(self)
+        cloned.node_kernel = copy.deepcopy(self.node_kernel)
+        cloned.edge_kernel = copy.deepcopy(self.edge_kernel)
+        cloned.theta = theta
+        return cloned

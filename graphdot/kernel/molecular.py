@@ -43,7 +43,7 @@ class Tang2019MolecularKernel:
 
     def _makekernel(self, **kwargs):
         self.kernel = MarginalizedGraphKernel(
-            TensorProduct(element=KroneckerDelta(self.element_prior, 1.0)),
+            TensorProduct(element=KroneckerDelta(self.element_prior)),
             TensorProduct(length=SquareExponential(self.edge_length_scale)),
             q=self.stopping_probability,
             p=self.starting_probability,
