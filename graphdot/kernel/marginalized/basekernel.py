@@ -4,7 +4,6 @@
 This module defines base kernels and composibility rules for creating vertex
 and edge kernels for the marginalized graph kernel.
 """
-from copy import copy
 import numpy as np
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
@@ -84,7 +83,7 @@ class Kernel:
             def theta(self, seq):
                 self.k1.theta = seq[0]
                 self.k2.theta = seq[1]
-            
+
             @property
             def bounds(self):
                 return tuple(self.k1.bounds, self.k2.bounds)
