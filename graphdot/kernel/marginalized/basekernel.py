@@ -50,8 +50,8 @@ class Kernel:
         @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
         class KernelOperator(Kernel):
             def __init__(self, k1, k2):
-                self.k1 = copy(k1)
-                self.k2 = copy(k2)
+                self.k1 = k1
+                self.k2 = k2
 
             def __call__(self, i, j):
                 return op(self.k1(i, j), self.k2(i, j))
@@ -84,17 +84,21 @@ class Kernel:
             def theta(self, seq):
                 self.k1.theta = seq[0]
                 self.k2.theta = seq[1]
+            
+            @property
+            def bounds(self):
+                return tuple(self.k1.bounds, self.k2.bounds)
 
         return KernelOperator(k1, k2)
 
 
-def Constant(constant):
-    r"""Creates a no-op kernel that returns a constant value which often is 1,
+def Constant(c, c_bounds=(0, np.inf)):
+    r"""Creates a no-op kernel that returns a constant value (often being 1),
     i.e. :math:`k_\mathrm{c}(\cdot, \cdot) \equiv constant`
 
     Parameters
     ----------
-    constant: float in (0, 1)
+    constant: float > 0
         The value of the kernel
 
     Returns
@@ -105,48 +109,51 @@ def Constant(constant):
 
     # only works with python >= 3.6
     # @cpptype(constant=np.float32)
-    @cpptype([('constant', np.float32)])
+    @cpptype([('c', np.float32)])
     class ConstantKernel(Kernel):
-        def __init__(self, constant):
-            self.constant = float(constant)
+        def __init__(self, c, c_bounds):
+            self.c = float(c)
+            self.c_bounds = c_bounds
 
         def __call__(self, i, j):
-            return self.constant
+            return self.c
 
         def __str__(self):
-            return '{}'.format(self.constant)
+            return '{}'.format(self.c)
 
         def __repr__(self):
-            return 'Constant({})'.format(self.constant)
+            return 'Constant({})'.format(self.c)
 
         def gen_constexpr(self, x, y):
-            return '{:f}f'.format(self.constant)
+            return '{:f}f'.format(self.c)
 
         def gen_expr(self, x, y, theta_prefix=''):
-            return '{}constant'.format(theta_prefix)
+            return '{}c'.format(theta_prefix)
 
         @property
         def theta(self):
-            return (self.constant,)
+            return (self.c,)
 
         @theta.setter
         def theta(self, seq):
-            self.constant = seq[0]
+            self.c = seq[0]
 
-    return ConstantKernel(constant)
+        @property
+        def bounds(self):
+            return (self.c_bounds,)
+
+    return ConstantKernel(c, c_bounds)
 
 
-def KroneckerDelta(h0, h1=1.0):
-    r"""Creates a Kronecker delta kernel that returns one of [h0, h1] depending
+def KroneckerDelta(h, h_bounds=(0, 1)):
+    r"""Creates a Kronecker delta kernel that returns either h or 1 depending
     on whether two objects compare equal, i.e. :math:`k_\delta(i, j) =
-    \begin{cases} h1, i = j \\ h0, otherwise \end{cases}`
+    \begin{cases} 1, i = j \\ h, otherwise \end{cases}`
 
     Parameters
     ----------
-    h0: float in (0, 1)
+    h: float in (0, 1)
         The value of the kernel when two objects do not compare equal
-    h1: float in (0, 1)
-        The value of the kernel when two objects compare equal
 
     Returns
     -------
@@ -156,41 +163,44 @@ def KroneckerDelta(h0, h1=1.0):
 
     # only works with python >= 3.6
     # @cpptype(lo=np.float32, hi=np.float32)
-    @cpptype([('h0', np.float32), ('h1', np.float32)])
+    @cpptype([('h', np.float32)])
     class KroneckerDeltaKernel(Kernel):
 
-        def __init__(self, h0, h1):
-            self.h0 = float(h0)
-            self.h1 = float(h1)
+        def __init__(self, h, h_bounds):
+            self.h = float(h)
+            self.h_bounds = h_bounds
 
         def __call__(self, i, j):
-            return self.h1 if i == j else self.h0
+            return 1.0 if i == j else self.h
 
         def __str__(self):
-            return 'δ({}, {})'.format(self.h1, self.h0)
+            return 'δ({})'.format(self.h)
 
         def __repr__(self):
-            return 'KroneckerDelta({}, {})'.format(self.h0, self.h1)
+            return 'KroneckerDelta({})'.format(self.h)
 
         def gen_constexpr(self, x, y):
-            return '({} == {} ? {:f}f : {:f}f)'.format(x, y, self.h1, self.h0)
+            return '({} == {} ? 1.0f : {:f}f)'.format(x, y, self.h)
 
         def gen_expr(self, x, y, theta_prefix=''):
-            return '({} == {} ? {p}h1 : {p}h0)'.format(x, y, p=theta_prefix)
+            return '({} == {} ? 1.0f : {p}h)'.format(x, y, p=theta_prefix)
 
         @property
         def theta(self):
-            return (self.h0, self.h1)
+            return (self.h,)
 
         @theta.setter
         def theta(self, seq):
-            self.h0 = seq[0]
-            self.h1 = seq[1]
+            self.h = seq[0]
 
-    return KroneckerDeltaKernel(h0, h1)
+        @property
+        def bounds(self):
+            return (self.h_bounds,)
+
+    return KroneckerDeltaKernel(h, h_bounds)
 
 
-def SquareExponential(length_scale):
+def SquareExponential(length_scale, length_scale_bounds=(0, np.inf)):
     r"""Creates a square exponential kernel that smoothly transitions from 1 to
     0 as the distance between two vectors increases from zero to infinity, i.e.
     :math:`k_\mathrm{se}(\mathbf{x}_1, \mathbf{x}_2) = \exp(-\frac{1}{2}
@@ -213,8 +223,9 @@ def SquareExponential(length_scale):
     # @cpptype(nrsql=np.float32)
     @cpptype([('nrsql', np.float32)])
     class SquareExponentialKernel(Kernel):
-        def __init__(self, length_scale):
+        def __init__(self, length_scale, length_scale_bounds):
             self.length_scale = length_scale
+            self.length_scale_bounds = length_scale_bounds
 
         def __call__(self, x1, x2):
             return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
@@ -245,7 +256,11 @@ def SquareExponential(length_scale):
         def theta(self, seq):
             self.length_scale = seq[0]
 
-    return SquareExponentialKernel(length_scale)
+        @property
+        def bounds(self):
+            return (self.length_scale_bounds,)
+
+    return SquareExponentialKernel(length_scale, length_scale_bounds)
 
 
 @cpptype([])
@@ -277,6 +292,10 @@ class _Multiply(Kernel):
     @theta.setter
     def theta(self, seq):
         pass
+
+    @property
+    def bounds(self):
+        return tuple()
 
 # def Product(*kernels):
 #     @cpptype([('k%d' % i, ker.dtype) for i, ker in enumerate(kernels)])
@@ -320,9 +339,10 @@ def TensorProduct(**kw_kernels):
     class TensorProductKernel(Kernel):
         def __init__(self, **kw_kernels):
             self.kw_kernels = kw_kernels
-
-        def __getattr__(self, attr):
-            return self.kw_kernels[attr]
+            # for the .state property of cpptype
+            for key in kw_kernels:
+                setattr(TensorProductKernel, key,
+                        property(lambda self, key=key: self.kw_kernels[key]))
 
         def __call__(self, object1, object2):
             prod = 1.0
@@ -359,6 +379,10 @@ def TensorProduct(**kw_kernels):
         def theta(self, seq):
             for kernel, value in zip(self.kw_kernels.values(), seq):
                 kernel.theta = value
+
+        @property
+        def bounds(self):
+            return tuple(k.bounds for k in self.kw_kernels.values())
 
     return TensorProductKernel(**kw_kernels)
 
