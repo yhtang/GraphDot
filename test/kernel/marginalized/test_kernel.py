@@ -114,18 +114,18 @@ case_dict = {
     'labeled': {
         'graphs': [Graph.from_networkx(labeled_graph1),
                    Graph.from_networkx(labeled_graph2)],
-        'knode': TensorProduct(hybridization=KroneckerDelta(0.3, 1.0),
+        'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
                                charge=SquareExponential(1.0)),
-        'kedge': TensorProduct(order=KroneckerDelta(0.3, 1.0),
+        'kedge': TensorProduct(order=KroneckerDelta(0.3),
                                length=SquareExponential(0.05)),
         'q': [0.01, 0.05, 0.1, 0.5]
     },
     'weighted': {
         'graphs': [Graph.from_networkx(weighted_graph1, weight='w'),
                    Graph.from_networkx(weighted_graph2, weight='w')],
-        'knode': TensorProduct(hybridization=KroneckerDelta(0.3, 1.0),
+        'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
                                charge=SquareExponential(1.0)),
-        'kedge': TensorProduct(order=KroneckerDelta(0.3, 1.0),
+        'kedge': TensorProduct(order=KroneckerDelta(0.3),
                                length=SquareExponential(0.05)),
         'q': [0.01, 0.05, 0.1, 0.5]
     },
@@ -320,7 +320,7 @@ def test_mlgk_large():
     dfg = Graph.from_networkx(g, weight='weight')
 
     q = 0.5
-    node_kernel = TensorProduct(type=KroneckerDelta(1.0, 1.0))
+    node_kernel = TensorProduct(type=KroneckerDelta(1.0))
     edge_kernel = Constant(1.0)
     mlgk = MarginalizedGraphKernel(node_kernel, edge_kernel, q=q)
 

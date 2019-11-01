@@ -3,7 +3,9 @@
 import os
 import uuid
 import warnings
+import copy
 import numpy as np
+import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 from graphdot import cpp
 from graphdot.codegen import Template
@@ -17,6 +19,27 @@ from ._octilegraph import OctileGraph
 from .basekernel import TensorProduct, _Multiply
 
 __all__ = ['MarginalizedGraphKernel']
+
+
+def flatten(iterable):
+    for item in iterable:
+        if hasattr(item, '__iter__'):
+            yield from flatten(item)
+        else:
+            yield item
+
+
+def fold_like(flat, example):
+    folded = []
+    for item in example:
+        if hasattr(item, '__iter__'):
+            n = len(list(flatten(item)))
+            folded.append(fold_like(flat[:n], item))
+            flat = flat[n:]
+        else:
+            folded.append(flat[0])
+            flat = flat[1:]
+    return tuple(folded)
 
 
 class MarginalizedGraphKernel:
@@ -79,6 +102,7 @@ class MarginalizedGraphKernel:
 
         self.p = self._get_starting_probability(kwargs.pop('p', 'default'))
         self.q = kwargs.pop('q', 0.01)
+        self.q_bounds = kwargs.pop('q_bounds', (0, 1))
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -100,10 +124,6 @@ class MarginalizedGraphKernel:
                                               BlockScratch.dtype))
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
-
-    def clone_with_theta(self):
-        """scikit-learn compatibility method"""
-        pass
 
     def _register_graph(self, graph):
         if not hasattr(graph, 'uuid'):
@@ -210,22 +230,36 @@ class MarginalizedGraphKernel:
             edge_kernel = self.edge_kernel
 
         node_kernel_src = Template(r'''
-        struct node_kernel {
+        using node_theta_t = ${theta_t};
+
+        struct node_kernel_t : node_theta_t {
             template<class V> __device__ __inline__
-            static auto compute(V const &v1, V const &v2) {
-                return ${node_expr};
+            auto operator() (V const &v1, V const &v2) const {
+                return ${expr};
             }
         };
-        ''').render(node_expr=self.node_kernel.gencode('v1', 'v2'))
+
+        __constant__ node_kernel_t node_kernel;
+        ''').render(
+            theta_t=decltype(self.node_kernel),
+            expr=self.node_kernel.gen_expr('v1', 'v2')
+        )
 
         edge_kernel_src = Template(r'''
-        struct edge_kernel {
+        using edge_theta_t = ${theta_t};
+
+        struct edge_kernel_t : edge_theta_t {
             template<class T> __device__ __inline__
-            static auto compute(T const &e1, T const &e2) {
-                return ${edge_expr};
+            auto operator() (T const &e1, T const &e2) const {
+                return ${expr};
             }
         };
-        ''').render(edge_expr=edge_kernel.gencode('e1', 'e2'))
+
+        __constant__ edge_kernel_t edge_kernel;
+        ''').render(
+            theta_t=decltype(edge_kernel),
+            expr=edge_kernel.gen_expr('e1', 'e2')
+        )
 
         self.source = self.template.render(node_kernel=node_kernel_src,
                                            edge_kernel=edge_kernel_src,
@@ -248,6 +282,15 @@ class MarginalizedGraphKernel:
 
         max_graph_size = np.max([len(g.nodes) for g in graphs])
         self._allocate_scratch(launch_block_count, max_graph_size**2)
+
+        p_node_kernel, _ = self.module.get_global('node_kernel')
+        cuda.memcpy_htod(p_node_kernel, np.array([self.node_kernel.state],
+                                                 dtype=self.node_kernel.dtype))
+
+        p_edge_kernel, _ = self.module.get_global('edge_kernel')
+        cuda.memcpy_htod(p_edge_kernel, np.array([self.edge_kernel.state],
+                                                 dtype=self.edge_kernel.dtype))
+
         self.timer.toc('calculating launch configuration')
 
         ''' GPU kernel execution '''
@@ -443,7 +486,6 @@ class MarginalizedGraphKernel:
         ''' post processing '''
         self.timer.tic('collecting result')
         if nodal == 'block':
-            print(len(output))
             output = [output[s:s + n**2].reshape(n, n)
                       for s, n in zip(starts[:-1], sizes)]
         self.timer.toc('collecting result')
@@ -453,3 +495,49 @@ class MarginalizedGraphKernel:
         self.timer.reset()
 
         return output
+
+    """scikit-learn interoperability methods"""
+
+    def is_stationary(self):
+        return False
+
+    @property
+    def n_dims(self):
+        '''p.theta + q + node_kernel.theta + edge_kernel.theta'''
+        return len(self.theta)
+
+    @property
+    def theta_folded(self):
+        return [self.q,
+                self.node_kernel.theta,
+                self.edge_kernel.theta
+                ]
+
+    @property
+    def theta(self):
+        return np.log(np.fromiter(flatten(self.theta_folded), np.float))
+
+    @theta.setter
+    def theta(self, value):
+        (self.q,
+         self.node_kernel.theta,
+         self.edge_kernel.theta
+         ) = fold_like(np.exp(value), self.theta_folded)
+
+    @property
+    def bounds_folded(self):
+        return (self.q_bounds,
+                self.node_kernel.bounds,
+                self.edge_kernel.bounds)
+
+    @property
+    def bounds(self):
+        return np.log(np.fromiter(flatten(self.bounds_folded),
+                                  np.float)).reshape(-1, 2, order='C')
+
+    def clone_with_theta(self, theta):
+        cloned = copy.copy(self)
+        cloned.node_kernel = copy.deepcopy(self.node_kernel)
+        cloned.edge_kernel = copy.deepcopy(self.edge_kernel)
+        cloned.theta = theta
+        return cloned

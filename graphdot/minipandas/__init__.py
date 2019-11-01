@@ -49,13 +49,10 @@ class DataFrame:
             yield RowTuple(*[self.columns[key][i] for key in visible])
 
     def itertuples(self):
-        self.rows()
+        yield from self.rows()
 
     def iterrows(self):
-        i = 0
-        for t in self.rows():
-            yield i, t
-            i += 1
+        yield from enumerate(self.rows())
 
     def to_pandas(self):
         return pd.DataFrame(self.columns)

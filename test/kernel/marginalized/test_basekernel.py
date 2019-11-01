@@ -41,7 +41,7 @@ def test_simple_kernel(kernel):
     ''' representation meaningness '''
     assert(eval(repr(kernel)).theta == kernel.theta)
     ''' hyperparameter retrieval '''
-    assert(isinstance(kernel.theta, list))
+    assert(isinstance(kernel.theta, tuple))
     assert(len(kernel.theta) > 0)
     kernel.theta = kernel.theta
     another = copy.copy(kernel)
@@ -62,7 +62,7 @@ def test_constant_kernel():
     assert(kernel(1.0, 'a') == 1)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gencode('x', 'y'), str))
+    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
 
 
 def test_kronecker_delta_kernel():
@@ -84,12 +84,12 @@ def test_kronecker_delta_kernel():
     assert(kernel(1.0, 'a') == 0.5)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gencode('x', 'y'), str))
+    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
 
 
 def test_square_exponential_kernel():
     kernel = SquareExponential(1.0)
-    assert(kernel.neg_half_inv_l2 == pytest.approx(-0.5))
+    assert(kernel.nrsql == pytest.approx(-0.5))
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
     assert(kernel(1, 1) == 1)
@@ -99,7 +99,7 @@ def test_square_exponential_kernel():
     assert(kernel(inf, -inf) == 0)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gencode('x', 'y'), str))
+    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
 
 
 def test_multiply_quasikernel():
@@ -113,11 +113,11 @@ def test_multiply_quasikernel():
         assert(kernel(r1, r2) == r1 * r2)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gencode('x', 'y'), str))
+    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
     ''' representation generation '''
     assert(isinstance(str(kernel), str))
     assert(isinstance(repr(kernel), str))
-    assert(kernel.theta == [])
+    assert(kernel.theta == tuple())
     kernel.theta = kernel.theta
     ''' representation meaningness '''
     assert(eval(repr(kernel)).theta == kernel.theta)
@@ -158,7 +158,7 @@ def test_tensor_product_2(k1, k2):
     assert(repr(k2) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
-    assert(isinstance(k.gencode('x', 'y'), str))
+    assert(isinstance(k.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -193,7 +193,7 @@ def test_tensor_product_3(k1, k2, k3):
     assert(repr(k3) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
-    assert(isinstance(k.gencode('x', 'y'), str))
+    assert(isinstance(k.gen_constexpr('x', 'y'), str))
 
 
 # # @pytest.mark.parametrize('kernel', kernels)
@@ -245,7 +245,7 @@ def test_kernel_add_constant(kernel):
         kadd.theta = kadd.theta
         ''' C++ code generation '''
         assert(kadd.dtype.isalignedstruct)
-        assert(isinstance(kadd.gencode('x', 'y'), str))
+        assert(isinstance(kadd.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -276,7 +276,7 @@ def test_kernel_add_kernel(k1, k2):
         kadd.theta = kadd.theta
         ''' C++ code generation '''
         assert(kadd.dtype.isalignedstruct)
-        assert(isinstance(kadd.gencode('x', 'y'), str))
+        assert(isinstance(kadd.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('kernel', kernels)
@@ -303,7 +303,7 @@ def test_kernel_mul_constant(kernel):
         kmul.theta = kmul.theta
         ''' C++ code generation '''
         assert(kmul.dtype.isalignedstruct)
-        assert(isinstance(kmul.gencode('x', 'y'), str))
+        assert(isinstance(kmul.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -334,4 +334,4 @@ def test_kernel_mul_kernel(k1, k2):
         kmul.theta = kmul.theta
         ''' C++ code generation '''
         assert(kmul.dtype.isalignedstruct)
-        assert(isinstance(kmul.gencode('x', 'y'), str))
+        assert(isinstance(kmul.gen_constexpr('x', 'y'), str))
