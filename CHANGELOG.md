@@ -1,3 +1,7 @@
+## 0.2.6 (2019-10-31)
+- Improved the performance of hyperparameter optimization by enabling lightweight re-parameterization.
+- Implemented a few properties and methods for scikit-learn interoperability.
+
 ## 0.2.5 (2019-10-30)
 - Improved the performance of successive graph kernel evaluations
 
