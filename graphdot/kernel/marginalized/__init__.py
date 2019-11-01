@@ -3,6 +3,7 @@
 import os
 import uuid
 import warnings
+import copy
 import numpy as np
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
@@ -534,6 +535,9 @@ class MarginalizedGraphKernel:
         return np.log(np.fromiter(flatten(self.bounds_folded),
                                   np.float)).reshape(-1, 2, order='C')
 
-    def clone_with_theta(self):
-        """scikit-learn compatibility method"""
-        pass
+    def clone_with_theta(self, theta):
+        cloned = copy.copy(self)
+        cloned.node_kernel = copy.deepcopy(self.node_kernel)
+        cloned.edge_kernel = copy.deepcopy(self.edge_kernel)
+        cloned.theta = theta
+        return cloned
