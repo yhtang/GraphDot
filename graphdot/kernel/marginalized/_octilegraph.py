@@ -71,6 +71,7 @@ class OctileGraph(object):
             np.add.at(degree, edges['!j'], 1.0)
             edge_aos = np.fromiter(zip(*[edges[t] for t in edge_type.names]),
                                    dtype=edge_type, count=nnz)
+        degree[degree == 0] = 1.0
 
         ''' collect non-zero edge octiles '''
         indices = np.empty((4, nnz * 2), dtype=np.uint32, order='C')
