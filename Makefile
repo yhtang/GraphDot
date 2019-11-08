@@ -1,8 +1,8 @@
-.PHONY: setup dev
+.PHONY: setup dev docs test test-coverage
 
 VENV ?= venv
 
-default: dev
+default: setup
 
 
 setup:
@@ -16,3 +16,12 @@ lint:
 	flake8 --max-line-length=80 graphdot/
 	flake8 --max-line-length=80 --ignore=E121,E123,E126,E226,E24,E704,F401,W503,W504 test/
 	flake8 --max-line-length=80 --ignore=E121,E123,E126,E226,E24,E704,F401,W503,W504 benchmark/
+
+test:
+	tox -e py37
+
+test-coverage:
+	tox -e coverage
+
+docs:
+	cd docs && make html

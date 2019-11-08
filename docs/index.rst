@@ -43,6 +43,7 @@ Contents
    quickstart
    userguide
    api
+   contribute
 
 
 Citation
