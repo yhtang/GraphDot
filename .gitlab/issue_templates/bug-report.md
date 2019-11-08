@@ -10,10 +10,10 @@ Follow the guide [here](https://graphdot.readthedocs.io/en/latest/contribute.htm
 
 Please provide an example of the problem in as little code as possible.
 
-### Expected behaviour
+### Expected behavior
 
 What should happen?
 
-### Actual behaviour
+### Actual behavior
 
 What actually happens instead?
