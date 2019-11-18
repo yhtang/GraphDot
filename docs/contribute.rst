@@ -6,9 +6,9 @@ Everyone is welcome to contribute.
 
 The project is hosted on `GitLab <https://gitlab.com/yhtang/graphdot>`_.
 For questions, suggestions and bug reports, please take advantage of the
-`issue tracking system <https://gitlab.com/yhtang/ermine/issues>`_.
+`issue tracking system <https://gitlab.com/yhtang/graphdot/issues>`_.
 In addition, contributions are very welcomed and could be submitted as
-`merge requests <https://gitlab.com/yhtang/ermine/merge_requests>`_.
+`merge requests <https://gitlab.com/yhtang/graphdot/merge_requests>`_.
 
 
 Submitting a bug report or a feature request
