@@ -144,7 +144,7 @@ def Constant(c, c_bounds=(0, np.inf)):
     return ConstantKernel(c, c_bounds)
 
 
-def KroneckerDelta(h, h_bounds=(0, 1)):
+def KroneckerDelta(h, h_bounds=(1e-3, 1)):
     r"""Creates a Kronecker delta kernel that returns either h or 1 depending
     on whether two objects compare equal, i.e. :math:`k_\delta(i, j) =
     \begin{cases} 1, i = j \\ h, otherwise \end{cases}`
@@ -199,7 +199,7 @@ def KroneckerDelta(h, h_bounds=(0, 1)):
     return KroneckerDeltaKernel(h, h_bounds)
 
 
-def SquareExponential(length_scale, length_scale_bounds=(0, np.inf)):
+def SquareExponential(length_scale, length_scale_bounds=(1e-6, np.inf)):
     r"""Creates a square exponential kernel that smoothly transitions from 1 to
     0 as the distance between two vectors increases from zero to infinity, i.e.
     :math:`k_\mathrm{se}(\mathbf{x}_1, \mathbf{x}_2) = \exp(-\frac{1}{2}

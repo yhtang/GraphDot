@@ -102,7 +102,7 @@ class MarginalizedGraphKernel:
 
         self.p = self._get_starting_probability(kwargs.pop('p', 'default'))
         self.q = kwargs.pop('q', 0.01)
-        self.q_bounds = kwargs.pop('q_bounds', (0, 1))
+        self.q_bounds = kwargs.pop('q_bounds', (1e-4, 1 - 1e-4))
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -372,7 +372,9 @@ class MarginalizedGraphKernel:
         else:
             starts = umzeros(len(X) + len(Y) + 1, dtype=np.uint32)
             if nodal is True:
-                sizes = np.array([len(g.nodes) for g in X + Y], dtype=np.uint32)
+                sizes = np.array([len(g.nodes) for g in X]
+                                 + [len(g.nodes) for g in Y],
+                                 dtype=np.uint32)
                 np.cumsum(sizes, out=starts[1:])
                 n_nodes_X = int(starts[len(X)])
                 starts[len(X):] -= n_nodes_X
@@ -390,7 +392,7 @@ class MarginalizedGraphKernel:
         traits = self._Traits.create(symmetric=Y is None,
                                      nodal=nodal,
                                      lmin1=lmin == 1)
-        self._launch_kernel(X + Y if Y is not None else X,
+        self._launch_kernel(np.concatenate((X, Y)) if Y is not None else X,
                             jobs,
                             starts,
                             output,
