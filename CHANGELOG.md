@@ -1,3 +1,6 @@
+## 0.2.7 (2019-11-18)
+- Bug fixes and stability improvements
+
 ## 0.2.6 (2019-10-31)
 - Improved the performance of hyperparameter optimization by enabling lightweight re-parameterization.
 - Implemented a few properties and methods for scikit-learn interoperability.
