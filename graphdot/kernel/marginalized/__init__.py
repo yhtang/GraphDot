@@ -102,7 +102,7 @@ class MarginalizedGraphKernel:
 
         self.p = self._get_starting_probability(kwargs.pop('p', 'default'))
         self.q = kwargs.pop('q', 0.01)
-        self.q_bounds = kwargs.pop('q_bounds', (0, 1))
+        self.q_bounds = kwargs.pop('q_bounds', (1e-4, 1 - 1e-4))
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
