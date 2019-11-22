@@ -6,10 +6,10 @@ import pytest
 import networkx as nx
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.marginalized.basekernel import Constant
-from graphdot.kernel.marginalized.basekernel import KroneckerDelta
-from graphdot.kernel.marginalized.basekernel import SquareExponential
-from graphdot.kernel.marginalized.basekernel import TensorProduct
+from graphdot.kernel.basekernel import Constant
+from graphdot.kernel.basekernel import KroneckerDelta
+from graphdot.kernel.basekernel import SquareExponential
+from graphdot.kernel.basekernel import TensorProduct
 
 
 def MLGK(G, knode, kedge, q, q0, nodal=False):
