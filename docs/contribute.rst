@@ -45,7 +45,7 @@ The most recommended way to contribute to GraphDot is to fork the
 1. `Fork <https://docs.gitlab.com/ee/gitlab-basics/fork-project.html>`_ the project repository.
 2. Clone your own fork to local disk via ``git clone``
 3. `Setting up the development environment`_
-4. Create a branch for development via ``git checkout -b feature-name master``.
+4. Create a branch for development via ``git checkout -b feature/<feature-name> master`` (replace ``feature-name`` with the actual name of the feature).
 5. Make changes on the feature branch
 6. Test the changes with `Quality assurance measures`_.
 7. Push the completed feature to your own fork, then

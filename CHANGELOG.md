@@ -1,3 +1,6 @@
+## 0.2.8 (2019-11-22)
+- Added an experimental 'M3' distance metric
+
 ## 0.2.7 (2019-11-18)
 - Bug fixes and stability improvements
 
