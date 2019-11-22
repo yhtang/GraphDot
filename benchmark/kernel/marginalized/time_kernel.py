@@ -5,10 +5,10 @@ import numpy as np
 import pycuda.autoinit
 from networkx.generators.random_graphs import newman_watts_strogatz_graph
 from graphdot import Graph
-from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.marginalized.basekernel import Constant
-from graphdot.kernel.marginalized.basekernel import TensorProduct
-from graphdot.kernel.marginalized.basekernel import KroneckerDelta
+from graphdot.kernel import MarginalizedGraphKernel
+from graphdot.kernel.basekernel import Constant
+from graphdot.kernel.basekernel import TensorProduct
+from graphdot.kernel.basekernel import KroneckerDelta
 
 
 def make_graphs(batch, size):
