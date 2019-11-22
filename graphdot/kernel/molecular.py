@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.marginalized.basekernel import KroneckerDelta
-from graphdot.kernel.marginalized.basekernel import SquareExponential
-from graphdot.kernel.marginalized.basekernel import TensorProduct
+from graphdot.kernel.basekernel import KroneckerDelta
+from graphdot.kernel.basekernel import SquareExponential
+from graphdot.kernel.basekernel import TensorProduct
 
 
 class Tang2019MolecularKernel:
