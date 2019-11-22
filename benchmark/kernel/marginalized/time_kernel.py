@@ -5,7 +5,7 @@ import numpy as np
 import pycuda.autoinit
 from networkx.generators.random_graphs import newman_watts_strogatz_graph
 from graphdot import Graph
-from graphdot.kernel import MarginalizedGraphKernel
+from graphdot.kernel.marginalized import MarginalizedGraphKernel
 from graphdot.kernel.basekernel import Constant
 from graphdot.kernel.basekernel import TensorProduct
 from graphdot.kernel.basekernel import KroneckerDelta
