@@ -500,6 +500,9 @@ class MarginalizedGraphKernel:
 
     """scikit-learn interoperability methods"""
 
+    def requires_vector_input(self):
+        return False
+
     def is_stationary(self):
         return False
 
