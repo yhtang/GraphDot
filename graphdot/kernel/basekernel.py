@@ -5,6 +5,7 @@ This module defines base kernels and composibility rules for creating vertex
 and edge kernels for the marginalized graph kernel.
 """
 import numpy as np
+import sympy as sym
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
 
@@ -261,6 +262,51 @@ def SquareExponential(length_scale, length_scale_bounds=(1e-6, np.inf)):
 
     return SquareExponentialKernel(length_scale, length_scale_bounds)
 
+
+def NewSquareExponential(length_scale, length_scale_bounds=(1e-6, np.inf)):
+
+    @cpptype([('nrsql', np.float32)])
+    class SquareExponentialKernel(Kernel):
+        def __init__(self, length_scale, length_scale_bounds):
+            self.length_scale = length_scale
+            self.length_scale_bounds = length_scale_bounds
+
+            self.expr = 
+
+        def __call__(self, x1, x2):
+            return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
+
+        def __str__(self):
+            return 'SqExp({})'.format(self.length_scale)
+
+        def __repr__(self):
+            return 'SquareExponential({})'.format(self.length_scale)
+
+        def gen_constexpr(self, x, y):
+            return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
+                self.nrsql, x, y, x, y)
+
+        def gen_expr(self, x, y, theta_prefix=''):
+            return 'expf({p}nrsql * ({x} - {y}) * ({x} - {y}))'.format(
+                p=theta_prefix, x=x, y=y)
+
+        @property
+        def nrsql(self):
+            return -0.5 / self.length_scale**2
+
+        @property
+        def theta(self):
+            return (self.length_scale,)
+
+        @theta.setter
+        def theta(self, seq):
+            self.length_scale = seq[0]
+
+        @property
+        def bounds(self):
+            return (self.length_scale_bounds,)
+
+    return SquareExponentialKernel(length_scale, length_scale_bounds)
 
 @cpptype([])
 class _Multiply(Kernel):
