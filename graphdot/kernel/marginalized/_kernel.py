@@ -78,8 +78,7 @@ class MarginalizedGraphKernel:
         LMIN1 = 8
         DIAGONAL = 16
 
-        @classmethod
-        def create(cls, **kwargs):
+        def __new__(cls, **kwargs):
             traits = 0
             nodal = kwargs.pop('nodal', False)
             traits |= cls.NODAL if nodal is not False else 0
@@ -389,9 +388,9 @@ class MarginalizedGraphKernel:
 
         ''' call GPU kernel '''
         self.timer.tic('calling GPU kernel (overall)')
-        traits = self._Traits.create(symmetric=Y is None,
-                                     nodal=nodal,
-                                     lmin1=lmin == 1)
+        traits = self._Traits(symmetric=Y is None,
+                              nodal=nodal,
+                              lmin1=lmin == 1)
         self._launch_kernel(np.concatenate((X, Y)) if Y is not None else X,
                             jobs,
                             starts,
@@ -473,9 +472,9 @@ class MarginalizedGraphKernel:
 
         ''' call GPU kernel '''
         self.timer.tic('calling GPU kernel (overall)')
-        traits = self._Traits.create(diagonal=True,
-                                     nodal=nodal,
-                                     lmin1=lmin == 1)
+        traits = self._Traits(diagonal=True,
+                              nodal=nodal,
+                              lmin1=lmin == 1)
         self._launch_kernel(X,
                             jobs,
                             starts,
