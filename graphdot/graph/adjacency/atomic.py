@@ -1,18 +1,30 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import re
+import copy
 import functools
 import numpy as np
 from mendeleev import get_table
 from graphdot.graph.adjacency.euclidean import Tent
 
 
-@functools.lru_cache(maxsize=32)
+def copying_lru_cache(*args, **kwargs):
+
+    def decorator(f):
+        cached_func = functools.lru_cache(*args, **kwargs)(f)
+
+        def wrapper(*args, **kwargs):
+            return copy.deepcopy(cached_func(*args, **kwargs))
+        return wrapper
+    return decorator
+
+
+@copying_lru_cache(maxsize=32)
 def get_ptable():
     return get_table('elements')
 
 
-@functools.lru_cache(maxsize=128)
+@copying_lru_cache(maxsize=128)
 def get_length_scales(name):
     ptable = get_ptable()
     length = np.zeros(ptable.atomic_number.max() + 1)
