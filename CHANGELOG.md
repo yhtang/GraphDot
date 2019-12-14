@@ -1,3 +1,6 @@
+## 0.2.9 (2019-12-14)
+- Fixed a bug related to atomic adjacency #43.
+
 ## 0.2.8 (2019-11-22)
 - Added an experimental 'M3' distance metric
 
