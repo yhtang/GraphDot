@@ -90,7 +90,11 @@ class Graph:
             the converted graph
         """
         import networkx as nx
-        graph = nx.relabel.convert_node_labels_to_integers(graph)
+        nodes = list(graph.nodes)
+
+        if not all(isinstance(x, int) for x in nodes) \
+                or max(nodes) + 1 != len(nodes) or min(nodes) < 0:
+            graph = nx.relabel.convert_node_labels_to_integers(graph)
 
         ''' extrac title '''
         title = graph.graph['title'] if 'title' in graph.graph.keys() else ''
