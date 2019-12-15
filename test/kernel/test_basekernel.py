@@ -11,6 +11,7 @@ from graphdot.kernel.basekernel import SquareExponential
 from graphdot.kernel.basekernel import _Multiply
 from graphdot.kernel.basekernel import TensorProduct
 # from graphdot.marginalized.basekernel import Convolution
+from graphdot.kernel.basekernel import Optional
 
 inf = float('inf')
 nan = float('nan')
@@ -18,7 +19,8 @@ kernels = [
     Constant(1.0),
     # Multiply(),
     KroneckerDelta(0.5),
-    SquareExponential(1.0)
+    SquareExponential(1.0),
+    Optional(Constant(1.0))
 ]
 
 
@@ -335,3 +337,14 @@ def test_kernel_mul_kernel(k1, k2):
         ''' C++ code generation '''
         assert(kmul.dtype.isalignedstruct)
         assert(isinstance(kmul.gen_constexpr('x', 'y'), str))
+
+
+@pytest.mark.parametrize('missing_value', [np.nan, np.inf, 0.0, 1.0])
+def test_optional_kernel(missing_value):
+    k = Optional(KroneckerDelta(0.5), missing_value=missing_value)
+    for v in np.random.rand(100):
+        assert(k(v, v) == 1)
+        assert(k(v, v + 1) < 1)
+        assert(k(v, missing_value) == 1)
+        assert(k(missing_value, v) == 1)
+        assert(k(missing_value, missing_value) == 1)

@@ -385,6 +385,7 @@ def TensorProduct(**kw_kernels):
 
     return TensorProductKernel(**kw_kernels)
 
+
 # class Convolution(Kernel):
 #     def __init__(self, kernel):
 #         self.kernel = kernel
@@ -406,3 +407,91 @@ def TensorProduct(**kw_kernels):
 #     def gen_constexpr(self, X, Y):
 #         return ' + '.join([self.kernel.gen_constexpr(x, y)
 #                            for x in X for y in Y])
+
+
+def Optional(kernel, missing_value=np.nan, missing_value_type=np.float32):
+    r"""Makes a kernel 'optional' so that it will only be evaluated if both of
+    its inputs are not equal to the missing value, i.e.
+    :math:`k_{optional}(i, j; \kappa) =
+    \begin{cases}
+        \kappa(i, j), i, j \neq \varnothing\\
+        1, otherwise
+    \end{cases}`
+
+    Parameters
+    ----------
+    missing_value: float, default = :py:const:`numpy.nan`
+        The symbol that represents a missing value.
+
+    Returns
+    -------
+    Kernel
+        A kernel instance of corresponding behavior
+    """
+
+    @cpptype([('kernel', kernel.dtype), ('missing_value', missing_value_type)])
+    class OptionalKernel(Kernel):
+
+        def __init__(self, kernel, missing_value=np.nan):
+            self.kernel = kernel
+            self.missing_value = missing_value
+
+        def __call__(self, i, j):
+            if np.isnan(self.missing_value):
+                return 1 if np.isnan(i) or np.isnan(j) else self.kernel(i, j)
+            else:
+                if i == self.missing_value or j == self.missing_value:
+                    return 1
+                else:
+                    return self.kernel(i, j)
+
+        def __str__(self):
+            return '({} | !{})'.format(str(self.kernel), self.missing_value)
+
+        def __repr__(self):
+            return 'Optional({}, {})'.format(
+                repr(self.kernel),
+                self.missing_value
+            )
+
+        def gen_constexpr(self, x, y):
+            if np.isnan(self.missing_value):
+                condition = '(std::isnan({}) || std::isnan({}))'.format(x, y)
+            else:
+                condition = '({x} == {m} || {y} == {m})'.format(
+                    x=x, y=y,
+                    m=self.missing_value
+                )
+
+            return '({} ? 1.0f : {})'.format(
+                condition,
+                self.kernel.gen_constexpr(x, y)
+            )
+
+        def gen_expr(self, x, y, theta_prefix=''):
+            if np.isnan(self.missing_value):
+                condition = '(std::isnan({}) || std::isnan({}))'.format(x, y)
+            else:
+                condition = '({x} == {m} || {y} == {m})'.format(
+                    x=x, y=y,
+                    m=theta_prefix + 'missing_value'
+                )
+
+            return '({} ? 1.0f : {})'.format(
+                condition,
+                self.kernel.gen_expr(x, y, theta_prefix + 'kernel.')
+            )
+
+        @property
+        def theta(self):
+            return self.kernel.theta
+
+        @theta.setter
+        def theta(self, seq):
+            self.kernel.theta = seq
+
+        @property
+        def bounds(self):
+            return self.kernel.bounds
+
+    return OptionalKernel(kernel, missing_value)
