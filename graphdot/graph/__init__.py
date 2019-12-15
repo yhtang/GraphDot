@@ -145,7 +145,8 @@ class Graph:
         return cls(nodes=node_df, edges=edge_df, title=title)
 
     @classmethod
-    def from_ase(cls, atoms, use_pbc=True, adjacency='default'):
+    def from_ase(cls, atoms, use_charge=False, use_pbc=True,
+                 adjacency='default'):
         """Convert from ASE atoms to molecular graph
 
         Parameters
@@ -169,6 +170,8 @@ class Graph:
 
         nodes = DataFrame({'!i': range(len(atoms))})
         nodes['element'] = atoms.get_atomic_numbers().astype(np.int8)
+        if use_charge:
+            nodes['charge'] = atoms.get_initial_charges().astype(np.float32)
 
         pbc = np.logical_and(atoms.pbc, use_pbc)
         images = [(atoms.cell.T * image).sum(axis=1) for image in product(
