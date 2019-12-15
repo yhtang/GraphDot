@@ -8,20 +8,32 @@ from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.kernel.basekernel import TensorProduct
 from graphdot.kernel.basekernel import KroneckerDelta
 from graphdot.kernel.basekernel import SquareExponential
+from graphdot.kernel.basekernel import Optional
 
 
 class M3:
     """The Marginalized MiniMax (M3) metric between molecules"""
 
-    def __init__(self, adjacency='default', q=0.01):
-        self.adjacency = AtomicAdjacency(shape='tent2', zoom=0.75)
+    def __init__(self, use_charge=False, adjacency='default', q=0.01):
+        self.use_charge = use_charge
+        if adjacency == 'default':
+            self.adjacency = AtomicAdjacency(shape='tent2', zoom=0.75)
+        else:
+            self.adjacency = adjacency
         self.q = q
-        self.node_kernel = TensorProduct(element=KroneckerDelta(0.2))
+        if use_charge:
+            self.node_kernel = TensorProduct(
+                element=KroneckerDelta(0.2),
+                charge=Optional(SquareExponential(0.05) * 0.9 + 0.1),
+            )
+        else:
+            self.node_kernel = TensorProduct(element=KroneckerDelta(0.2))
         self.edge_kernel = TensorProduct(length=SquareExponential(0.02))
 
     def __call__(self, atoms1, atoms2):
-        g1 = Graph.from_ase(atoms1, adjacency=self.adjacency)
-        g2 = Graph.from_ase(atoms2, adjacency=self.adjacency)
+        args = dict(use_charge=self.use_charge, adjacency=self.adjacency)
+        g1 = Graph.from_ase(atoms1, **args)
+        g2 = Graph.from_ase(atoms2, **args)
 
         R1 = self._mlgk(g1, g1).diagonal()**-0.5
         R2 = self._mlgk(g2, g2).diagonal()**-0.5
