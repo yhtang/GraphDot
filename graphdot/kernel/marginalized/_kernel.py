@@ -295,10 +295,11 @@ class MarginalizedGraphKernel:
 
     """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
 
-    def requires_vector_input(self):
+    def is_stationary(self):
         return False
 
-    def is_stationary(self):
+    @property
+    def requires_vector_input(self):
         return False
 
     @property
@@ -339,3 +340,13 @@ class MarginalizedGraphKernel:
         clone = copy.deepcopy(self)
         clone.theta = theta
         return clone
+
+    def get_params(self, deep=False):
+        return dict(
+            node_kernel=self.node_kernel,
+            edge_kernel=self.edge_kernel,
+            p=self.p,
+            q=self.q,
+            q_bounds=self.q_bounds,
+            backend=self.backend
+        )
