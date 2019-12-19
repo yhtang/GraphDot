@@ -84,7 +84,6 @@ class MarginalizedGraphKernel:
         self.q_bounds = q_bounds
 
         self.backend = backend_factory(backend)
-        self.timer = Timer()
 
     def _get_starting_probability(self, p):
         if isinstance(p, str):
@@ -123,10 +122,11 @@ class MarginalizedGraphKernel:
             similarities between the graphs in X; otherwise, returns a matrix
             containing similarities across graphs in X and Y.
         """
+        timer = Timer()
         backend = self.backend
 
         ''' generate jobs '''
-        self.timer.tic('generating jobs')
+        timer.tic('generating jobs')
         if Y is None:
             i, j = np.triu_indices(len(X))
             i, j = i.astype(np.uint32), j.astype(np.uint32)
@@ -138,10 +138,10 @@ class MarginalizedGraphKernel:
             .ravel()
             .view(np.dtype([('i', np.uint32), ('j', np.uint32)]))
         )
-        self.timer.toc('generating jobs')
+        timer.toc('generating jobs')
 
         ''' create output buffer '''
-        self.timer.tic('creating output buffer')
+        timer.tic('creating output buffer')
         if Y is None:
             starts = backend.zeros(len(X) + 1, dtype=np.uint32)
             if nodal is True:
@@ -168,10 +168,10 @@ class MarginalizedGraphKernel:
                 starts[len(X):] = np.arange(len(Y) + 1)
                 output_shape = (len(X), len(Y))
         output = backend.empty(output_shape[0] * output_shape[1], np.float32)
-        self.timer.toc('creating output buffer')
+        timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
-        self.timer.tic('calling GPU kernel (overall)')
+        timer.tic('calling GPU kernel (overall)')
         traits = self._Traits(symmetric=Y is None,
                               nodal=nodal,
                               lmin1=lmin == 1)
@@ -185,18 +185,18 @@ class MarginalizedGraphKernel:
                 output,
                 output_shape,
                 np.uint32(traits),
-                self.timer,
+                timer,
                 )
-        self.timer.toc('calling GPU kernel (overall)')
+        timer.toc('calling GPU kernel (overall)')
 
         ''' collect result '''
-        self.timer.tic('collecting result')
+        timer.tic('collecting result')
         output = output.reshape(*output_shape, order='F')
-        self.timer.toc('collecting result')
+        timer.toc('collecting result')
 
         if timer:
-            self.timer.report(unit='ms')
-        self.timer.reset()
+            timer.report(unit='ms')
+        timer.reset()
 
         return output
 
@@ -229,20 +229,21 @@ class MarginalizedGraphKernel:
             similarities; if nodal = 'block', return a list of square matrices,
             each being a pairwise nodal similarity matrix within a graph.
         """
+        timer = Timer()
         backend = self.backend
 
         ''' generate jobs '''
-        self.timer.tic('generating jobs')
+        timer.tic('generating jobs')
         i = np.arange(len(X), dtype=np.uint32)
         jobs = backend.array(
             np.column_stack((i, i))
             .ravel()
             .view(np.dtype([('i', np.uint32), ('j', np.uint32)]))
         )
-        self.timer.toc('generating jobs')
+        timer.toc('generating jobs')
 
         ''' create output buffer '''
-        self.timer.tic('creating output buffer')
+        timer.tic('creating output buffer')
         starts = backend.zeros(len(X) + 1, dtype=np.uint32)
         if nodal is True:
             sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
@@ -258,10 +259,10 @@ class MarginalizedGraphKernel:
         else:
             raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
         output = backend.empty(output_length, np.float32)
-        self.timer.toc('creating output buffer')
+        timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
-        self.timer.tic('calling GPU kernel (overall)')
+        timer.tic('calling GPU kernel (overall)')
         traits = self._Traits(diagonal=True,
                               nodal=nodal,
                               lmin1=lmin == 1)
@@ -275,20 +276,20 @@ class MarginalizedGraphKernel:
                 output,
                 (output_length, 1),
                 traits,
-                self.timer,
+                timer,
                 )
-        self.timer.toc('calling GPU kernel (overall)')
+        timer.toc('calling GPU kernel (overall)')
 
         ''' post processing '''
-        self.timer.tic('collecting result')
+        timer.tic('collecting result')
         if nodal == 'block':
             output = [output[s:s + n**2].reshape(n, n)
                       for s, n in zip(starts[:-1], sizes)]
-        self.timer.toc('collecting result')
+        timer.toc('collecting result')
 
         if timer:
-            self.timer.report(unit='ms')
-        self.timer.reset()
+            timer.report(unit='ms')
+        timer.reset()
 
         return output
 
@@ -335,8 +336,6 @@ class MarginalizedGraphKernel:
                                   np.float)).reshape(-1, 2, order='C')
 
     def clone_with_theta(self, theta):
-        cloned = copy.copy(self)
-        cloned.node_kernel = copy.deepcopy(self.node_kernel)
-        cloned.edge_kernel = copy.deepcopy(self.edge_kernel)
-        cloned.theta = theta
-        return cloned
+        clone = copy.deepcopy(self)
+        clone.theta = theta
+        return clone

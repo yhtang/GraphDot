@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import copy
 import uuid
 import warnings
 import functools
@@ -34,6 +35,8 @@ class CUDABackend(Backend):
         return umempty(size, dtype)
 
     def __init__(self, **kwargs):
+        self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
+        self.device = self.ctx.get_device()
         self.scratch = None
         self.scratch_capacity = 0
         self.graph_cache = {}
@@ -43,10 +46,11 @@ class CUDABackend(Backend):
         self.block_size = kwargs.pop('block_size', 128)
 
         self.nvcc_extra = kwargs.pop('nvcc_extra', [])
-        self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
-        self.device = self.ctx.get_device()
         self._source = ''
         self._module = None
+
+    def __deepcopy__(self, memo):
+        return copy.copy(self)
 
     def _assert_homogeneous(self, x, y):
         try:
