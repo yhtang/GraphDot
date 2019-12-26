@@ -268,124 +268,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
 #     return SquareExponentialKernel(length_scale, length_scale_bounds)
 
 
-def make_hyperparameters(kernel, *specifications):
-
-    defs = OrderedDict()
-
-    for spec in specifications:
-        if len(spec) == 2:
-            symbol, dtype = spec
-            defs[symbol] = dict(dtype=dtype)
-        if len(spec) == 3:
-            symbol, dtype, doc = spec
-            defs[symbol] = dict(dtype=dtype, doc=doc)
-        elif len(spec) == 4:
-            symbol, dtype, lb, ub = spec
-            defs[symbol] = dict(dtype=dtype, bounds=(lb, ub))
-        elif len(spec) == 5:
-            symbol, dtype, doc, lb, ub = spec
-            defs[symbol] = dict(dtype=dtype, doc=doc, bounds=(lb, ub))
-        else:
-            raise ValueError(
-                'Invalid hyperparameter specification, '
-                'must be one of\n'
-                '(symbol, dtype)\n',
-                '(symbol, dtype, doc)\n',
-                '(symbol, dtype, lb, ub)\n',
-                '(symbol, dtype, doc, lb, ub)\n',
-            )
-
-    class Meta(type):
-
-        _definitions = defs
-
-        @property
-        def definitions(self):
-            return self._definitions
-
-        @property
-        def names(self):
-            return self.definitions.keys()
-
-        @property
-        def dtypes(self):
-            return [t['dtype'] for t in self.definitions.values()]
-
-    class Hyperparameters(metaclass=Meta):
-
-        _kernel = kernel
-        values_t = namedtuple("HyperparameterValues", defs)
-        bounds_t = namedtuple("HyperparameterBounds", defs)
-
-        def __init__(self, *args, **kwargs):
-
-            values = {}
-            bounds = {}
-
-            for symbol, value in zip(self.names, args):
-                values[symbol] = value
-
-            for symbol in self.names:
-                try:
-                    values[symbol] = kwargs[symbol]
-                except KeyError:
-                    if symbol not in values:
-                        raise KeyError(
-                            'Hyperparameter {} not provided for {}'.format(
-                                symbol,
-                                self._kernel
-                            )
-                        )
-
-                try:
-                    bounds[symbol] = kwargs['%s_bounds' % symbol]
-                except KeyError:
-                    try:
-                        bounds[symbol] = self.definitions[symbol]['bounds']
-                    except KeyError:
-                        raise KeyError(
-                            'Bounds for hyperparameter {} of kernel {} not '
-                            'specified, while no default value exists.'.format(
-                                symbol,
-                                self._kernel
-                            )
-                        )
-
-            self._values = self.values_t(**values)
-            self._bounds = self.bounds_t(**bounds)
-
-        @property
-        def definitions(self):
-            return Hyperparameters.definitions
-
-        @property
-        def names(self):
-            return Hyperparameters.names
-
-        @property
-        def values(self):
-            return self._values
-
-        @values.setter
-        def values(self, kwrhs):
-            self._values = self.values_t(**kwrhs)
-
-        @property
-        def bounds(self):
-            return self._bounds
-
-        @bounds.setter
-        def bounds(self, kwrhs):
-            self._bounds = self.bounds_t(**kwrhs)
-
-    return Hyperparameters
-
-
-@lru_cache(128)
-def uf(v, e):
-    return ufuncify(v, e)
-
-def make_kernel(name, expression, variables, *hyperparameter_specs):
+def create(kernel, expression, variables, *hyperparameter_specs):
 
     '''parse expression'''
     if isinstance(expression, str):
@@ -400,33 +283,85 @@ def make_kernel(name, expression, variables, *hyperparameter_specs):
     variables = [sy.Symbol(v) if isinstance(v, str) else v for v in variables]
 
     '''parse the list of hyperparameters'''
-    hparams_t = make_hyperparameters(name, *hyperparameter_specs)
+    hyperdefs = OrderedDict()
+    for spec in hyperparameter_specs:
+        if not hasattr(spec, '__iter__'):
+            symbol = spec
+            hyperdefs[symbol] = dict(dtype=np.float32)
+        if len(spec) == 1:
+            symbol = spec[0]
+            hyperdefs[symbol] = dict(dtype=np.float32)
+        if len(spec) == 2:
+            symbol, dtype = spec
+            hyperdefs[symbol] = dict(dtype=dtype)
+        if len(spec) == 3:
+            symbol, dtype, doc = spec
+            hyperdefs[symbol] = dict(dtype=dtype, doc=doc)
+        elif len(spec) == 4:
+            symbol, dtype, lb, ub = spec
+            hyperdefs[symbol] = dict(dtype=dtype, bounds=(lb, ub))
+        elif len(spec) == 5:
+            symbol, dtype, doc, lb, ub = spec
+            hyperdefs[symbol] = dict(dtype=dtype, doc=doc, bounds=(lb, ub))
+        else:
+            raise ValueError(
+                'Invalid hyperparameter specification, '
+                'must be one of\n'
+                '(symbol, dtype)\n',
+                '(symbol, dtype, doc)\n',
+                '(symbol, dtype, lb, ub)\n',
+                '(symbol, dtype, doc, lb, ub)\n',
+            )
 
     '''create kernel class'''
-    @cpptype(list(zip(hparams_t.names, hparams_t.dtypes)))
+    @cpptype([(p, v['dtype']) for p, v in hyperdefs.items()])
     class BaseKernel(Kernel):
 
-        __name__ = name
+        __name__ = kernel
 
         _expression = expression
         _variables = variables
-        _hparams_t = hparams_t
+        _hyperdefs = hyperdefs
 
         def __init__(self, *args, **kwargs):
-            self._hparams = self._hparams_t(*args, **kwargs)
 
-        @property
-        # @cached_on('theta')
-        def ufunc(self):
-            expr = self._expression.subs(zip(self.theta_names,
-                                             self.theta))
-            # return ufuncify(self._variables, expr)
-            return uf(self._variables, expr)
+            self._theta_values = values = OrderedDict()
+            self._theta_bounds = bounds = OrderedDict()
 
-        # @cached_on('theta')
-        def expanded_expr(self):
-            return self._expression.subs(zip(self.theta_names,
-                                             self.theta))
+            for symbol, value in zip(self._hyperdefs, args):
+                values[symbol] = value
+
+            for symbol in self._hyperdefs:
+                try:
+                    values[symbol] = kwargs[symbol]
+                except KeyError:
+                    if symbol not in values:
+                        raise KeyError(
+                            'Hyperparameter {} not provided for {}'.format(
+                                symbol,
+                                self.__name__
+                            )
+                        )
+
+                try:
+                    bounds[symbol] = kwargs['%s_bounds' % symbol]
+                except KeyError:
+                    try:
+                        bounds[symbol] = self._hyperdefs[symbol]['bounds']
+                    except KeyError:
+                        raise KeyError(
+                            'Bounds for hyperparameter {} of kernel {} not '
+                            'specified, while no default value exists.'.format(
+                                symbol,
+                                self.__name__
+                            )
+                        )
+            
+            self.ufunc = self.gen_ufunc()
+
+        def gen_ufunc(self):
+            expr = self._expression.subs(self._theta_values.items())
+            return ufuncify(self._variables, expr)
 
         def __call__(self, x1, x2):
             return self.ufunc.outer(x1, x2)
@@ -437,84 +372,78 @@ def make_kernel(name, expression, variables, *hyperparameter_specs):
         def __repr__(self):
             return Template('${cls}(${theta, }, ${bounds, })').render(
                 cls=self.__name__,
-                theta=['{}={}'.format(n, v)
-                       for n, v in zip(self.theta_names,
-                                       self.theta)],
-                bounds=['{}_bounds={}'.format(n, v)
-                        for n, v in zip(self.theta_names,
-                                        self._hparams.bounds)]
+                theta=['{}={}'.format(*v)
+                       for v in self._theta_values.items()],
+                bounds=['{}_bounds={}'.format(*v)
+                        for v in self._theta_bounds.items()]
             )
 
         def gen_constexpr(self, x, y):
             expr = self._expression.subs(zip(self._variables, (x, y)))
-            expr = self._expression.subs(zip(self.theta_names, self.theta))
+            expr = self._expression.subs(self._theta_values.items())
             return cuda_cxx11_code_printer(expr)
 
         def gen_expr(self, x, y, theta_prefix=''):
             expr = self._expression.subs(zip(self._variables, (x, y)))
             # protect hyperparameters for scoping touchup
             expr = self._expression.subs(
-                [(n, '__%s__' % n) for n in self.theta_names]
+                [(n, '__%s__' % n) for n in self._hyperdefs]
             )
             expr = cuda_cxx11_code_printer(expr)
             # prefix hyperparameters with correct scope
-            for theta in self.theta_names:
+            for theta in self._hyperdefs:
                 expr = re.sub('__%s__' % theta, theta_prefix + theta, expr)
             return expr
 
         @property
         def theta(self):
-            return self._hparams.values
+            return tuple(self._theta_values.values())
 
         @theta.setter
         def theta(self, seq):
-            assert(len(seq) == len(self._hparams))
-            self._hparams.values = {
-                name: value for name, value in zip(self.theta_names, seq)
-            }
+            assert(len(seq) == len(self._theta_values))
+            for theta, value in zip(self._hyperdefs, seq):
+                self._theta_values[theta] = value
+            self.ufunc = self.gen_ufunc()
 
         @property
         def bounds(self):
-            return self._hparams.bounds
-
-        @property
-        def theta_names(self):
-            return self._hparams.names
+            return tuple(self._theta_bounds.values())
 
     return BaseKernel
 
 
-SquareExponential = make_kernel(
+SquareExponential = create(
     'SquareExponential',
     'exp(-(x - y)**2 / (2 * length_scale**2))',
     ('x', 'y'),
     ('length_scale', np.float32, 1e-6, np.inf)
 )
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
-#     SquareExponentialKernel = make_kernel(
-#         'SquareExponential',
-#         'exp(-(x - y)**2 / (2 * length_scale**2))',
-#         ('x', 'y'),
-#         ('length_scale', np.float32, 1e-6, np.inf)
-#     )
+    SquareExponentialKernel = create(
+        'SquareExponential',
+        'exp(-(x - y)**2 / (2 * length_scale**2))',
+        ('x', 'y'),
+        ('length_scale', np.float32, 1e-6, np.inf)
+    )
 
-#     print(SquareExponentialKernel)
+    print(SquareExponentialKernel)
 
-#     k = SquareExponentialKernel(length_scale=1.0)
+    k = SquareExponentialKernel(length_scale=1.0)
 
-#     print(k._expression)
-#     # print(k.length_scale)
-#     # print(k.dtype)
-#     print(repr(k))
-#     print(k.theta)
-#     print(k.bounds)
-#     print(k.gen_constexpr('X', 'Y'))
-#     print(k.gen_expr('X', 'Y', 'some.scope.'))
-#     print(k(0, 0))
-#     print(k(1, 1))
-#     print(k(0, 1))
+    print(k._expression)
+    # print(k.length_scale)
+    # print(k.dtype)
+    print(repr(k))
+    print(k.theta)
+    print(k.bounds)
+    print(k.gen_constexpr('X', 'Y'))
+    print(k.gen_expr('X', 'Y', 'some.scope.'))
+    print(k(0, 0))
+    print(k(1, 1))
+    print(k(0, 1))
 
 
 @cpptype([])
