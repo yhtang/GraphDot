@@ -4,10 +4,15 @@
 This module defines base kernels and composibility rules for creating vertex
 and edge kernels for the marginalized graph kernel.
 """
+import re
+from collections import namedtuple, OrderedDict
+from functools import lru_cache
 import numpy as np
-import sympy as sym
+import sympy as sy
+from sympy.utilities.autowrap import ufuncify
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
+from graphdot.codegen.sympy import cuda_cxx11_code_printer
 
 __all__ = ['Kernel',
            'Constant',
@@ -200,113 +205,317 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
     return KroneckerDeltaKernel(h, h_bounds)
 
 
-def SquareExponential(length_scale, length_scale_bounds=(1e-6, np.inf)):
-    r"""Creates a square exponential kernel that smoothly transitions from 1 to
-    0 as the distance between two vectors increases from zero to infinity, i.e.
-    :math:`k_\mathrm{se}(\mathbf{x}_1, \mathbf{x}_2) = \exp(-\frac{1}{2}
-    \frac{\lVert \mathbf{x}_1 - \mathbf{x}_2 \rVert^2}{\sigma^2})`
+# def SquareExponential(length_scale, length_scale_bounds=(1e-6, np.inf)):
+#     r"""Creates a square exponential kernel that smoothly transitions from 1 to
+#     0 as the distance between two vectors increases from zero to infinity, i.e.
+#     :math:`k_\mathrm{se}(\mathbf{x}_1, \mathbf{x}_2) = \exp(-\frac{1}{2}
+#     \frac{\lVert \mathbf{x}_1 - \mathbf{x}_2 \rVert^2}{\sigma^2})`
 
-    Parameters
-    ----------
-    length_scale: float > 0
-        Determines how quickly should the kernel decay to zero. The kernel has
-        a value of approx. 0.606 at one length scale, 0.135 at two length
-        scales, and 0.011 at three length scales.
+#     Parameters
+#     ----------
+#     length_scale: float > 0
+#         Determines how quickly should the kernel decay to zero. The kernel has
+#         a value of approx. 0.606 at one length scale, 0.135 at two length
+#         scales, and 0.011 at three length scales.
 
-    Returns
-    -------
-    Kernel
-        A kernel instance of corresponding behavior
-    """
+#     Returns
+#     -------
+#     Kernel
+#         A kernel instance of corresponding behavior
+#     """
 
-    # only works with python >= 3.6
-    # @cpptype(nrsql=np.float32)
-    @cpptype([('nrsql', np.float32)])
-    class SquareExponentialKernel(Kernel):
-        def __init__(self, length_scale, length_scale_bounds):
-            self.length_scale = length_scale
-            self.length_scale_bounds = length_scale_bounds
+#     # only works with python >= 3.6
+#     # @cpptype(nrsql=np.float32)
+#     @cpptype([('nrsql', np.float32)])
+#     class SquareExponentialKernel(Kernel):
+#         def __init__(self, length_scale, length_scale_bounds):
+#             self.length_scale = length_scale
+#             self.length_scale_bounds = length_scale_bounds
 
-        def __call__(self, x1, x2):
-            return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
+#         def __call__(self, x1, x2):
+#             return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
 
-        def __str__(self):
-            return 'SqExp({})'.format(self.length_scale)
+#         def __str__(self):
+#             return 'SqExp({})'.format(self.length_scale)
 
-        def __repr__(self):
-            return 'SquareExponential({})'.format(self.length_scale)
+#         def __repr__(self):
+#             return 'SquareExponential({})'.format(self.length_scale)
 
-        def gen_constexpr(self, x, y):
-            return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
-                self.nrsql, x, y, x, y)
+#         def gen_constexpr(self, x, y):
+#             return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
+#                 self.nrsql, x, y, x, y)
 
-        def gen_expr(self, x, y, theta_prefix=''):
-            return 'expf({p}nrsql * ({x} - {y}) * ({x} - {y}))'.format(
-                p=theta_prefix, x=x, y=y)
+#         def gen_expr(self, x, y, theta_prefix=''):
+#             return 'expf({p}nrsql * ({x} - {y}) * ({x} - {y}))'.format(
+#                 p=theta_prefix, x=x, y=y)
+
+#         @property
+#         def nrsql(self):
+#             return -0.5 / self.length_scale**2
+
+#         @property
+#         def theta(self):
+#             return (self.length_scale,)
+
+#         @theta.setter
+#         def theta(self, seq):
+#             self.length_scale = seq[0]
+
+#         @property
+#         def bounds(self):
+#             return (self.length_scale_bounds,)
+
+#     return SquareExponentialKernel(length_scale, length_scale_bounds)
+
+
+def make_hyperparameters(kernel, *specifications):
+
+    defs = OrderedDict()
+
+    for spec in specifications:
+        if len(spec) == 2:
+            symbol, dtype = spec
+            defs[symbol] = dict(dtype=dtype)
+        if len(spec) == 3:
+            symbol, dtype, doc = spec
+            defs[symbol] = dict(dtype=dtype, doc=doc)
+        elif len(spec) == 4:
+            symbol, dtype, lb, ub = spec
+            defs[symbol] = dict(dtype=dtype, bounds=(lb, ub))
+        elif len(spec) == 5:
+            symbol, dtype, doc, lb, ub = spec
+            defs[symbol] = dict(dtype=dtype, doc=doc, bounds=(lb, ub))
+        else:
+            raise ValueError(
+                'Invalid hyperparameter specification, '
+                'must be one of\n'
+                '(symbol, dtype)\n',
+                '(symbol, dtype, doc)\n',
+                '(symbol, dtype, lb, ub)\n',
+                '(symbol, dtype, doc, lb, ub)\n',
+            )
+
+    class Meta(type):
+
+        _definitions = defs
 
         @property
-        def nrsql(self):
-            return -0.5 / self.length_scale**2
+        def definitions(self):
+            return self._definitions
 
         @property
-        def theta(self):
-            return (self.length_scale,)
+        def names(self):
+            return self.definitions.keys()
 
-        @theta.setter
-        def theta(self, seq):
-            self.length_scale = seq[0]
+        @property
+        def dtypes(self):
+            return [t['dtype'] for t in self.definitions.values()]
+
+    class Hyperparameters(metaclass=Meta):
+
+        _kernel = kernel
+        values_t = namedtuple("HyperparameterValues", defs)
+        bounds_t = namedtuple("HyperparameterBounds", defs)
+
+        def __init__(self, *args, **kwargs):
+
+            values = {}
+            bounds = {}
+
+            for symbol, value in zip(self.names, args):
+                values[symbol] = value
+
+            for symbol in self.names:
+                try:
+                    values[symbol] = kwargs[symbol]
+                except KeyError:
+                    if symbol not in values:
+                        raise KeyError(
+                            'Hyperparameter {} not provided for {}'.format(
+                                symbol,
+                                self._kernel
+                            )
+                        )
+
+                try:
+                    bounds[symbol] = kwargs['%s_bounds' % symbol]
+                except KeyError:
+                    try:
+                        bounds[symbol] = self.definitions[symbol]['bounds']
+                    except KeyError:
+                        raise KeyError(
+                            'Bounds for hyperparameter {} of kernel {} not '
+                            'specified, while no default value exists.'.format(
+                                symbol,
+                                self._kernel
+                            )
+                        )
+
+            self._values = self.values_t(**values)
+            self._bounds = self.bounds_t(**bounds)
+
+        @property
+        def definitions(self):
+            return Hyperparameters.definitions
+
+        @property
+        def names(self):
+            return Hyperparameters.names
+
+        @property
+        def values(self):
+            return self._values
+
+        @values.setter
+        def values(self, kwrhs):
+            self._values = self.values_t(**kwrhs)
 
         @property
         def bounds(self):
-            return (self.length_scale_bounds,)
+            return self._bounds
 
-    return SquareExponentialKernel(length_scale, length_scale_bounds)
+        @bounds.setter
+        def bounds(self, kwrhs):
+            self._bounds = self.bounds_t(**kwrhs)
+
+    return Hyperparameters
 
 
-def NewSquareExponential(length_scale, length_scale_bounds=(1e-6, np.inf)):
+@lru_cache(128)
+def uf(v, e):
+    return ufuncify(v, e)
 
-    @cpptype([('nrsql', np.float32)])
-    class SquareExponentialKernel(Kernel):
-        def __init__(self, length_scale, length_scale_bounds):
-            self.length_scale = length_scale
-            self.length_scale_bounds = length_scale_bounds
+def make_kernel(name, expression, variables, *hyperparameter_specs):
 
-            self.expr = 
+    '''parse expression'''
+    if isinstance(expression, str):
+        expression = sy.sympify(expression)
+    from sympy.codegen import rewriting
+    opt = rewriting.create_expand_pow_optimization(3)
+    expression = opt(expression)
 
-        def __call__(self, x1, x2):
-            return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
+    '''check input variables'''
+    if len(variables) != 2:
+        raise ValueError('A kernel must have exactly two variables')
+    variables = [sy.Symbol(v) if isinstance(v, str) else v for v in variables]
 
-        def __str__(self):
-            return 'SqExp({})'.format(self.length_scale)
+    '''parse the list of hyperparameters'''
+    hparams_t = make_hyperparameters(name, *hyperparameter_specs)
 
-        def __repr__(self):
-            return 'SquareExponential({})'.format(self.length_scale)
+    '''create kernel class'''
+    @cpptype(list(zip(hparams_t.names, hparams_t.dtypes)))
+    class BaseKernel(Kernel):
 
-        def gen_constexpr(self, x, y):
-            return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
-                self.nrsql, x, y, x, y)
+        __name__ = name
 
-        def gen_expr(self, x, y, theta_prefix=''):
-            return 'expf({p}nrsql * ({x} - {y}) * ({x} - {y}))'.format(
-                p=theta_prefix, x=x, y=y)
+        _expression = expression
+        _variables = variables
+        _hparams_t = hparams_t
+
+        def __init__(self, *args, **kwargs):
+            self._hparams = self._hparams_t(*args, **kwargs)
 
         @property
-        def nrsql(self):
-            return -0.5 / self.length_scale**2
+        # @cached_on('theta')
+        def ufunc(self):
+            expr = self._expression.subs(zip(self.theta_names,
+                                             self.theta))
+            # return ufuncify(self._variables, expr)
+            return uf(self._variables, expr)
+
+        # @cached_on('theta')
+        def expanded_expr(self):
+            return self._expression.subs(zip(self.theta_names,
+                                             self.theta))
+
+        def __call__(self, x1, x2):
+            return self.ufunc.outer(x1, x2)
+
+        # def __str__(self):
+        #     return '%s({})'.format(self.length_scale)
+
+        def __repr__(self):
+            return Template('${cls}(${theta, }, ${bounds, })').render(
+                cls=self.__name__,
+                theta=['{}={}'.format(n, v)
+                       for n, v in zip(self.theta_names,
+                                       self.theta)],
+                bounds=['{}_bounds={}'.format(n, v)
+                        for n, v in zip(self.theta_names,
+                                        self._hparams.bounds)]
+            )
+
+        def gen_constexpr(self, x, y):
+            expr = self._expression.subs(zip(self._variables, (x, y)))
+            expr = self._expression.subs(zip(self.theta_names, self.theta))
+            return cuda_cxx11_code_printer(expr)
+
+        def gen_expr(self, x, y, theta_prefix=''):
+            expr = self._expression.subs(zip(self._variables, (x, y)))
+            # protect hyperparameters for scoping touchup
+            expr = self._expression.subs(
+                [(n, '__%s__' % n) for n in self.theta_names]
+            )
+            expr = cuda_cxx11_code_printer(expr)
+            # prefix hyperparameters with correct scope
+            for theta in self.theta_names:
+                expr = re.sub('__%s__' % theta, theta_prefix + theta, expr)
+            return expr
 
         @property
         def theta(self):
-            return (self.length_scale,)
+            return self._hparams.values
 
         @theta.setter
         def theta(self, seq):
-            self.length_scale = seq[0]
+            assert(len(seq) == len(self._hparams))
+            self._hparams.values = {
+                name: value for name, value in zip(self.theta_names, seq)
+            }
 
         @property
         def bounds(self):
-            return (self.length_scale_bounds,)
+            return self._hparams.bounds
 
-    return SquareExponentialKernel(length_scale, length_scale_bounds)
+        @property
+        def theta_names(self):
+            return self._hparams.names
+
+    return BaseKernel
+
+
+SquareExponential = make_kernel(
+    'SquareExponential',
+    'exp(-(x - y)**2 / (2 * length_scale**2))',
+    ('x', 'y'),
+    ('length_scale', np.float32, 1e-6, np.inf)
+)
+
+# if __name__ == '__main__':
+
+#     SquareExponentialKernel = make_kernel(
+#         'SquareExponential',
+#         'exp(-(x - y)**2 / (2 * length_scale**2))',
+#         ('x', 'y'),
+#         ('length_scale', np.float32, 1e-6, np.inf)
+#     )
+
+#     print(SquareExponentialKernel)
+
+#     k = SquareExponentialKernel(length_scale=1.0)
+
+#     print(k._expression)
+#     # print(k.length_scale)
+#     # print(k.dtype)
+#     print(repr(k))
+#     print(k.theta)
+#     print(k.bounds)
+#     print(k.gen_constexpr('X', 'Y'))
+#     print(k.gen_expr('X', 'Y', 'some.scope.'))
+#     print(k(0, 0))
+#     print(k(1, 1))
+#     print(k(0, 1))
+
 
 @cpptype([])
 class _Multiply(Kernel):
