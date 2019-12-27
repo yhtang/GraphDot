@@ -314,7 +314,6 @@ def create(kernel, expression, variables, *hyperparameter_specs):
             )
 
     '''create kernel class'''
-    @cpptype([(p, v['dtype']) for p, v in hyperdefs.items()])
     class BaseKernel(Kernel):
 
         __name__ = kernel
@@ -356,18 +355,11 @@ def create(kernel, expression, variables, *hyperparameter_specs):
                                 self.__name__
                             )
                         )
-            
-            self.ufunc = self.gen_ufunc()
 
-        def gen_ufunc(self):
-            expr = self._expression.subs(self._theta_values.items())
-            return ufuncify(self._variables, expr)
+            self.ufunc = ufuncify(self._variables, self._bound_expr)
 
         def __call__(self, x1, x2):
             return self.ufunc.outer(x1, x2)
-
-        # def __str__(self):
-        #     return '%s({})'.format(self.length_scale)
 
         def __repr__(self):
             return Template('${cls}(${theta, }, ${bounds, })').render(
@@ -378,22 +370,47 @@ def create(kernel, expression, variables, *hyperparameter_specs):
                         for v in self._theta_bounds.items()]
             )
 
+        @staticmethod
+        def _mangle(expression, vars):
+            mangled = ['__%s__' % str(v) for v in vars]
+            return expression.subs(zip(vars, mangled)), mangled
+
+        @property
+        def _bound_expr(self):
+            return self._expression.subs(self._theta_values.items())
+
         def gen_constexpr(self, x, y):
-            expr = self._expression.subs(zip(self._variables, (x, y)))
-            expr = self._expression.subs(self._theta_values.items())
-            return cuda_cxx11_code_printer(expr)
+            expr, mangled = self._mangle(self._bound_expr, self._variables)
+
+            expr = cuda_cxx11_code_printer(expr)
+
+            for v, e in zip(mangled, [x, y]):
+                expr = re.sub(str(v), e, expr)
+
+            return expr
 
         def gen_expr(self, x, y, theta_prefix=''):
-            expr = self._expression.subs(zip(self._variables, (x, y)))
-            # protect hyperparameters for scoping touchup
-            expr = self._expression.subs(
-                [(n, '__%s__' % n) for n in self._hyperdefs]
-            )
-            expr = cuda_cxx11_code_printer(expr)
-            # prefix hyperparameters with correct scope
-            for theta in self._hyperdefs:
-                expr = re.sub('__%s__' % theta, theta_prefix + theta, expr)
-            return expr
+            expr, m_vars = self._mangle(self._expression, self._variables)
+            expr, m_thetas = self._mangle(expr, self._hyperdefs)
+
+            cxxexpr = cuda_cxx11_code_printer(expr)
+
+            for pattern, repl in zip(m_vars, [x, y]):
+                cxxexpr = re.sub(pattern, repl, cxxexpr)
+
+            for pattern, repl in zip(m_thetas, self._hyperdefs):
+                cxxexpr = re.sub(pattern, theta_prefix + repl, cxxexpr)
+
+            return cxxexpr
+
+        @property
+        def dtype(self):
+            return np.dtype([(p, v['dtype']) for p, v in hyperdefs.items()],
+                            align=True)
+
+        @property
+        def state(self):
+            return tuple(self._theta_values.values())
 
         @property
         def theta(self):
@@ -404,7 +421,7 @@ def create(kernel, expression, variables, *hyperparameter_specs):
             assert(len(seq) == len(self._theta_values))
             for theta, value in zip(self._hyperdefs, seq):
                 self._theta_values[theta] = value
-            self.ufunc = self.gen_ufunc()
+            self.ufunc = ufuncify(self._variables, self._bound_expr)
 
         @property
         def bounds(self):
