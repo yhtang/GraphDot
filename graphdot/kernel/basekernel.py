@@ -4,9 +4,7 @@
 This module defines base kernels and composibility rules for creating vertex
 and edge kernels for the marginalized graph kernel.
 """
-import re
 from collections import namedtuple, OrderedDict
-from functools import lru_cache
 import numpy as np
 import sympy as sy
 from sympy.utilities.autowrap import ufuncify
@@ -205,69 +203,6 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
     return KroneckerDeltaKernel(h, h_bounds)
 
 
-# def SquareExponential(length_scale, length_scale_bounds=(1e-6, np.inf)):
-#     r"""Creates a square exponential kernel that smoothly transitions from 1 to
-#     0 as the distance between two vectors increases from zero to infinity, i.e.
-#     :math:`k_\mathrm{se}(\mathbf{x}_1, \mathbf{x}_2) = \exp(-\frac{1}{2}
-#     \frac{\lVert \mathbf{x}_1 - \mathbf{x}_2 \rVert^2}{\sigma^2})`
-
-#     Parameters
-#     ----------
-#     length_scale: float > 0
-#         Determines how quickly should the kernel decay to zero. The kernel has
-#         a value of approx. 0.606 at one length scale, 0.135 at two length
-#         scales, and 0.011 at three length scales.
-
-#     Returns
-#     -------
-#     Kernel
-#         A kernel instance of corresponding behavior
-#     """
-
-#     # only works with python >= 3.6
-#     # @cpptype(nrsql=np.float32)
-#     @cpptype([('nrsql', np.float32)])
-#     class SquareExponentialKernel(Kernel):
-#         def __init__(self, length_scale, length_scale_bounds):
-#             self.length_scale = length_scale
-#             self.length_scale_bounds = length_scale_bounds
-
-#         def __call__(self, x1, x2):
-#             return np.exp(-0.5 * np.sum((x1 - x2)**2) / self.length_scale**2)
-
-#         def __str__(self):
-#             return 'SqExp({})'.format(self.length_scale)
-
-#         def __repr__(self):
-#             return 'SquareExponential({})'.format(self.length_scale)
-
-#         def gen_constexpr(self, x, y):
-#             return 'expf({:f}f * ({} - {}) * ({} - {}))'.format(
-#                 self.nrsql, x, y, x, y)
-
-#         def gen_expr(self, x, y, theta_prefix=''):
-#             return 'expf({p}nrsql * ({x} - {y}) * ({x} - {y}))'.format(
-#                 p=theta_prefix, x=x, y=y)
-
-#         @property
-#         def nrsql(self):
-#             return -0.5 / self.length_scale**2
-
-#         @property
-#         def theta(self):
-#             return (self.length_scale,)
-
-#         @theta.setter
-#         def theta(self, seq):
-#             self.length_scale = seq[0]
-
-#         @property
-#         def bounds(self):
-#             return (self.length_scale_bounds,)
-
-#     return SquareExponentialKernel(length_scale, length_scale_bounds)
-
-
 def create(kernel, expr, vars, *hyperparameter_specs):
 
     '''parse expression'''
@@ -314,13 +249,20 @@ def create(kernel, expr, vars, *hyperparameter_specs):
             )
 
     '''create kernel class'''
-    class BaseKernel(Kernel):
+    class Meta(type):
+        @property
+        def dtype(cls):
+            return cls._dtype
+
+    class BaseKernel(Kernel, metaclass=Meta):
 
         __name__ = kernel
 
         _expr = expr
         _vars = vars
         _hyperdefs = hyperdefs
+        _dtype = np.dtype([(k, v['dtype']) for k, v in hyperdefs.items()],
+                          align=True)
 
         def __init__(self, *args, **kwargs):
 
@@ -395,8 +337,7 @@ def create(kernel, expr, vars, *hyperparameter_specs):
 
         @property
         def dtype(self):
-            return np.dtype([(p, v['dtype']) for p, v in hyperdefs.items()],
-                            align=True)
+            return self._dtype
 
         @property
         def state(self):
@@ -404,14 +345,18 @@ def create(kernel, expr, vars, *hyperparameter_specs):
 
         @property
         def theta(self):
-            return tuple(self._theta_values.values())
+            return namedtuple(
+                self.__name__ + 'Hyperparameters',
+                self._theta_values.keys()
+            )(**self._theta_values)
 
         @theta.setter
         def theta(self, seq):
             assert(len(seq) == len(self._theta_values))
             for theta, value in zip(self._hyperdefs, seq):
                 self._theta_values[theta] = value
-            del self._ufunc
+            if hasattr(self, '_ufunc'):
+                del self._ufunc
 
         @property
         def bounds(self):
@@ -426,31 +371,23 @@ SquareExponential = create(
     ('x', 'y'),
     ('length_scale', np.float32, 1e-6, np.inf)
 )
+r"""A square exponential kernel smoothly transitions from 1 to
+0 as the distance between two vectors increases from zero to infinity, i.e.
+:math:`k_\mathrm{se}(\mathbf{x}_1, \mathbf{x}_2) = \exp(-\frac{1}{2}
+\frac{\lVert \mathbf{x}_1 - \mathbf{x}_2 \rVert^2}{\sigma^2})`
 
-if __name__ == '__main__':
+Parameters
+----------
+length_scale: float > 0
+    Determines how quickly should the kernel decay to zero. The kernel has
+    a value of approx. 0.606 at one length scale, 0.135 at two length
+    scales, and 0.011 at three length scales.
 
-    SquareExponentialKernel = create(
-        'SquareExponential',
-        'exp(-(x - y)**2 / (2 * length_scale**2))',
-        ('x', 'y'),
-        ('length_scale', np.float32, 1e-6, np.inf)
-    )
-
-    print(SquareExponentialKernel)
-
-    k = SquareExponentialKernel(length_scale=1.0)
-
-    print(k._expr)
-    # print(k.length_scale)
-    # print(k.dtype)
-    print(repr(k))
-    print(k.theta)
-    print(k.bounds)
-    print(k.gen_constexpr('X', 'Y'))
-    print(k.gen_expr('X', 'Y', 'some.scope.'))
-    print(k(0, 0))
-    print(k(1, 1))
-    print(k(0, 1))
+Returns
+-------
+Kernel
+    A kernel instance of corresponding behavior
+"""
 
 
 @cpptype([])
