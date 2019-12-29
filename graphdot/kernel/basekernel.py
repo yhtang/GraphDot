@@ -12,7 +12,7 @@ import sympy as sy
 from sympy.utilities.autowrap import ufuncify
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
-from graphdot.codegen.sympy import cuda_cxx11_code_printer
+from graphdot.codegen.sympy import cudacxxcode
 
 __all__ = ['Kernel',
            'Constant',
@@ -268,19 +268,19 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
 #     return SquareExponentialKernel(length_scale, length_scale_bounds)
 
 
-def create(kernel, expression, variables, *hyperparameter_specs):
+def create(kernel, expr, vars, *hyperparameter_specs):
 
     '''parse expression'''
-    if isinstance(expression, str):
-        expression = sy.sympify(expression)
+    if isinstance(expr, str):
+        expr = sy.sympify(expr)
     from sympy.codegen import rewriting
     opt = rewriting.create_expand_pow_optimization(3)
-    expression = opt(expression)
+    expr = opt(expr)
 
     '''check input variables'''
-    if len(variables) != 2:
+    if len(vars) != 2:
         raise ValueError('A kernel must have exactly two variables')
-    variables = [sy.Symbol(v) if isinstance(v, str) else v for v in variables]
+    vars = [sy.Symbol(v) if isinstance(v, str) else v for v in vars]
 
     '''parse the list of hyperparameters'''
     hyperdefs = OrderedDict()
@@ -318,8 +318,8 @@ def create(kernel, expression, variables, *hyperparameter_specs):
 
         __name__ = kernel
 
-        _expression = expression
-        _variables = variables
+        _expr = expr
+        _vars = vars
         _hyperdefs = hyperdefs
 
         def __init__(self, *args, **kwargs):
@@ -356,8 +356,6 @@ def create(kernel, expression, variables, *hyperparameter_specs):
                             )
                         )
 
-            self.ufunc = ufuncify(self._variables, self._bound_expr)
-
         def __call__(self, x1, x2):
             return self.ufunc.outer(x1, x2)
 
@@ -370,38 +368,30 @@ def create(kernel, expression, variables, *hyperparameter_specs):
                         for v in self._theta_bounds.items()]
             )
 
-        @staticmethod
-        def _mangle(expression, vars):
-            mangled = ['__%s__' % str(v) for v in vars]
-            return expression.subs(zip(vars, mangled)), mangled
-
         @property
         def _bound_expr(self):
-            return self._expression.subs(self._theta_values.items())
+            return self._expr.subs(self._theta_values.items())
+
+        @property
+        def ufunc(self):
+            if not hasattr(self, '_ufunc'):
+                self._ufunc = ufuncify(self._vars, self._bound_expr)
+            return self._ufunc
 
         def gen_constexpr(self, x, y):
-            expr, mangled = self._mangle(self._bound_expr, self._variables)
-
-            expr = cuda_cxx11_code_printer(expr)
-
-            for v, e in zip(mangled, [x, y]):
-                expr = re.sub(str(v), e, expr)
-
-            return expr
+            return cudacxxcode(
+                self._bound_expr,
+                {str(self._vars[0]): x,
+                 str(self._vars[1]): y}
+            )
 
         def gen_expr(self, x, y, theta_prefix=''):
-            expr, m_vars = self._mangle(self._expression, self._variables)
-            expr, m_thetas = self._mangle(expr, self._hyperdefs)
-
-            cxxexpr = cuda_cxx11_code_printer(expr)
-
-            for pattern, repl in zip(m_vars, [x, y]):
-                cxxexpr = re.sub(pattern, repl, cxxexpr)
-
-            for pattern, repl in zip(m_thetas, self._hyperdefs):
-                cxxexpr = re.sub(pattern, theta_prefix + repl, cxxexpr)
-
-            return cxxexpr
+            return cudacxxcode(
+                self._expr,
+                {str(self._vars[0]): x,
+                 str(self._vars[1]): y,
+                 **{t: theta_prefix + t for t in self._hyperdefs}}
+            )
 
         @property
         def dtype(self):
@@ -421,7 +411,7 @@ def create(kernel, expression, variables, *hyperparameter_specs):
             assert(len(seq) == len(self._theta_values))
             for theta, value in zip(self._hyperdefs, seq):
                 self._theta_values[theta] = value
-            self.ufunc = ufuncify(self._variables, self._bound_expr)
+            del self._ufunc
 
         @property
         def bounds(self):
@@ -450,7 +440,7 @@ if __name__ == '__main__':
 
     k = SquareExponentialKernel(length_scale=1.0)
 
-    print(k._expression)
+    print(k._expr)
     # print(k.length_scale)
     # print(k.dtype)
     print(repr(k))
