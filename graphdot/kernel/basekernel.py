@@ -59,9 +59,6 @@ class Kernel:
             def __call__(self, i, j):
                 return op(self.k1(i, j), self.k2(i, j))
 
-            def __str__(self):
-                return '({} {} {})'.format(str(self.k1), opstr, str(self.k2))
-
             def __repr__(self):
                 return '{k1} {o} {k2}'.format(
                     k1=repr(k1),
@@ -95,6 +92,38 @@ class Kernel:
         return KernelOperator(k1, k2)
 
 
+@cpptype([])
+class _Multiply(Kernel):
+    """
+    Direct product is technically not a valid base kernel
+    Only used internally for treating weighted edges
+    """
+
+    def __call__(self, x1, x2):
+        return x1 * x2
+
+    def __repr__(self):
+        return '_Multiply()'
+
+    def gen_constexpr(self, x, y):
+        return '({} * {})'.format(x, y)
+
+    def gen_expr(self, x, y, theta_prefix=''):
+        return '({} * {})'.format(x, y)
+
+    @property
+    def theta(self):
+        return tuple()
+
+    @theta.setter
+    def theta(self, seq):
+        pass
+
+    @property
+    def bounds(self):
+        return tuple()
+
+
 def Constant(c, c_bounds=(0, np.inf)):
     r"""Creates a no-op kernel that returns a constant value (often being 1),
     i.e. :math:`k_\mathrm{c}(\cdot, \cdot) \equiv constant`
@@ -120,9 +149,6 @@ def Constant(c, c_bounds=(0, np.inf)):
 
         def __call__(self, i, j):
             return self.c
-
-        def __str__(self):
-            return '{}'.format(self.c)
 
         def __repr__(self):
             return 'Constant({})'.format(self.c)
@@ -175,9 +201,6 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
 
         def __call__(self, i, j):
             return 1.0 if i == j else self.h
-
-        def __str__(self):
-            return 'δ({})'.format(self.h)
 
         def __repr__(self):
             return 'KroneckerDelta({})'.format(self.h)
@@ -389,40 +412,15 @@ Kernel
     A kernel instance of corresponding behavior
 """
 
-
-@cpptype([])
-class _Multiply(Kernel):
-    """
-    Direct product is technically not a valid base kernel
-    Only used internally for treating weighted edges
-    """
-
-    def __call__(self, x1, x2):
-        return x1 * x2
-
-    def __str__(self):
-        return '_mul'
-
-    def __repr__(self):
-        return '_Multiply()'
-
-    def gen_constexpr(self, x, y):
-        return '({} * {})'.format(x, y)
-
-    def gen_expr(self, x, y, theta_prefix=''):
-        return '({} * {})'.format(x, y)
-
-    @property
-    def theta(self):
-        return tuple()
-
-    @theta.setter
-    def theta(self, seq):
-        pass
-
-    @property
-    def bounds(self):
-        return tuple()
+RationalQuadratic = create(
+    'RationalQuadratic',
+    '(1 + (x - y)**2/(2 * alpha * length_scale**2))**(-alpha)',
+    ('x', 'y'),
+    ('length_scale', np.float32, 1e-6, np.inf),
+    ('alpha', np.float32, 1e-3, np.inf)
+)
+r"""A rational quadratic kernel
+"""
 
 # def Product(*kernels):
 #     @cpptype([('k%d' % i, ker.dtype) for i, ker in enumerate(kernels)])
@@ -476,10 +474,6 @@ def TensorProduct(**kw_kernels):
             for key, kernel in self.kw_kernels.items():
                 prod *= kernel(object1[key], object2[key])
             return prod
-
-        def __str__(self):
-            return ' ⊗ '.join([kw + ':' + str(k)
-                               for kw, k in self.kw_kernels.items()])
 
         def __repr__(self):
             return Template('TensorProduct(${kwexpr, })').render(
