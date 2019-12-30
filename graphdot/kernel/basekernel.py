@@ -131,7 +131,7 @@ class BaseKernel:
                 return Template('${cls}(${theta, }, ${bounds, })').render(
                     cls=self.__name__,
                     theta=['{}={}'.format(*v)
-                        for v in self._theta_values.items()],
+                           for v in self._theta_values.items()],
                     bounds=['{}_bounds={}'.format(*v)
                             for v in self._theta_bounds.items()]
                 )
@@ -150,15 +150,15 @@ class BaseKernel:
                 return cudacxxcode(
                     self._bound_expr,
                     {str(self._vars[0]): x,
-                    str(self._vars[1]): y}
+                     str(self._vars[1]): y}
                 )
 
             def gen_expr(self, x, y, theta_prefix=''):
                 return cudacxxcode(
                     self._expr,
                     {str(self._vars[0]): x,
-                    str(self._vars[1]): y,
-                    **{t: theta_prefix + t for t in self._hyperdefs}}
+                     str(self._vars[1]): y,
+                     **{t: theta_prefix + t for t in self._hyperdefs}}
                 )
 
             @property
@@ -207,8 +207,8 @@ class BaseKernel:
             '\n'
             'Parameters\n'
             '----------\n'
-            '${param_docs\n}'
-            , escape_repl=False
+            '${param_docs\n}',
+            escape_repl=False
         ).render(
             desc='\n'.join([s.strip() for s in desc.split('\n')]),
             param_docs=param_docs
