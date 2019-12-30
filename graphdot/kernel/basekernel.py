@@ -16,6 +16,7 @@ __all__ = ['BaseKernel',
            'Constant',
            'KroneckerDelta',
            'SquareExponential',
+           'RationalQuadratic',
            'TensorProduct']
 
 
