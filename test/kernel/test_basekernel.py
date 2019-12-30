@@ -151,7 +151,6 @@ def test_tensor_product_2(k1, k2):
     assert(k2.theta in k.theta)
     k.theta = k.theta
     ''' representation generation '''
-    assert(len(str(k).split('⊗')) == 2)
     assert(str(k1) in str(k))
     assert(str(k2) in str(k))
     assert(repr(k1) in repr(k))
@@ -184,7 +183,6 @@ def test_tensor_product_3(k1, k2, k3):
     assert(k3.theta in k.theta)
     k.theta = k.theta
     ''' representation generation '''
-    assert(len(str(k).split('⊗')) == 3)
     assert(str(k1) in str(k))
     assert(str(k2) in str(k))
     assert(str(k3) in str(k))

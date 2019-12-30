@@ -259,16 +259,17 @@ def create(kernel, expr, vars, *hyperparameter_specs):
             symbol, dtype, lb, ub = spec
             hyperdefs[symbol] = dict(dtype=dtype, bounds=(lb, ub))
         elif len(spec) == 5:
-            symbol, dtype, doc, lb, ub = spec
+            symbol, dtype, lb, ub, doc = spec
             hyperdefs[symbol] = dict(dtype=dtype, doc=doc, bounds=(lb, ub))
         else:
             raise ValueError(
                 'Invalid hyperparameter specification, '
                 'must be one of\n'
+                '(symbol)\n',
                 '(symbol, dtype)\n',
                 '(symbol, dtype, doc)\n',
                 '(symbol, dtype, lb, ub)\n',
-                '(symbol, dtype, doc, lb, ub)\n',
+                '(symbol, dtype, lb, ub, doc)\n',
             )
 
     '''create kernel class'''
@@ -392,7 +393,11 @@ SquareExponential = create(
     'SquareExponential',
     'exp(-(x - y)**2 / (2 * length_scale**2))',
     ('x', 'y'),
-    ('length_scale', np.float32, 1e-6, np.inf)
+    ('length_scale', np.float32, 1e-6, np.inf, """
+     Determines how quickly should the kernel decay to zero. The kernel has
+     a value of approx. 0.606 at one length scale, 0.135 at two length
+     scales, and 0.011 at three length scales.
+     """)
 )
 r"""A square exponential kernel smoothly transitions from 1 to
 0 as the distance between two vectors increases from zero to infinity, i.e.
