@@ -8,6 +8,7 @@ import pytest
 from graphdot.kernel.basekernel import Constant
 from graphdot.kernel.basekernel import KroneckerDelta
 from graphdot.kernel.basekernel import SquareExponential
+from graphdot.kernel.basekernel import RationalQuadratic
 from graphdot.kernel.basekernel import _Multiply
 from graphdot.kernel.basekernel import TensorProduct
 # from graphdot.marginalized.basekernel import Convolution
@@ -18,7 +19,8 @@ kernels = [
     Constant(1.0),
     # Multiply(),
     KroneckerDelta(0.5),
-    SquareExponential(1.0)
+    SquareExponential(1.0),
+    RationalQuadratic(1.0, 1.0),
 ]
 
 
