@@ -9,11 +9,12 @@ class Template:
     Code generation helper
     """
 
-    def __init__(self, template):
+    def __init__(self, template, escape_repl=True):
         if os.path.isfile(template):
             self.template = open(template).read()
         else:
             self.template = template
+        self.escape_repl = escape_repl
 
     def render(self, **substitutions):
         """
@@ -31,5 +32,7 @@ class Template:
                 text = re.sub(pattern, lambda m: m.group(1).join(repl), text)
             else:
                 pattern = r'\${%s}' % symbol
+                if self.escape_repl is False:
+                    repl = repl.replace('\\', r'\\')
                 text = re.sub(pattern, repl, text)
         return text
