@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import copy
+from collections import namedtuple
 import numpy as np
 from graphdot.util import Timer
 from ._backend_factory import backend_factory
@@ -308,32 +309,37 @@ class MarginalizedGraphKernel:
         return len(self.theta)
 
     @property
-    def theta_folded(self):
-        return [self.q,
-                self.node_kernel.theta,
-                self.edge_kernel.theta
-                ]
+    def hyperparameters(self):
+        return namedtuple(
+            'GraphKernelHyperparameters',
+            ['q', 'node', 'edge']
+        )(self.q,
+          self.node_kernel.theta,
+          self.edge_kernel.theta)
 
     @property
     def theta(self):
-        return np.log(np.fromiter(flatten(self.theta_folded), np.float))
+        return np.log(np.fromiter(flatten(self.hyperparameters), np.float))
 
     @theta.setter
     def theta(self, value):
         (self.q,
          self.node_kernel.theta,
          self.edge_kernel.theta
-         ) = fold_like(np.exp(value), self.theta_folded)
+         ) = fold_like(np.exp(value), self.hyperparameters)
 
     @property
-    def bounds_folded(self):
-        return (self.q_bounds,
-                self.node_kernel.bounds,
-                self.edge_kernel.bounds)
+    def hyperparameter_bounds(self):
+        return namedtuple(
+            'GraphKernelHyperparameterBounds',
+            ['q', 'node', 'edge']
+        )(self.q_bounds,
+          self.node_kernel.bounds,
+          self.edge_kernel.bounds)
 
     @property
     def bounds(self):
-        return np.log(np.fromiter(flatten(self.bounds_folded),
+        return np.log(np.fromiter(flatten(self.hyperparameter_bounds),
                                   np.float)).reshape(-1, 2, order='C')
 
     def clone_with_theta(self, theta):
