@@ -135,9 +135,10 @@ def test_tensor_product_2(k1, k2):
         for i2, j2 in [(0, 0), (0, 1.5), (-1, 1), (-1.0, 0)]:
             ''' default and corner cases '''
             assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
-                   == k1(i1, j1) * k2(i2, j2))
+                   == pytest.approx(k1(i1, j1) * k2(i2, j2)))
             assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
-                   == mirror(dict(x=i1, y=i2), dict(x=j1, y=j2)))
+                   == pytest.approx(mirror(dict(x=i1, y=i2),
+                                           dict(x=j1, y=j2))))
     for _ in range(10000):
         i1 = random.paretovariate(0.1)
         j1 = random.paretovariate(0.1)
@@ -174,9 +175,9 @@ def test_tensor_product_3(k1, k2, k3):
         for x2, y2, z2 in [(0, 0, 0), (0, 1, -1), (-1, 1, 0.5), (0, -42., 1)]:
             ''' default and corner cases '''
             assert(k(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2))
-                   == (k1(x1, x2)
-                   * k2(y1, y2)
-                   * k3(z1, z2)))
+                   == pytest.approx(k1(x1, x2)
+                                    * k2(y1, y2)
+                                    * k3(z1, z2)))
             assert(k(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2))
                    == mirror(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2)))
     ''' hyperparameter retrieval '''
