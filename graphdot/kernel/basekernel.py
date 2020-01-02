@@ -363,7 +363,10 @@ def Constant(c, c_bounds=(0, np.inf)):
 
         @property
         def theta(self):
-            return (self.c,)
+            return namedtuple(
+                'ConstantHyperparameters',
+                ['c']
+            )(self.c)
 
         @theta.setter
         def theta(self, seq):
@@ -415,7 +418,10 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
 
         @property
         def theta(self):
-            return (self.h,)
+            return namedtuple(
+                'KroneckerDeltaHyperparameters',
+                ['h']
+            )(self.h)
 
         @theta.setter
         def theta(self, seq):
@@ -542,7 +548,10 @@ def TensorProduct(**kw_kernels):
 
         @property
         def theta(self):
-            return tuple(k.theta for k in self.kw_kernels.values())
+            return namedtuple(
+                'TensorProductHyperparameters',
+                self.kw_kernels.keys()
+            )(*[k.theta for k in self.kw_kernels.values()])
 
         @theta.setter
         def theta(self, seq):
