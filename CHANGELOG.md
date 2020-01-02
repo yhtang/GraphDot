@@ -1,3 +1,7 @@
+## 0.3.0
+- Users can now define new base kernels easily using SymPy expression #45.
+- Better scikit-learn interoperability.
+
 ## 0.2.9 (2019-12-14)
 - Fixed a bug related to atomic adjacency #43.
 
