@@ -25,8 +25,16 @@ class CUDACXX11CodePrinter(CXX11CodePrinter):
 cudacxxcode = CUDACXX11CodePrinter(
     dict(
         user_functions={
-            'exp': '__expf',
-            'pow': '__powf',
+            'Pow': [
+                # if exp is positive integer
+                (lambda b, e: e.is_integer and int(e) >= 0,
+                 lambda b, e: 'graphdot::ipow<%d>(%s)' % (int(e), b)),
+                # if exp is negative integer
+                (lambda b, e: e.is_integer and int(e) < 0,
+                 lambda b, e: 'graphdot::ripow<%d>(%s)' % (-int(e), b)),
+                # otherwise
+                (lambda b, e: True, 'powf'),
+            ]
         },
         type_aliases={
             ast.real: ast.float32,
