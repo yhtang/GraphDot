@@ -1,5 +1,6 @@
 #include <graph.h>
 #include <marginalized_kernel.h>
+#include <fmath.h>
 #include <numpy_type.h>
 #include <util_cuda.h>
 
@@ -56,6 +57,11 @@ extern "C" {
             auto const g2  = graphs[job.y];
             auto const I1  = std::size_t(starts[job.x]);
             auto const I2  = std::size_t(starts[job.y]);
+            const int  n1  = g1.n_node;
+            const int  n2  = g2.n_node;
+            const int   N  = n1 * n2;
+            auto const p1  = p[job.x];
+            auto const p2  = p[job.y];
 
             // flush output to zero for later atomic accumulations
             if (!(traits & trait_t::NODAL) && threadIdx.x == 0) {
@@ -73,11 +79,6 @@ extern "C" {
             __syncthreads();
 
             /********* post-processing *********/
-            const int  n1 = g1.n_node;
-            const int  n2 = g2.n_node;
-            const int   N = n1 * n2;
-            auto const p1 = p[job.x];
-            auto const p2 = p[job.y];
 
             // apply starting probability and 'lmins == 1'
             for (int i = threadIdx.x; i < N; i += blockDim.x) {

@@ -10,7 +10,7 @@ import sympy as sy
 from sympy.utilities.autowrap import ufuncify
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
-from graphdot.codegen.sympy import cudacxxcode
+from graphdot.codegen.sympy_printer import cudacxxcode
 
 __all__ = ['BaseKernel',
            'Constant',
@@ -31,9 +31,6 @@ class BaseKernel:
         '''parse expression'''
         if isinstance(expr, str):
             expr = sy.sympify(expr)
-        from sympy.codegen import rewriting
-        opt = rewriting.create_expand_pow_optimization(3)
-        expr = opt(expr)
 
         '''check input variables'''
         if len(vars) != 2:
@@ -154,12 +151,12 @@ class BaseKernel:
                      str(self._vars[1]): y}
                 )
 
-            def gen_expr(self, x, y, theta_prefix=''):
+            def gen_expr(self, x, y, theta_scope=''):
                 return cudacxxcode(
                     self._expr,
                     {str(self._vars[0]): x,
                      str(self._vars[1]): y,
-                     **{t: theta_prefix + t for t in self._hyperdefs}}
+                     **{t: theta_scope + t for t in self._hyperdefs}}
                 )
 
             @property
@@ -439,7 +436,7 @@ SquareExponential = BaseKernel.create(
     :math:`k_\mathrm{se}(\mathbf{x}, \mathbf{y}) = \exp(-\frac{1}{2}
     \frac{\lVert \mathbf{x} - \mathbf{y} \rVert^2}{\sigma^2})`""",
 
-    'exp(-(x - y)**2 / (2 * length_scale**2))',
+    'exp(-0.5 * (x - y)**2 * length_scale**-2)',
 
     ('x', 'y'),
 
