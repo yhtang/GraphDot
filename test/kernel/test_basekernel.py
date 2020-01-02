@@ -8,6 +8,7 @@ import pytest
 from graphdot.kernel.basekernel import Constant
 from graphdot.kernel.basekernel import KroneckerDelta
 from graphdot.kernel.basekernel import SquareExponential
+from graphdot.kernel.basekernel import RationalQuadratic
 from graphdot.kernel.basekernel import _Multiply
 from graphdot.kernel.basekernel import TensorProduct
 # from graphdot.marginalized.basekernel import Convolution
@@ -18,7 +19,8 @@ kernels = [
     Constant(1.0),
     # Multiply(),
     KroneckerDelta(0.5),
-    SquareExponential(1.0)
+    SquareExponential(1.0),
+    RationalQuadratic(1.0, 1.0),
 ]
 
 
@@ -89,7 +91,7 @@ def test_kronecker_delta_kernel():
 
 def test_square_exponential_kernel():
     kernel = SquareExponential(1.0)
-    assert(kernel.nrsql == pytest.approx(-0.5))
+    assert(kernel.theta.length_scale == pytest.approx(1.0))
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
     assert(kernel(1, 1) == 1)
@@ -151,7 +153,6 @@ def test_tensor_product_2(k1, k2):
     assert(k2.theta in k.theta)
     k.theta = k.theta
     ''' representation generation '''
-    assert(len(str(k).split('⊗')) == 2)
     assert(str(k1) in str(k))
     assert(str(k2) in str(k))
     assert(repr(k1) in repr(k))
@@ -184,7 +185,6 @@ def test_tensor_product_3(k1, k2, k3):
     assert(k3.theta in k.theta)
     k.theta = k.theta
     ''' representation generation '''
-    assert(len(str(k).split('⊗')) == 3)
     assert(str(k1) in str(k))
     assert(str(k2) in str(k))
     assert(str(k3) in str(k))
@@ -263,20 +263,20 @@ def test_kernel_add_kernel(k1, k2):
         assert(kadd(i, j) == kadd(j, i))
         assert(kadd(i, j) == mirror(i, j))
         assert(kadd(i, j) == mirror(j, i))
-        ''' representation generation '''
-        assert(len(str(kadd).split('+')) == 2)
-        assert(str(k1) in str(kadd))
-        assert(str(k2) in str(kadd))
-        assert(len(repr(kadd).split('+')) == 2)
-        assert(repr(k1) in repr(kadd))
-        assert(repr(k2) in repr(kadd))
-        ''' hyperparameter retrieval '''
-        assert(k1.theta in kadd.theta)
-        assert(k2.theta in kadd.theta)
-        kadd.theta = kadd.theta
-        ''' C++ code generation '''
-        assert(kadd.dtype.isalignedstruct)
-        assert(isinstance(kadd.gen_constexpr('x', 'y'), str))
+    ''' representation generation '''
+    assert(len(str(kadd).split('+')) == 2)
+    assert(str(k1) in str(kadd))
+    assert(str(k2) in str(kadd))
+    assert(len(repr(kadd).split('+')) == 2)
+    assert(repr(k1) in repr(kadd))
+    assert(repr(k2) in repr(kadd))
+    ''' hyperparameter retrieval '''
+    assert(k1.theta in kadd.theta)
+    assert(k2.theta in kadd.theta)
+    kadd.theta = kadd.theta
+    ''' C++ code generation '''
+    assert(kadd.dtype.isalignedstruct)
+    assert(isinstance(kadd.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('kernel', kernels)
@@ -321,17 +321,17 @@ def test_kernel_mul_kernel(k1, k2):
         assert(kmul(i, j) == kmul(j, i))
         assert(kmul(i, j) == mirror(i, j))
         assert(kmul(i, j) == mirror(j, i))
-        ''' representation generation '''
-        assert(len(str(kmul).split('*')) == 2)
-        assert(str(k1) in str(kmul))
-        assert(str(k2) in str(kmul))
-        assert(len(repr(kmul).split('*')) == 2)
-        assert(repr(k1) in repr(kmul))
-        assert(repr(k2) in repr(kmul))
-        ''' hyperparameter retrieval '''
-        assert(k1.theta in kmul.theta)
-        assert(k2.theta in kmul.theta)
-        kmul.theta = kmul.theta
-        ''' C++ code generation '''
-        assert(kmul.dtype.isalignedstruct)
-        assert(isinstance(kmul.gen_constexpr('x', 'y'), str))
+    ''' representation generation '''
+    assert(len(str(kmul).split('*')) == 2)
+    assert(str(k1) in str(kmul))
+    assert(str(k2) in str(kmul))
+    assert(len(repr(kmul).split('*')) == 2)
+    assert(repr(k1) in repr(kmul))
+    assert(repr(k2) in repr(kmul))
+    ''' hyperparameter retrieval '''
+    assert(k1.theta in kmul.theta)
+    assert(k2.theta in kmul.theta)
+    kmul.theta = kmul.theta
+    ''' C++ code generation '''
+    assert(kmul.dtype.isalignedstruct)
+    assert(isinstance(kmul.gen_constexpr('x', 'y'), str))

@@ -1,6 +1,7 @@
-def to_gpu(*args, **kwargs):
-    pass
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from unittest.mock import MagicMock
 
+to_gpu = MagicMock()
 
-class GPUArray:
-    pass
+GPUArray = MagicMock()
