@@ -7,7 +7,7 @@ and edge kernels for the marginalized graph kernel.
 from collections import namedtuple, OrderedDict
 import numpy as np
 import sympy as sy
-from sympy.utilities.autowrap import ufuncify
+from sympy.utilities.lambdify import lambdify
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
 from graphdot.codegen.sympy_printer import cudacxxcode
@@ -123,7 +123,7 @@ class BaseKernel:
                             )
 
             def __call__(self, x1, x2):
-                return self.ufunc.outer(x1, x2)
+                return self.lda(x1, x2)
 
             def __repr__(self):
                 return Template('${cls}(${theta, }, ${bounds, })').render(
@@ -139,10 +139,10 @@ class BaseKernel:
                 return self._expr.subs(self._theta_values.items())
 
             @property
-            def ufunc(self):
-                if not hasattr(self, '_ufunc'):
-                    self._ufunc = ufuncify(self._vars, self._bound_expr)
-                return self._ufunc
+            def lda(self):
+                if not hasattr(self, '_lda'):
+                    self._lda = lambdify(self._vars, self._bound_expr)
+                return self._lda
 
             def gen_constexpr(self, x, y):
                 return cudacxxcode(
@@ -179,8 +179,8 @@ class BaseKernel:
                 assert(len(seq) == len(self._theta_values))
                 for theta, value in zip(self._hyperdefs, seq):
                     self._theta_values[theta] = value
-                if hasattr(self, '_ufunc'):
-                    del self._ufunc
+                if hasattr(self, '_lda'):
+                    del self._lda
 
             @property
             def bounds(self):
