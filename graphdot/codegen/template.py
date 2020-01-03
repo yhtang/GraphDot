@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import re
 import os
+import copy
+from contextlib import contextmanager
 
 
 class Template:
@@ -23,6 +25,17 @@ class Template:
         else:
             self.template = template
         self.escape = escape
+
+    @contextmanager
+    def context(self, **kwargs):
+        t = copy.copy(self)
+        t.template = re.sub(
+            r'\?{([^}]+)}',
+            lambda m: 'if (true)' if eval(m.group(1), kwargs) else
+                      'if (false)',
+            t.template
+        )
+        yield t
 
     def render(self, **substitutions):
         """Substitute placeholders using the syntax symbol=replacement.
