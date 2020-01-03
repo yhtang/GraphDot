@@ -152,24 +152,21 @@ class BaseKernel:
                             for v in self._theta_bounds.items()]
                 )
 
-            @property
-            def _bound_expr(self):
-                return self._expr.subs(self._theta_values.items())
+            def gen_expr(self, x, y, jac=False, theta_scope=''):
+                nmap = {
+                    str(self._vars[0]): x,
+                    str(self._vars[1]): y,
+                    **{t: theta_scope + t for t in self._hyperdefs}
+                }
 
-            def gen_constexpr(self, x, y):
-                return cudacxxcode(
-                    self._bound_expr,
-                    {str(self._vars[0]): x,
-                     str(self._vars[1]): y}
-                )
-
-            def gen_expr(self, x, y, der=None, theta_scope=''):
-                return cudacxxcode(
-                    self._expr,
-                    {str(self._vars[0]): x,
-                     str(self._vars[1]): y,
-                     **{t: theta_scope + t for t in self._hyperdefs}}
-                )
+                if jac is True:
+                    return (
+                        cudacxxcode(self._expr, nmap),
+                        [cudacxxcode(sy.diff(self._expr, h), nmap)
+                         for h in self._hyperdefs]
+                    )
+                else:
+                    return cudacxxcode(self._expr, nmap)
 
             @property
             def dtype(self):
@@ -228,96 +225,174 @@ class BaseKernel:
         r"""Implements the additive kernel composition semantics, i.e.
         expression ``k1 + k2`` creates
         :math:`k_+(a, b) = k_1(a, b) + k_2(a, b)`"""
-        return BaseKernel._op(
+        return KernelOperator.add(
             self,
-            k if isinstance(k, BaseKernel) else Constant(k),
-            '+',
-            lambda x, y: x + y,
-            lambda x, y, dx, dy: dx + dy,
+            k if isinstance(k, BaseKernel) else Constant(k)
         )
 
     def __radd__(self, k):
-        return BaseKernel._op(
+        return KernelOperator.add(
             k if isinstance(k, BaseKernel) else Constant(k),
-            self,
-            '+',
-            lambda x, y: x + y,
-            lambda x, y, dx, dy: dx + dy,
+            self
         )
 
     def __mul__(self, k):
         r"""Implements the multiplicative kernel composition semantics, i.e.
         expression ``k1 * k2`` creates
         :math:`k_\times(a, b) = k_1(a, b) \times k_2(a, b)`"""
-        return BaseKernel._op(
+        return KernelOperator.mul(
             self,
             k if isinstance(k, BaseKernel) else Constant(k),
-            '*',
-            lambda x, y: x * y,
-            lambda x, y, dx, dy: dx * y + x * dy,
         )
 
     def __rmul__(self, k):
-        return BaseKernel._op(
+        return KernelOperator.mul(
             k if isinstance(k, BaseKernel) else Constant(k),
             self,
-            '*',
-            lambda x, y: x * y,
-            lambda x, y, dx, dy: dx * y + x * dy,
         )
 
+    # @staticmethod
+    # def _op(k1, k2, opstr, op_fun, op_jac):
+    #     # only works with python >= 3.6
+    #     # @cpptype(k1=k1.dtype, k2=k2.dtype)
+    #     @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
+    #     class KernelOperator(BaseKernel):
+    #         def __init__(self, k1, k2):
+    #             self.k1 = k1
+    #             self.k2 = k2
+
+    #         def __call__(self, i, j, jac=False):
+    #             if jac is True:
+    #                 f1, J1 = self.k1(i, j, True)
+    #                 f2, J2 = self.k2(i, j, True)
+    #                 return (
+    #                     op_fun(f1, f2),
+    #                     [op_jac(f1, f2, j1, j2) for j1, j2 in zip(J1, J2)]
+    #                 )
+    #             else:
+    #                 return op_fun(self.k1(i, j, False), self.k2(i, j, False))
+
+    #         def __repr__(self):
+    #             return '{k1} {o} {k2}'.format(
+    #                 k1=repr(k1),
+    #                 o=opstr,
+    #                 k2=repr(k2))
+
+    #         def gen_expr(self, x, y, jac=False, theta_prefix=''):
+    #             if jac is True:
+    #                 e1, J1 = self.k1.gen_expr(x, y, True, theta_prefix + 'k1.')
+    #                 e2, J2 = self.k2.gen_expr(x, y, True, theta_prefix + 'k2.')
+    #                 return ('({k1} {op} {k2})'.format(k1=e1, k2=e2, op=opstr), J1 + J2)
+    #             else:
+    #                 return '({k1} {op} {k2})'.format(
+    #                     k1=self.k1.gen_expr(x, y, False, theta_prefix + 'k1.'),
+    #                     k2=self.k2.gen_expr(x, y, False, theta_prefix + 'k2.'),
+    #                     op=opstr)
+
+    #         @property
+    #         def theta(self):
+    #             return (self.k1.theta, self.k2.theta)
+
+    #         @theta.setter
+    #         def theta(self, seq):
+    #             self.k1.theta = seq[0]
+    #             self.k2.theta = seq[1]
+
+    #         @property
+    #         def bounds(self):
+    #             return tuple(self.k1.bounds, self.k2.bounds)
+
+    #     return KernelOperator(k1, k2)
+
+
+class KernelOperator(BaseKernel):
+    def __init__(self, k1, k2):
+        self.k1 = k1
+        self.k2 = k2
+
+    def __repr__(self):
+        return '{k1} {o} {k2}'.format(
+            k1=repr(self.k1),
+            o=self.opstr,
+            k2=repr(self.k2))
+
+    @property
+    def theta(self):
+        return (self.k1.theta, self.k2.theta)
+
+    @theta.setter
+    def theta(self, seq):
+        self.k1.theta = seq[0]
+        self.k2.theta = seq[1]
+
+    @property
+    def bounds(self):
+        return tuple(self.k1.bounds, self.k2.bounds)
+
     @staticmethod
-    def _op(k1, k2, opstr, op_fun, op_jac):
+    def add(k1, k2):
         # only works with python >= 3.6
         # @cpptype(k1=k1.dtype, k2=k2.dtype)
         @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
-        class KernelOperator(BaseKernel):
-            def __init__(self, k1, k2):
-                self.k1 = k1
-                self.k2 = k2
+        class Add(KernelOperator):
+
+            opstr = '+'
+
+            def __call__(self, i, j, jac=False):
+                if jac is True:
+                    f1, J1 = self.k1(i, j, True)
+                    f2, J2 = self.k2(i, j, True)
+                    return (f1 + f2, J1 + J2)
+                else:
+                    return self.k1(i, j, False) + self.k2(i, j, False)
+
+            def gen_expr(self, x, y, jac=False, theta_prefix=''):
+                if jac is True:
+                    f1, J1 = self.k1.gen_expr(x, y, True, theta_prefix + 'k1.')
+                    f2, J2 = self.k2.gen_expr(x, y, True, theta_prefix + 'k2.')
+                    return ('({f1} + {f2})'.format(f1=f1, f2=f2), J1 + J2)
+                else:
+                    f1 = self.k1.gen_expr(x, y, False, theta_prefix + 'k1.')
+                    f2 = self.k2.gen_expr(x, y, False, theta_prefix + 'k2.')
+                    return '({f1} + {f2})'.format(f1=f1, f2=f2)
+
+        return Add(k1, k2)
+
+    @staticmethod
+    def mul(k1, k2):
+        # only works with python >= 3.6
+        # @cpptype(k1=k1.dtype, k2=k2.dtype)
+        @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
+        class Mul(KernelOperator):
+
+            opstr = '*'
 
             def __call__(self, i, j, jac=False):
                 if jac is True:
                     f1, J1 = self.k1(i, j, True)
                     f2, J2 = self.k2(i, j, True)
                     return (
-                        op_fun(f1, f2),
-                        [op_jac(f1, f2, j1, j2) for j1, j2 in zip(J1, J2)]
+                        f1 * f2,
+                        [j1 * f2 for j1 in J1] + [f1 * j2 for j2 in J2]
                     )
                 else:
-                    return op_fun(self.k1(i, j, False), self.k2(i, j, False))
+                    return self.k1(i, j, False) * self.k2(i, j, False)
 
-            def __repr__(self):
-                return '{k1} {o} {k2}'.format(
-                    k1=repr(k1),
-                    o=opstr,
-                    k2=repr(k2))
+            def gen_expr(self, x, y, jac=False, theta_prefix=''):
+                if jac is True:
+                    f1, J1 = self.k1.gen_expr(x, y, True, theta_prefix + 'k1.')
+                    f2, J2 = self.k2.gen_expr(x, y, True, theta_prefix + 'k2.')
+                    return (
+                        '({f1} * {f2})'.format(f1=f1, f2=f2),
+                        ['({j1} * {f2})'.format(j1=j1, f2=f2) for j1 in J1] +
+                        ['({f1} * {j2})'.format(f1=f1, j2=j2) for j2 in J2]
+                    )
+                else:
+                    f1 = self.k1.gen_expr(x, y, False, theta_prefix + 'k1.')
+                    f2 = self.k2.gen_expr(x, y, False, theta_prefix + 'k2.')
+                    return '({f1} * {f2})'.format(f1=f1, f2=f2)
 
-            def gen_constexpr(self, x, y):
-                return '({k1} {op} {k2})'.format(k1=self.k1.gen_constexpr(x, y),
-                                                 k2=self.k2.gen_constexpr(x, y),
-                                                 op=opstr)
-
-            def gen_expr(self, x, y, theta_prefix=''):
-                return '({k1} {op} {k2})'.format(
-                    k1=self.k1.gen_expr(x, y, theta_prefix + 'k1.'),
-                    k2=self.k2.gen_expr(x, y, theta_prefix + 'k2.'),
-                    op=opstr)
-
-            @property
-            def theta(self):
-                return (self.k1.theta, self.k2.theta)
-
-            @theta.setter
-            def theta(self, seq):
-                self.k1.theta = seq[0]
-                self.k2.theta = seq[1]
-
-            @property
-            def bounds(self):
-                return tuple(self.k1.bounds, self.k2.bounds)
-
-        return KernelOperator(k1, k2)
+        return Mul(k1, k2)
 
 
 @cpptype([])
@@ -336,11 +411,12 @@ class _Multiply(BaseKernel):
     def __repr__(self):
         return '_Multiply()'
 
-    def gen_constexpr(self, x, y):
-        return '({} * {})'.format(x, y)
-
-    def gen_expr(self, x, y, theta_prefix=''):
-        return '({} * {})'.format(x, y)
+    def gen_expr(self, x, y, jac=False, theta_prefix=''):
+        f = '({} * {})'.format(x, y)
+        if jac is True:
+            return (f, [])
+        else:
+            return f
 
     @property
     def theta(self):
@@ -387,11 +463,12 @@ def Constant(c, c_bounds=(0, np.inf)):
         def __repr__(self):
             return 'Constant({})'.format(self.c)
 
-        def gen_constexpr(self, x, y):
-            return '{:f}f'.format(self.c)
-
-        def gen_expr(self, x, y, theta_prefix=''):
-            return '{}c'.format(theta_prefix)
+        def gen_expr(self, x, y, jac=False, theta_prefix=''):
+            f = '{}c'.format(theta_prefix)
+            if jac is True:
+                return (f, ['1.0f'])
+            else:
+                return f
 
         @property
         def theta(self):
@@ -446,11 +523,12 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         def __repr__(self):
             return 'KroneckerDelta({})'.format(self.h)
 
-        def gen_constexpr(self, x, y):
-            return '({} == {} ? 1.0f : {:f}f)'.format(x, y, self.h)
-
-        def gen_expr(self, x, y, theta_prefix=''):
-            return '({} == {} ? 1.0f : {p}h)'.format(x, y, p=theta_prefix)
+        def gen_expr(self, x, y, jac=False, theta_prefix=''):
+            f = '({} == {} ? 1.0f : {p}h)'.format(x, y, p=theta_prefix)
+            if jac is True:
+                return (f, ['({} == {} ? 0.0f : 1.0f)'.format(x, y)])
+            else:
+                return f
 
         @property
         def theta(self):
@@ -497,7 +575,7 @@ RationalQuadratic = BaseKernel.create(
     alpha approaches infinity, the kernel is identical to the square
     exponential kernel.""",
 
-    '(1 + (x - y)**2/(2 * alpha * length_scale**2))**(-alpha)',
+    '(1 + (x - y)**2 / (2 * alpha * length_scale**2))**(-alpha)',
 
     ('x', 'y'),
 
@@ -508,33 +586,6 @@ RationalQuadratic = BaseKernel.create(
      Larger alpha values leads to a faster decay of the weights for larger
      length scales.""")
 )
-r"""A rational quadratic kernel
-"""
-
-
-# def Product(*kernels):
-#     @cpptype([('k%d' % i, ker.dtype) for i, ker in enumerate(kernels)])
-#     class ProductKernel(BaseKernel):
-#         def __init__(self, *kernels):
-#             self.kernels = kernels
-#
-#         def __call__(self, object1, object2):
-#             prod = 1.0
-#             for kernel in self.kernels:
-#                 prod *= kernel(object1, object2)
-#             return prod
-#
-#         def __repr__(self):
-#             return ' * '.join([repr(k) for k in self.kernels])
-#
-#         def gen_constexpr(self, x, y):
-#             return ' * '.join([k.gen_constexpr(x, y) for k in self.kernels])
-#
-#         @property
-#         def theta(self):
-#             return [k.theta for k in self.kw_kernels.values()]
-#
-#     return ProductKernel(*kernels)
 
 
 def TensorProduct(**kw_kernels):
@@ -566,8 +617,8 @@ def TensorProduct(**kw_kernels):
                           for key, kernel in self.kw_kernels.items()])
                 )
                 fun = np.prod(F)
-                jac = [fun / f * j for i, f in enumerate(F) for j in J[i]]
-                return fun, jac
+                jacobian = [fun / f * j for i, f in enumerate(F) for j in J[i]]
+                return fun, jacobian
             else:
                 prod = 1.0
                 for key, kernel in self.kw_kernels.items():
@@ -579,17 +630,21 @@ def TensorProduct(**kw_kernels):
                 kwexpr=['{}={}'.format(kw, repr(k))
                         for kw, k in self.kw_kernels.items()])
 
-        def gen_constexpr(self, x, y):
-            return Template('(${expr*})').render(
-                expr=[k.gen_constexpr('%s.%s' % (x, key), '%s.%s' % (y, key))
-                      for key, k in self.kw_kernels.items()])
-
-        def gen_expr(self, x, y, theta_prefix=''):
-            return Template('(${expr*})').render(
-                expr=[k.gen_expr('%s.%s' % (x, key),
-                                 '%s.%s' % (y, key),
-                                 '%s%s.' % (theta_prefix, key))
-                      for key, k in self.kw_kernels.items()])
+        def gen_expr(self, x, y, jac=False, theta_prefix=''):
+            F, J = list(
+                zip(*[kernel.gen_expr('%s.%s' % (x, key),
+                                      '%s.%s' % (y, key),
+                                      True,
+                                      '%s%s.' % (theta_prefix, key))
+                      for key, kernel in self.kw_kernels.items()])
+            )
+            f = Template('(${F * })').render(F=F)
+            if jac is True:
+                jacobian = [Template('(${X * })').render(X=F[:i] + (j,) + F[i + 1:])
+                            for i, f in enumerate(F) for j in J[i]]
+                return (f, jacobian)
+            else:
+                return f
 
         @property
         def theta(self):
@@ -627,6 +682,17 @@ def TensorProduct(**kw_kernels):
 #     def theta(self):
 #         return self.kernel.theta
 
-#     def gen_constexpr(self, X, Y):
-#         return ' + '.join([self.kernel.gen_constexpr(x, y)
-#                            for x in X for y in Y])
+if __name__ == '__main__':
+
+    k = TensorProduct(
+        a=SquareExponential(1.0),
+        b=KroneckerDelta(0.5)
+    )
+
+    print(k(dict(a=1, b=2), dict(a=2, b=1), True))
+
+    print(k.gen_expr('x', 'y'))
+
+    # print(SquareExponential(1.0).gen_expr('x', 'y', jac=True))
+
+    print(k.gen_expr('x', 'y', jac=True))
