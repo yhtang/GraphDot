@@ -18,7 +18,8 @@ class cached_property:
             self.attrname = name
         elif name != self.attrname:
             raise TypeError(
-                "Cannot assign the same cached_property to two different names "
+                "Cannot assign the same cached_property "
+                "to two different names "
                 f"({self.attrname!r} and {name!r})."
             )
 
@@ -27,10 +28,11 @@ class cached_property:
             return self
         if self.attrname is None:
             raise TypeError(
-                "Cannot use cached_property instance without calling __set_name__ on it.")
+                "Cannot use cached_property instance without"
+                "calling __set_name__ on it.")
         try:
             cache = instance.__dict__
-        except AttributeError:  # not all objects have __dict__ (e.g. class defines slots)
+        except AttributeError:
             msg = (
                 f"No '__dict__' attribute on {type(instance).__name__!r} "
                 f"instance to cache {self.attrname!r} property."
@@ -47,8 +49,10 @@ class cached_property:
                         cache[self.attrname] = val
                     except TypeError:
                         msg = (
-                            f"The '__dict__' attribute on {type(instance).__name__!r} instance "
-                            f"does not support item assignment for caching {self.attrname!r} property."
+                            "The '__dict__' attribute on "
+                            f"{type(instance).__name__!r} instance "
+                            "does not support item assignment for "
+                            f"caching {self.attrname!r} property."
                         )
                         raise TypeError(msg) from None
         return val

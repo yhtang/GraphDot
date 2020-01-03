@@ -4,7 +4,6 @@
 This module defines base kernels and composibility rules for creating vertex
 and edge kernels for the marginalized graph kernel.
 """
-import math
 from collections import namedtuple, OrderedDict
 import numpy as np
 import sympy as sy
@@ -250,59 +249,6 @@ class BaseKernel:
             k if isinstance(k, BaseKernel) else Constant(k),
             self,
         )
-
-    # @staticmethod
-    # def _op(k1, k2, opstr, op_fun, op_jac):
-    #     # only works with python >= 3.6
-    #     # @cpptype(k1=k1.dtype, k2=k2.dtype)
-    #     @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
-    #     class KernelOperator(BaseKernel):
-    #         def __init__(self, k1, k2):
-    #             self.k1 = k1
-    #             self.k2 = k2
-
-    #         def __call__(self, i, j, jac=False):
-    #             if jac is True:
-    #                 f1, J1 = self.k1(i, j, True)
-    #                 f2, J2 = self.k2(i, j, True)
-    #                 return (
-    #                     op_fun(f1, f2),
-    #                     [op_jac(f1, f2, j1, j2) for j1, j2 in zip(J1, J2)]
-    #                 )
-    #             else:
-    #                 return op_fun(self.k1(i, j, False), self.k2(i, j, False))
-
-    #         def __repr__(self):
-    #             return '{k1} {o} {k2}'.format(
-    #                 k1=repr(k1),
-    #                 o=opstr,
-    #                 k2=repr(k2))
-
-    #         def gen_expr(self, x, y, jac=False, theta_prefix=''):
-    #             if jac is True:
-    #                 e1, J1 = self.k1.gen_expr(x, y, True, theta_prefix + 'k1.')
-    #                 e2, J2 = self.k2.gen_expr(x, y, True, theta_prefix + 'k2.')
-    #                 return ('({k1} {op} {k2})'.format(k1=e1, k2=e2, op=opstr), J1 + J2)
-    #             else:
-    #                 return '({k1} {op} {k2})'.format(
-    #                     k1=self.k1.gen_expr(x, y, False, theta_prefix + 'k1.'),
-    #                     k2=self.k2.gen_expr(x, y, False, theta_prefix + 'k2.'),
-    #                     op=opstr)
-
-    #         @property
-    #         def theta(self):
-    #             return (self.k1.theta, self.k2.theta)
-
-    #         @theta.setter
-    #         def theta(self, seq):
-    #             self.k1.theta = seq[0]
-    #             self.k2.theta = seq[1]
-
-    #         @property
-    #         def bounds(self):
-    #             return tuple(self.k1.bounds, self.k2.bounds)
-
-    #     return KernelOperator(k1, k2)
 
 
 class KernelOperator(BaseKernel):
@@ -640,8 +586,10 @@ def TensorProduct(**kw_kernels):
             )
             f = Template('(${F * })').render(F=F)
             if jac is True:
-                jacobian = [Template('(${X * })').render(X=F[:i] + (j,) + F[i + 1:])
-                            for i, f in enumerate(F) for j in J[i]]
+                jacobian = [
+                    Template('(${X * })').render(X=F[:i] + (j,) + F[i + 1:])
+                    for i, _ in enumerate(F) for j in J[i]
+                ]
                 return (f, jacobian)
             else:
                 return f
@@ -681,18 +629,3 @@ def TensorProduct(**kw_kernels):
 #     @property
 #     def theta(self):
 #         return self.kernel.theta
-
-if __name__ == '__main__':
-
-    k = TensorProduct(
-        a=SquareExponential(1.0),
-        b=KroneckerDelta(0.5)
-    )
-
-    print(k(dict(a=1, b=2), dict(a=2, b=1), True))
-
-    print(k.gen_expr('x', 'y'))
-
-    # print(SquareExponential(1.0).gen_expr('x', 'y', jac=True))
-
-    print(k.gen_expr('x', 'y', jac=True))

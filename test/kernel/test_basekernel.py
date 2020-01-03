@@ -85,7 +85,7 @@ def test_kronecker_delta_kernel():
     assert(kernel(1.0, 'a') == 0.5)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    
+
 
 def test_square_exponential_kernel():
     kernel = SquareExponential(1.0)
