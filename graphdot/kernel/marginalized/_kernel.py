@@ -51,30 +51,12 @@ class MarginalizedGraphKernel:
             Note that a custom probability does not have to be normalized.
         q: float in (0, 1)
             The probability for the random walk to stop during each step.
-        context: :py:class:`pycuda.driver.Context` instance
-            The CUDA context for launching kernels, Will use a default one if
-            none is given.
-        block_per_sm: int
-            Tunes the GPU kernel.
-        block_size: int
-            Tunes the GPU kernel.
     """
-    class _Traits:
-        NODAL = 1
-        BLOCK = 2
-        SYMMETRIC = 4
-        LMIN1 = 8
-        DIAGONAL = 16
-
-        def __new__(cls, **kwargs):
-            traits = 0
-            nodal = kwargs.pop('nodal', False)
-            traits |= cls.NODAL if nodal is not False else 0
-            traits |= cls.BLOCK if nodal == 'block' else 0
-            traits |= cls.SYMMETRIC if kwargs.pop('symmetric', False) else 0
-            traits |= cls.LMIN1 if kwargs.pop('lmin1', False) else 0
-            traits |= cls.DIAGONAL if kwargs.pop('diagonal', False) else 0
-            return traits
+    @staticmethod
+    def traits(diagonal=False, symmetric=False, nodal=False, lmin=0):
+        return namedtuple('Traits', 'diagonal, symmetric, nodal, lmin')(
+            diagonal, symmetric, nodal, lmin
+        )
 
     def __init__(self, node_kernel, edge_kernel, p='default', q=0.01,
                  q_bounds=(1e-4, 1 - 1e-4), backend='auto'):
@@ -173,21 +155,19 @@ class MarginalizedGraphKernel:
 
         ''' call GPU kernel '''
         timer.tic('calling GPU kernel (overall)')
-        traits = self._Traits(symmetric=Y is None,
-                              nodal=nodal,
-                              lmin1=lmin == 1)
-        backend(np.concatenate((X, Y)) if Y is not None else X,
-                self.node_kernel,
-                self.edge_kernel,
-                self.p,
-                self.q,
-                jobs,
-                starts,
-                output,
-                output_shape,
-                np.uint32(traits),
-                timer,
-                )
+        backend(
+            np.concatenate((X, Y)) if Y is not None else X,
+            self.node_kernel,
+            self.edge_kernel,
+            self.p,
+            self.q,
+            jobs,
+            starts,
+            output,
+            output_shape,
+            self.traits(symmetric=Y is None, nodal=nodal, lmin=lmin),
+            timer,
+        )
         timer.toc('calling GPU kernel (overall)')
 
         ''' collect result '''
@@ -264,21 +244,19 @@ class MarginalizedGraphKernel:
 
         ''' call GPU kernel '''
         timer.tic('calling GPU kernel (overall)')
-        traits = self._Traits(diagonal=True,
-                              nodal=nodal,
-                              lmin1=lmin == 1)
-        backend(X,
-                self.node_kernel,
-                self.edge_kernel,
-                self.p,
-                self.q,
-                jobs,
-                starts,
-                output,
-                (output_length, 1),
-                traits,
-                timer,
-                )
+        backend(
+            X,
+            self.node_kernel,
+            self.edge_kernel,
+            self.p,
+            self.q,
+            jobs,
+            starts,
+            output,
+            (output_length, 1),
+            self.traits(diagonal=True, nodal=nodal, lmin=lmin),
+            timer,
+        )
         timer.toc('calling GPU kernel (overall)')
 
         ''' post processing '''
