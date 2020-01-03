@@ -21,6 +21,18 @@ from ._octilegraph import OctileGraph
 
 
 class CUDABackend(Backend):
+    """
+
+    Parameters
+    ----------
+    context: :py:class:`pycuda.driver.Context` instance
+        The CUDA context for launching kernels, Will use a default one if
+        none is given.
+    block_per_sm: int
+        Tunes the GPU kernel.
+    block_size: int
+        Tunes the GPU kernel.
+    """
 
     @staticmethod
     def array(ndarray):
@@ -191,10 +203,13 @@ class CUDABackend(Backend):
             expr=edge_kernel.gen_expr('e1', 'e2')
         )
 
-        self.source = self.template.render(node_kernel=node_kernel_src,
-                                           edge_kernel=edge_kernel_src,
-                                           node_t=decltype(node_type),
-                                           edge_t=decltype(edge_type))
+        with self.template.context(traits=traits) as template:
+            self.source = template.render(
+                node_kernel=node_kernel_src,
+                edge_kernel=edge_kernel_src,
+                node_t=decltype(node_type),
+                edge_t=decltype(edge_type)
+            )
         timer.toc('code generation')
 
         ''' JIT '''
@@ -237,7 +252,6 @@ class CUDABackend(Backend):
             np.uint32(output_shape[0]),
             np.float32(q),
             np.float32(q),  # placeholder for q0
-            np.uint32(traits),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,
