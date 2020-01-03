@@ -4,6 +4,7 @@
 This module defines base kernels and composibility rules for creating vertex
 and edge kernels for the marginalized graph kernel.
 """
+import math
 from collections import namedtuple, OrderedDict
 import numpy as np
 import sympy as sy
@@ -11,6 +12,7 @@ from sympy.utilities.lambdify import lambdify
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
 from graphdot.codegen.sympy_printer import cudacxxcode
+from graphdot.util.cached_property import cached_property
 
 __all__ = ['BaseKernel',
            'Constant',
@@ -21,9 +23,6 @@ __all__ = ['BaseKernel',
 
 
 class BaseKernel:
-    """
-    Parent class for all base kernels
-    """
 
     @staticmethod
     def create(kernel, desc, expr, vars, *hyperparameter_specs):
@@ -122,8 +121,27 @@ class BaseKernel:
                                 )
                             )
 
-            def __call__(self, x1, x2):
-                return self.lda(x1, x2)
+            @cached_property
+            def _vars_and_hypers(self):
+                return [*self._vars, *self._hyperdefs.keys()]
+
+            @cached_property
+            def _fun(self):
+                return lambdify(self._vars_and_hypers, self._expr)
+
+            @cached_property
+            def _jac(self):
+                return [lambdify(self._vars_and_hypers, sy.diff(expr, h))
+                        for h in self._hyperdefs]
+
+            def __call__(self, x1, x2, jac=False):
+                if jac is True:
+                    return (
+                        self._fun(x1, x2, *self.theta),
+                        [j(x1, x2, *self.theta) for j in self._jac]
+                    )
+                else:
+                    return self._fun(x1, x2, *self.theta)
 
             def __repr__(self):
                 return Template('${cls}(${theta, }, ${bounds, })').render(
@@ -138,12 +156,6 @@ class BaseKernel:
             def _bound_expr(self):
                 return self._expr.subs(self._theta_values.items())
 
-            @property
-            def lda(self):
-                if not hasattr(self, '_lda'):
-                    self._lda = lambdify(self._vars, self._bound_expr)
-                return self._lda
-
             def gen_constexpr(self, x, y):
                 return cudacxxcode(
                     self._bound_expr,
@@ -151,7 +163,7 @@ class BaseKernel:
                      str(self._vars[1]): y}
                 )
 
-            def gen_expr(self, x, y, theta_scope=''):
+            def gen_expr(self, x, y, der=None, theta_scope=''):
                 return cudacxxcode(
                     self._expr,
                     {str(self._vars[0]): x,
@@ -179,8 +191,6 @@ class BaseKernel:
                 assert(len(seq) == len(self._theta_values))
                 for theta, value in zip(self._hyperdefs, seq):
                     self._theta_values[theta] = value
-                if hasattr(self, '_lda'):
-                    del self._lda
 
             @property
             def bounds(self):
@@ -221,14 +231,18 @@ class BaseKernel:
         return BaseKernel._op(
             self,
             k if isinstance(k, BaseKernel) else Constant(k),
-            lambda x, y: x + y, '+'
+            '+',
+            lambda x, y: x + y,
+            lambda x, y, dx, dy: dx + dy,
         )
 
     def __radd__(self, k):
         return BaseKernel._op(
             k if isinstance(k, BaseKernel) else Constant(k),
             self,
-            lambda x, y: x + y, '+'
+            '+',
+            lambda x, y: x + y,
+            lambda x, y, dx, dy: dx + dy,
         )
 
     def __mul__(self, k):
@@ -238,18 +252,22 @@ class BaseKernel:
         return BaseKernel._op(
             self,
             k if isinstance(k, BaseKernel) else Constant(k),
-            lambda x, y: x * y, '*'
+            '*',
+            lambda x, y: x * y,
+            lambda x, y, dx, dy: dx * y + x * dy,
         )
 
     def __rmul__(self, k):
         return BaseKernel._op(
             k if isinstance(k, BaseKernel) else Constant(k),
             self,
-            lambda x, y: x * y, '*'
+            '*',
+            lambda x, y: x * y,
+            lambda x, y, dx, dy: dx * y + x * dy,
         )
 
     @staticmethod
-    def _op(k1, k2, op, opstr):
+    def _op(k1, k2, opstr, op_fun, op_jac):
         # only works with python >= 3.6
         # @cpptype(k1=k1.dtype, k2=k2.dtype)
         @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
@@ -258,8 +276,16 @@ class BaseKernel:
                 self.k1 = k1
                 self.k2 = k2
 
-            def __call__(self, i, j):
-                return op(self.k1(i, j), self.k2(i, j))
+            def __call__(self, i, j, jac=False):
+                if jac is True:
+                    f1, J1 = self.k1(i, j, True)
+                    f2, J2 = self.k2(i, j, True)
+                    return (
+                        op_fun(f1, f2),
+                        [op_jac(f1, f2, j1, j2) for j1, j2 in zip(J1, J2)]
+                    )
+                else:
+                    return op_fun(self.k1(i, j, False), self.k2(i, j, False))
 
             def __repr__(self):
                 return '{k1} {o} {k2}'.format(
@@ -301,8 +327,11 @@ class _Multiply(BaseKernel):
     Only used internally for treating weighted edges
     """
 
-    def __call__(self, x1, x2):
-        return x1 * x2
+    def __call__(self, x1, x2, jac=False):
+        if jac is True:
+            return (x1 * x2, [])
+        else:
+            return x1 * x2
 
     def __repr__(self):
         return '_Multiply()'
@@ -349,8 +378,11 @@ def Constant(c, c_bounds=(0, np.inf)):
             self.c = float(c)
             self.c_bounds = c_bounds
 
-        def __call__(self, i, j):
-            return self.c
+        def __call__(self, i, j, jac=False):
+            if jac is True:
+                return (self.c, [1.0])
+            else:
+                return self.c
 
         def __repr__(self):
             return 'Constant({})'.format(self.c)
@@ -404,8 +436,12 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
             self.h = float(h)
             self.h_bounds = h_bounds
 
-        def __call__(self, i, j):
-            return 1.0 if i == j else self.h
+        def __call__(self, i, j, jac=False):
+            if jac is True:
+                return (1.0 if i == j else self.h,
+                        [0.0 if i == j else 1.0])
+            else:
+                return 1.0 if i == j else self.h
 
         def __repr__(self):
             return 'KroneckerDelta({})'.format(self.h)
@@ -523,11 +559,20 @@ def TensorProduct(**kw_kernels):
                 setattr(TensorProductKernel, key,
                         property(lambda self, key=key: self.kw_kernels[key]))
 
-        def __call__(self, object1, object2):
-            prod = 1.0
-            for key, kernel in self.kw_kernels.items():
-                prod *= kernel(object1[key], object2[key])
-            return prod
+        def __call__(self, object1, object2, jac=False):
+            if jac is True:
+                F, J = list(
+                    zip(*[kernel(object1[key], object2[key], True)
+                          for key, kernel in self.kw_kernels.items()])
+                )
+                fun = np.prod(F)
+                jac = [fun / f * j for i, f in enumerate(F) for j in J[i]]
+                return fun, jac
+            else:
+                prod = 1.0
+                for key, kernel in self.kw_kernels.items():
+                    prod *= kernel(object1[key], object2[key], False)
+                return prod
 
         def __repr__(self):
             return Template('TensorProduct(${kwexpr, })').render(
