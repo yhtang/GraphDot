@@ -213,7 +213,7 @@ class BaseKernel:
             'Parameters\n'
             '----------\n'
             '${param_docs\n}',
-            escape_repl=False
+            escape=False
         ).render(
             desc='\n'.join([s.strip() for s in desc.split('\n')]),
             param_docs=param_docs
