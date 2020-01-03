@@ -13,6 +13,6 @@ def backend_factory(backend, *args, **kwargs):
         try:
             return CUDABackend(*args, **kwargs)
         except Exception as e:
-            raise RuntimeError('Cannot auto-select backend: {}'.format(e))
+            raise RuntimeError(f'Cannot auto-select backend: {e}')
     else:
-        raise ValueError('Unknown backend {}'.format(backend))
+        raise ValueError(f'Unknown backend {backend}')

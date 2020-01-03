@@ -105,9 +105,9 @@ class Graph:
             if index == 0:
                 node_attr = sorted(node.keys())
             elif node_attr != sorted(node.keys()):
-                raise TypeError('Node {} '.format(index) +
-                                'attributes {} '.format(node.keys()) +
-                                'inconsistent with {}'.format(node_attr))
+                raise TypeError(f'Node {index} '
+                                f'attributes {node.keys()} '
+                                f'inconsistent with {node_attr}')
 
         node_df = DataFrame({'!i': range(len(graph.nodes))})
         for key in node_attr:
@@ -119,9 +119,9 @@ class Graph:
             if index == 0:
                 edge_attr = sorted(edge.keys())
             elif edge_attr != sorted(edge.keys()):
-                raise TypeError('Edge {} '.format((i, j)) +
-                                'attributes {} '.format(edge.keys()) +
-                                'inconsistent with {}'.format(edge_attr))
+                raise TypeError(f'Edge {(i, j)} '
+                                f'attributes {edge.keys()} '
+                                f'inconsistent with {edge_attr}')
 
         edge_df = DataFrame()
         edge_df['!i'], edge_df['!j'] = zip(*graph.edges.keys())
