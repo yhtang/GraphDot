@@ -53,7 +53,7 @@ class AtomicAdjacency:
             if m:
                 self.shape = Tent(ord=int(m.group(1)))
             else:
-                raise ValueError('Invalid shape: {}'.format(shape))
+                raise ValueError(f'Invalid shape: {shape}')
         else:
             self.shape = shape
         if isinstance(length_scale, str):

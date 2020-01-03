@@ -72,9 +72,9 @@ def cpptype(dtype=[]):
                     t = Class.dtype.fields[name][0]
                     if np.dtype(type(value)).kind not in _convertible[t.kind]:
                         raise ValueError(
-                            "Cannot set attribute '{}' (C++ type {}) "
-                            "with value {} of {}".format(name, t,
-                                                         value, type(value)))
+                            f"Cannot set attribute '{name}' (C++ type {t}) "
+                            f"with value {value} of {type(value)}"
+                        )
                 super().__setattr__(name, value)
 
             # TODO: need a nicer __repr__
@@ -92,13 +92,13 @@ def decltype(type, name=''):
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
-            return 'constexpr static _empty {} {{}}'.format(name)
+            return f'constexpr static _empty {name} {{}}'
     # elif type.subdtype is not None:
     #     return Template(r'''${type} ${name}${dim}''').render(
     #         type=type.name, name=
     #     )
     else:
-        return '{} {}'.format(str(type.name), name)
+        return f'{str(type.name)} {name}'
 
 
 def rowtype(df, pack=True, exclude=[]):
