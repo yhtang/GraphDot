@@ -9,17 +9,17 @@ namespace graphdot {
 namespace marginalized {
 
 struct job_t {
-    int     i, j;
-    float * vr;
+    int i, j;
+    float * __restrict vr;
 };
 
 struct pcg_scratch_t {
 
-    float * ptr;
-    int     stride;
+    float * __restrict ptr;
+    int stride;
 
     pcg_scratch_t(pcg_scratch_t const & other) = default;
-
+ 
     __device__ __inline__ float * x() { return ptr + stride * 0; }
     __device__ __inline__ float * r() { return ptr + stride * 1; }
     __device__ __inline__ float * z() { return ptr + stride * 2; }
@@ -125,8 +125,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         EdgeKernel const edge_kernel,
         Graph const    g1,
         Graph const    g2,
-        scratch_t      scratch,
-        char * const   p_shared,
+        scratch_t      scratch, 
+        char * const   cache,
         const float    q,
         const float    q0) {
 
@@ -142,36 +142,35 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         const int i1_lower       = (lane + warp_size) / octile_h;
         const int i2             =  lane              % octile_h;
 
-        octile octilex {p_shared + warp_id_local * shmem_bytes_per_warp};
+        octile octilex {cache + warp_id_local * shmem_bytes_per_warp};
 
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            int   i1 = i / n2;
-            int   i2 = i % n2;
-            float d1 = g1.degree[i1] / (1 - q);
-            float d2 = g2.degree[i2] / (1 - q);
+            const int   i1 = i / n2;
+            const int   i2 = i % n2;
+            const float d1 = g1.degree[i1] / (1 - q);
+            const float d2 = g2.degree[i2] / (1 - q);
+            const float dx = d1 * d2;
+            const float vx = node_kernel(g1.node[i1], g2.node[i2]);
+
             // b  = Dx . qx
-            float b = d1 * d2 * q * q / (q0 * q0);
+            const auto b = dx * q * q / (q0 * q0);
             // r0 = b - A . x0
             //    = b
-            float r0 = b;
+            const auto r0 = b; 
             // z0 = M^-1 . r0
             //    = (Dx . Vx^-1)^-1 . r0
-            //    = Vx . Dx^-1 . r0
-            //    = Vx . Dx^-1 . b
-            //    = Vx . Dx^-1 . Dx . qx
-            //    = Vx . qx
-            float z0 = node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
-            // x0 = 0
-            scratch.x(i) = 0;
+            //    = r0 .* Vx ./ Dx
+            const auto z0 = r0 * vx / dx;
+            const auto p0 = z0;
+
+            scratch.x(i) = 0;  // x0 === 0
             scratch.r(i) = r0;
             scratch.z(i) = z0;
-            // p0 = z0
-            scratch.p(i) = z0;
+            scratch.p(i) = p0;
+
             // Ap = diag(A . p0)
             //    = Dx . Vx^-1 . p0
-            //    = Dx . Vx^-1 . Vx . qx
-            //    = Dx . qx
-            scratch.Ap(i) = d1 * d2 * q * q / (q0 * q0);
+            scratch.Ap(i) = dx / vx * p0;
         }
         __syncthreads();
 
@@ -189,8 +188,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
                     // load the first submatrix in compact format into shared memory
                     auto o1 = g1.octile[O1 + warp_id_local];
-                    octile octile1 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes};
-                    nzlist nzlist1 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
+                    octile octile1 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes};
+                    nzlist nzlist1 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
 
                     // expand into col-major dense ayout
                     const int nnz1 = __popcll(o1.nzmask);
@@ -222,8 +221,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                     if (warp_id_local < nt2) {
                         // load the second submatrix in compact fornat into shared memory
                         auto o2 = g2.octile[O2 + warp_id_local];
-                        octile octile2 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
-                        nzlist nzlist2 {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes + octile2.size_bytes};
+                        octile octile2 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
+                        nzlist nzlist2 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes + octile2.size_bytes};
 
                         // expand into col-major dense ayout
                         const int nnz2 = __popcll(o2.nzmask);
@@ -262,9 +261,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         const int I2   = o2.upper;
                         const int J2   = o2.left;
 
-                        octile octile1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes };
-                        octile octile2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
-                        rhs    rhs     {p_shared + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes * 2 + nzlist::size_bytes * 2};
+                        octile octile1 {cache + p1 * shmem_bytes_per_warp + octilex.size_bytes };
+                        octile octile2 {cache + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
+                        rhs    rhs     {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes * 2 + nzlist::size_bytes * 2};
 
                         // load RHS
                         int j1 = lane / octile_w;
@@ -320,8 +319,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
                         } else {
                             // sparse x sparse
-                            nzlist nzlist1 {p_shared + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
-                            nzlist nzlist2 {p_shared + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
+                            nzlist nzlist1 {cache + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
+                            nzlist nzlist2 {cache + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
 
                             for (int i = lane; i < nnz1 * nnz2; i += warp_size) {
                                 int  k1 = i / nnz2;
@@ -353,20 +352,23 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             // x = x + alpha * p;
             // r = r - alpha * Ap;
             // z = M^-1 . r
+            //   = (Dx . Vx^-1)^-1 . r
+            //   = Vx . r ./ Dx
             // rTr      = r^T . r
             // rTz_next = r^T . z
             float rTr = 0, rTz_next = 0;
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                const int i1 = i / n2;
+                const int i2 = i % n2;
+                const float d1 = g1.degree[i1] / (1 - q);
+                const float d2 = g2.degree[i2] / (1 - q);
+                const float dx = d1 * d2;
+                const float vx = node_kernel(g1.node[i1], g2.node[i2]);
+
                 scratch.x(i) += alpha * scratch.p(i);
                 scratch.r(i) -= alpha * scratch.Ap(i);
-                int i1 = i / n2;
-                int i2 = i % n2;
-                float d1 = g1.degree[i1] / (1 - q);
-                float d2 = g2.degree[i2] / (1 - q);
-                float D  = d1 * d2;
-                float V  = node_kernel(g1.node[i1], g2.node[i2]);
-                scratch.z(i) = scratch.r(i) / (D / V);
-                rTr += scratch.r(i) * scratch.r(i);
+                scratch.z(i)  = vx / dx * scratch.r(i);
+                rTr      += scratch.r(i) * scratch.r(i);
                 rTz_next += scratch.r(i) * scratch.z(i);
             }
 
@@ -394,13 +396,16 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             // p = r + beta * p;
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                int i1 = i / n2;
-                int i2 = i % n2;
-                float p       = scratch.z(i) + beta * scratch.p(i);
-                float d1      = g1.degree[i1] / (1 - q);
-                float d2      = g2.degree[i2] / (1 - q);
-                scratch.p(i)  = p;
-                scratch.Ap(i) = d1 * d2 / node_kernel(g1.node[i1], g2.node[i2]) * p;
+                const int i1 = i / n2;
+                const int i2 = i % n2;
+                const float p  = scratch.z(i) + beta * scratch.p(i);
+                scratch.p(i)   = p;
+
+                const float d1 = g1.degree[i1] / (1 - q);
+                const float d2 = g2.degree[i2] / (1 - q);
+                const float dx = d1 * d2;
+                const float vx = node_kernel(g1.node[i1], g2.node[i2]);
+                scratch.Ap(i)  = dx / vx * p;
             }
             __syncthreads();
 
