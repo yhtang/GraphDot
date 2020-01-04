@@ -42,7 +42,7 @@ template<class T> __device__ T block_sum( T value ) {
     return bsum;
 }
 
-template<class T> __inline__ __device__ T block_vdotv( T const * x, T const * y, int const N ) {
+template<class T> __inline__ __device__ T block_vdotv( T const * __restrict x, T const * __restrict y, int const N ) {
     T wsum = 0;
     for ( int i = threadIdx.x; i < N; i += blockDim.x ) wsum += x[i] * y[i];
     return block_sum( wsum );
