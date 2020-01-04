@@ -342,7 +342,7 @@ class _Multiply(BaseKernel):
 
     def __call__(self, x1, x2, jac=False):
         if jac is True:
-            return (x1 * x2, [])
+            return x1 * x2, []
         else:
             return x1 * x2
 
@@ -352,7 +352,7 @@ class _Multiply(BaseKernel):
     def gen_expr(self, x, y, jac=False, theta_prefix=''):
         f = f'({x} * {y})'
         if jac is True:
-            return (f, [])
+            return f, []
         else:
             return f
 
@@ -394,7 +394,7 @@ def Constant(c, c_bounds=(0, np.inf)):
 
         def __call__(self, i, j, jac=False):
             if jac is True:
-                return (self.c, [1.0])
+                return self.c, [1.0]
             else:
                 return self.c
 
@@ -404,7 +404,7 @@ def Constant(c, c_bounds=(0, np.inf)):
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             f = f'{theta_prefix}c'
             if jac is True:
-                return (f, ['1.0f'])
+                return f, ['1.0f']
             else:
                 return f
 
@@ -453,8 +453,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
 
         def __call__(self, i, j, jac=False):
             if jac is True:
-                return (1.0 if i == j else self.h,
-                        [0.0 if i == j else 1.0])
+                return 1.0 if i == j else self.h, [0.0 if i == j else 1.0]
             else:
                 return 1.0 if i == j else self.h
 
@@ -464,7 +463,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             f = f'({x} == {y} ? 1.0f : {theta_prefix}h)'
             if jac is True:
-                return (f, [f'({x} == {y} ? 0.0f : 1.0f)'])
+                return f, [f'({x} == {y} ? 0.0f : 1.0f)']
             else:
                 return f
 
@@ -581,7 +580,7 @@ def TensorProduct(**kw_kernels):
                     Template('(${X * })').render(X=F[:i] + (j,) + F[i + 1:])
                     for i, _ in enumerate(F) for j in J[i]
                 ]
-                return (f, jacobian)
+                return f, jacobian
             else:
                 return f
 
