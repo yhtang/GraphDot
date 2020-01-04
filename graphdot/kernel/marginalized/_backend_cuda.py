@@ -250,6 +250,7 @@ class CUDABackend(Backend):
             i_job_global,
             np.uint32(len(jobs)),
             np.uint32(output_shape[0]),
+            np.uint32(output_shape[1]),
             np.float32(q),
             np.float32(q),  # placeholder for q0
             grid=(launch_block_count, 1, 1),

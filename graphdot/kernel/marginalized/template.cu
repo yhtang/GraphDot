@@ -25,10 +25,11 @@ extern "C" {
         scratch_t       * scratches,
         uint2           * jobs,
         uint32          * starts,
-        float32         * R,
+        float32         * out,
         uint32          * i_job_global,
         const uint32      n_jobs,
-        const uint32      R_stride,
+        const uint32      out_h,
+        const uint32      out_w,
         const float32     q,
         const float32     q0
     ) {
@@ -57,11 +58,11 @@ extern "C" {
             // wipe output buffer for atomic accumulations
             ?{traits.nodal is False} {
                 ?{traits.diagonal is True} {
-                    R[I1] = 0.f;
+                    out[I1] = 0.f;
                 } else {
-                    R[I1 + I2 * R_stride] = 0.f;
+                    out[I1 + I2 * out_h] = 0.f;
                     ?{traits.symmetric is True} {
-                        if (job.x != job.y) R[I2 + I1 * R_stride] = 0.f;
+                        if (job.x != job.y) out[I2 + I1 * out_h] = 0.f;
                     }
                 }
             }
@@ -88,22 +89,22 @@ extern "C" {
                     int i1 = i / n2;
                     int i2 = i % n2;
                     auto r = scratch.x(i);
-                    R[I1 + i1 + i2 * g1.n_node] = r;
+                    out[I1 + i1 + i2 * g1.n_node] = r;
                 }
             }
             ?{traits.nodal is True} {
                 ?{traits.diagonal is True}{
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
-                        R[I1 + i1] = scratch.x(i1 + i1 * n1);
+                        out[I1 + i1] = scratch.x(i1 + i1 * n1);
                     }
                 } else {
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
                         auto r = scratch.x(i);
-                        R[(I1 + i1) + (I2 + i2) * R_stride] = r;
+                        out[(I1 + i1) + (I2 + i2) * out_h] = r;
                         ?{traits.symmetric is True} {
-                            if (job.x != job.y) R[(I2 + i2) + (I1 + i1) * R_stride] = r;
+                            if (job.x != job.y) out[(I2 + i2) + (I1 + i1) * out_h] = r;
                         }
                     }    
                 }
@@ -116,12 +117,12 @@ extern "C" {
                 sum = graphdot::cuda::warp_sum(sum);
                 if (graphdot::cuda::laneid() == 0) {
                     ?{traits.diagonal is True} {
-                        atomicAdd(R + I1, sum);
+                        atomicAdd(out + I1, sum);
                     } else {
-                        atomicAdd(R + I1 + I2 * R_stride, sum);
+                        atomicAdd(out + I1 + I2 * out_h, sum);
                         ?{traits.symmetric is True} {
                             if (job.x != job.y) {
-                                atomicAdd(R + I2 + I1 * R_stride, sum);
+                                atomicAdd(out + I2 + I1 * out_h, sum);
                             }
                         }
                     }

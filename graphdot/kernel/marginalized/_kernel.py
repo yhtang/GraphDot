@@ -53,9 +53,12 @@ class MarginalizedGraphKernel:
             The probability for the random walk to stop during each step.
     """
     @staticmethod
-    def traits(diagonal=False, symmetric=False, nodal=False, lmin=0):
-        return namedtuple('Traits', 'diagonal, symmetric, nodal, lmin')(
-            diagonal, symmetric, nodal, lmin
+    def traits(diagonal=False, symmetric=False, nodal=False, lmin=0,
+               eval_gradient=False):
+        return namedtuple(
+            'Traits', 'diagonal, symmetric, nodal, lmin, eval_gradient'
+        )(
+            diagonal, symmetric, nodal, lmin, eval_gradient
         )
 
     def __init__(self, node_kernel, edge_kernel, p='default', q=0.01,
@@ -78,7 +81,8 @@ class MarginalizedGraphKernel:
         else:
             return p
 
-    def __call__(self, X, Y=None, nodal=False, lmin=0, timer=False):
+    def __call__(self, X, Y=None, eval_gradient=False, nodal=False, lmin=0,
+                 timer=False):
         """Compute pairwise similarity matrix between graphs
 
         Parameters
@@ -150,7 +154,9 @@ class MarginalizedGraphKernel:
                 starts[:len(X)] = np.arange(len(X))
                 starts[len(X):] = np.arange(len(Y) + 1)
                 output_shape = (len(X), len(Y))
-        output = backend.empty(output_shape[0] * output_shape[1], np.float32)
+        if eval_gradient is True:
+            output_shape = (*output_shape, 1 + self.n_dims)
+        output = backend.empty(int(np.prod(output_shape)), np.float32)
         timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
@@ -165,7 +171,12 @@ class MarginalizedGraphKernel:
             starts,
             output,
             output_shape,
-            self.traits(symmetric=Y is None, nodal=nodal, lmin=lmin),
+            self.traits(
+                symmetric=Y is None,
+                nodal=nodal,
+                lmin=lmin,
+                eval_gradient=eval_gradient
+            ),
             timer,
         )
         timer.toc('calling GPU kernel (overall)')
@@ -179,7 +190,10 @@ class MarginalizedGraphKernel:
             timer.report(unit='ms')
         timer.reset()
 
-        return output
+        if eval_gradient is True:
+            return output[:, :, 0], output[:, :, 1:]
+        else:
+            return output
 
     def diag(self, X, nodal=False, lmin=0, timer=False):
         """Compute the self-similarities for a list of graphs
