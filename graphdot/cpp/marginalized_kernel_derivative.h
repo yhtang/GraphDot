@@ -25,21 +25,11 @@ struct pcg_scratch_t {
     __device__ __inline__ float * z() { return ptr + stride * 2; }
     __device__ __inline__ float * p() { return ptr + stride * 3; }
     __device__ __inline__ float * Ap() { return ptr + stride * 4; }
-    __device__ __inline__ float * X() { return ptr + stride * 5; }
-    __device__ __inline__ float * R() { return ptr + stride * 6; }
-    __device__ __inline__ float * Z() { return ptr + stride * 7; }
-    __device__ __inline__ float * P() { return ptr + stride * 8; }
-    __device__ __inline__ float * AP() { return ptr + stride * 9; }
     __device__ __inline__ float & x(int i) { return x()[i]; }
     __device__ __inline__ float & r(int i) { return r()[i]; }
     __device__ __inline__ float & z(int i) { return z()[i]; }
     __device__ __inline__ float & p(int i) { return p()[i]; }
     __device__ __inline__ float & Ap(int i) { return Ap()[i]; }
-    __device__ __inline__ float & X(int i) { return X()[i]; }
-    __device__ __inline__ float & R(int i) { return R()[i]; }
-    __device__ __inline__ float & Z(int i) { return Z()[i]; }
-    __device__ __inline__ float & P(int i) { return P()[i]; }
-    __device__ __inline__ float & AP(int i) { return AP()[i]; }
 };
 
 /*-----------------------------------------------------------------------------
@@ -101,7 +91,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         __device__ __inline__ rhs(void * ptr)
             : _data(reinterpret_cast<float2 *>(ptr)) {}
 
-        __device__ __inline__ float & operator()(int j1, int j2) {
+        __device__ __inline__ float2 & operator()(int j1, int j2) {
             return _data[j1 * octile_w + j2];
         }
     };
@@ -135,9 +125,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         EdgeKernel const edge_kernel,
         Graph const    g1,
         Graph const    g2,
-        scratch_t      scratch, 
+        scratch_t      scratch,
         char * const   cache,
-        const float    p,
         const float    q,
         const float    q0) {
 
@@ -165,37 +154,37 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             // b  = Dx . qx
             const auto b = dx * q * q / (q0 * q0);
-            const auto B = p * p;
             // r0 = b - A . x0
             //    = b
             const auto r0 = b; 
-            const auto R0 = B; 
             // z0 = M^-1 . r0
             //    = (Dx . Vx^-1)^-1 . r0
             //    = r0 .* Vx ./ Dx
             const auto z0 = r0 * vx / dx;
-            const auto Z0 = R0 * vx / dx;
             const auto p0 = z0;
-            const auto P0 = Z0;
 
             scratch.x(i) = 0;  // x0 === 0
             scratch.r(i) = r0;
             scratch.z(i) = z0;
             scratch.p(i) = p0;
+            
+            const auto bX = p * p;
+            const auto rX = bX;
+            const auto zX = rX * vx / dx;
+            const auto pX = zX;
 
-            scratch.X(i) = 0;  // x0 === 0
-            scratch.R(i) = R0;
-            scratch.Z(i) = Z0;
-            scratch.P(i) = P0;
+            scratch.x(i + N) = 0;
+            scratch.r(i + N) = rX;
+            scratch.z(i + N) = zX;
+            scratch.p(i + N) = pX;
 
             // Ap = diag(A . p0)
             //    = Dx . Vx^-1 . p0
             scratch.Ap(i) = dx / vx * p0;
-            scratch.AP(i) = dx / vx * P0;
         }
         __syncthreads();
 
-        auto rTz = block_vdotv(scratch.r(), scratch.z(), N);
+        auto rTz = block_vdotv(scratch.r(), scratch.z(), 2 * N);
 
         int k;
         for (k = 0; k < N; ++k) {
@@ -289,12 +278,23 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         // load RHS
                         int j1 = lane / octile_w;
                         int j2 = lane % octile_w;
-                        if (J1 + j1                        < n1 && J2 + j2 < n2) rhs (j1,                        j2) = scratch.p((J1 + j1                       ) * n2 + (J2 + j2));
-                        if (J1 + j1 + warp_size / octile_w < n1 && J2 + j2 < n2) rhs (j1 + warp_size / octile_w, j2) = scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2));
+                        if (J1 + j1                        < n1 && J2 + j2 < n2) {
+                            rhs (j1,                        j2) = make_float2(
+                                scratch.p((J1 + j1                       ) * n2 + (J2 + j2)),
+                                scratch.p((J1 + j1                       ) * n2 + (J2 + j2) + N)
+                            );
+                        }
+                        if (J1 + j1 + warp_size / octile_w < n1 && J2 + j2 < n2) {
+                            rhs (j1 + warp_size / octile_w, j2) = make_float2(
+                                scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2)),
+                                scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2) + N),
+                            );
+                        }
 
                         if (nnz1 * nnz2 >= 256) {
                             // dense x dense
-                            float sum_upper = 0, sum_lower = 0;
+                            float2 sum_upper = make_float2(0, 0);
+                            float2 sum_lower = make_float2(0, 0);
 
                             #if 1
                             for (int j1 = 0, colmask1 = 1; j1 < octile_w && j1 < g1.n_node - J1; ++j1, colmask1 <<= 1) {
@@ -308,8 +308,10 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                     if (o2.nzmask_r_bytes[i2] & colmask2) {
                                         auto e2 = octile2(i2, j2);
                                         auto r  = rhs(j1, j2);
-                                        sum_upper -= r * (m1_upper ? edge_kernel(e1_upper, e2) : 0.f);
-                                        sum_lower -= r * (m1_lower ? edge_kernel(e1_lower, e2) : 0.f);
+                                        sum_upper.x -= r.x * (m1_upper ? edge_kernel(e1_upper, e2) : 0.f);
+                                        sum_upper.y -= r.y * (m1_upper ? edge_kernel(e1_upper, e2) : 0.f);
+                                        sum_lower.x -= r.x * (m1_lower ? edge_kernel(e1_lower, e2) : 0.f);
+                                        sum_lower.y -= r.y * (m1_lower ? edge_kernel(e1_lower, e2) : 0.f);
                                     }
                                 }
                             }
@@ -335,8 +337,10 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                             }
                             #endif
 
-                            atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper);
-                            atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower);
+                            atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper.x);
+                            atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower.x);
+                            atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2) + N), sum_upper.y);
+                            atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2) + N), sum_lower.y);
 
                         } else {
                             // sparse x sparse
@@ -355,7 +359,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                 auto e1 = octile1(p1);
                                 auto e2 = octile2(p2);
                                 auto r  = rhs(j1, j2);
-                                atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2)), -edge_kernel(e1, e2) * r);
+                                auto e  = -edge_kernel(e1, e2);
+                                atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2)), e * r.x);
+                                atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2) + N), e * r.y);
                             }
                         }
                     }
@@ -367,7 +373,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             __syncthreads();
 
             // alpha = rTr / dot( p, Ap );
-            auto pAp   = block_vdotv(scratch.p(), scratch.Ap(), N);
+            auto pAp   = block_vdotv(scratch.p(), scratch.Ap(), 2 * N);
             auto alpha = rTz / pAp;
 
             // x = x + alpha * p;
@@ -386,11 +392,14 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                 const float dx = d1 * d2;
                 const float vx = node_kernel(g1.node[i1], g2.node[i2]);
 
-                scratch.x(i) += alpha * scratch.p(i);
-                scratch.r(i) -= alpha * scratch.Ap(i);
-                scratch.z(i)  = vx / dx * scratch.r(i);
-                rTr      += scratch.r(i) * scratch.r(i);
-                rTz_next += scratch.r(i) * scratch.z(i);
+                #pragma unroll 2
+                for(int k = 0; k < 2; ++k) {
+                    scratch.x(i + k * N) += alpha * scratch.p(i + k * N);
+                    scratch.r(i + k * N) -= alpha * scratch.Ap(i + k * N);
+                    scratch.z(i + k * N)  = vx / dx * scratch.r(i + k * N);
+                    rTr      += scratch.r(i + k * N) * scratch.r(i + k * N);
+                    rTz_next += scratch.r(i + k * N) * scratch.z(i + k * N);
+                }
             }
 
             // rTr      = block_sum(rTr);
@@ -411,7 +420,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTr      = sum1;
             rTz_next = sum2;
 
-            if (rTr < 1e-20f * N * N) break;
+            if (rTr < 1e-20f * N * N * 2) break;
 
             auto beta = rTz_next / rTz;
 
@@ -419,14 +428,17 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
                 const int i1 = i / n2;
                 const int i2 = i % n2;
-                const float p  = scratch.z(i) + beta * scratch.p(i);
-                scratch.p(i)   = p;
-
                 const float d1 = g1.degree[i1] / (1 - q);
                 const float d2 = g2.degree[i2] / (1 - q);
                 const float dx = d1 * d2;
                 const float vx = node_kernel(g1.node[i1], g2.node[i2]);
-                scratch.Ap(i)  = dx / vx * p;
+            
+                #pragma unroll 2
+                for(int k = 0; k < 2; ++k) {
+                    const float p  = scratch.z(i + k * N) + beta * scratch.p(i + k * N);
+                    scratch.p(i + k * N)   = p;
+                    scratch.Ap(i + k * N)  = dx / vx * p;
+                }
             }
             __syncthreads();
 
