@@ -127,6 +127,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         Graph const    g2,
         scratch_t      scratch,
         char * const   cache,
+        const float * __restrict p1,
+        const float * __restrict p2,
         const float    q,
         const float    q0) {
 
@@ -168,7 +170,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             scratch.z(i) = z0;
             scratch.p(i) = p0;
             
-            const auto bX = p * p;
+            const auto bX = p1[i1] * p2[i2];
             const auto rX = bX;
             const auto zX = rX * vx / dx;
             const auto pX = zX;
@@ -180,7 +182,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             // Ap = diag(A . p0)
             //    = Dx . Vx^-1 . p0
-            scratch.Ap(i) = dx / vx * p0;
+            scratch.Ap(i    ) = dx / vx * p0;
+            scratch.Ap(i + N) = dx / vx * pX;
         }
         __syncthreads();
 
@@ -287,7 +290,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         if (J1 + j1 + warp_size / octile_w < n1 && J2 + j2 < n2) {
                             rhs (j1 + warp_size / octile_w, j2) = make_float2(
                                 scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2)),
-                                scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2) + N),
+                                scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2) + N)
                             );
                         }
 

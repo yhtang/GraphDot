@@ -116,7 +116,8 @@ class CUDABackend(Backend):
     @property
     @functools.lru_cache(maxsize=1)
     def template(self):
-        return Template(os.path.join(os.path.dirname(__file__), 'template.cu'))
+        # return Template(os.path.join(os.path.dirname(__file__), 'template.cu'))
+        return Template(os.path.join(os.path.dirname(__file__), 'template_derivative.cu'))
 
     @property
     def source(self):
@@ -226,7 +227,7 @@ class CUDABackend(Backend):
                                  // self.device.WARP_SIZE)
 
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        self._allocate_scratch(launch_block_count, max_graph_size**2)
+        self._allocate_scratch(launch_block_count, 2 * max_graph_size**2)
 
         p_node_kernel, _ = self.module.get_global('node_kernel')
         cuda.memcpy_htod(p_node_kernel, np.array([node_kernel.state],
