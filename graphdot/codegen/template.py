@@ -31,8 +31,7 @@ class Template:
         t = copy.copy(self)
         t.template = re.sub(
             r'\?{([^}]+)}',
-            lambda m: 'if (true)' if eval(m.group(1), kwargs) else
-                      'if (false)',
+            lambda m: 'true' if eval(m.group(1), kwargs) else 'false',
             t.template
         )
         yield t

@@ -56,12 +56,12 @@ extern "C" {
             auto const p2  = p[job.y];
 
             // wipe output buffer for atomic accumulations
-            ?{traits.nodal is False} {
-                ?{traits.diagonal is True} {
+            if (?{traits.nodal is False}) {
+                if (?{traits.diagonal is True}) {
                     out[I1] = 0.f;
                 } else {
                     out[I1 + I2 * out_h] = 0.f;
-                    ?{traits.symmetric is True} {
+                    if (?{traits.symmetric is True}) {
                         if (job.x != job.y) out[I2 + I1 * out_h] = 0.f;
                     }
                 }
@@ -77,14 +77,14 @@ extern "C" {
                 int i1 = i / n2;
                 int i2 = i % n2;
                 auto r = scratch.x(i);
-                ?{traits.lmin == 1} {
+                if (?{traits.lmin == 1}) {
                     r -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
                 scratch.x(i) = r * p1[i1] * p2[i2];
             }
 
             // write to output buffer
-            ?{traits.nodal == "block"} {
+            if (?{traits.nodal == "block"}) {
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
                     int i2 = i % n2;
@@ -92,8 +92,8 @@ extern "C" {
                     out[I1 + i1 + i2 * g1.n_node] = r;
                 }
             }
-            ?{traits.nodal is True} {
-                ?{traits.diagonal is True}{
+            if (?{traits.nodal is True}) {
+                if (?{traits.diagonal is True}) {
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
                         out[I1 + i1] = scratch.x(i1 + i1 * n1);
                     }
@@ -103,24 +103,24 @@ extern "C" {
                         int i2 = i % n2;
                         auto r = scratch.x(i);
                         out[(I1 + i1) + (I2 + i2) * out_h] = r;
-                        ?{traits.symmetric is True} {
+                        if (?{traits.symmetric is True}) {
                             if (job.x != job.y) out[(I2 + i2) + (I1 + i1) * out_h] = r;
                         }
                     }    
                 }
             }
-            ?{traits.nodal is False} {
+            if (?{traits.nodal is False}) {
                 float32 sum = 0;
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     sum += scratch.x(i);
                 }
                 sum = graphdot::cuda::warp_sum(sum);
                 if (graphdot::cuda::laneid() == 0) {
-                    ?{traits.diagonal is True} {
+                    if (?{traits.diagonal is True}) {
                         atomicAdd(out + I1, sum);
                     } else {
                         atomicAdd(out + I1 + I2 * out_h, sum);
-                        ?{traits.symmetric is True} {
+                        if (?{traits.symmetric is True}) {
                             if (job.x != job.y) {
                                 atomicAdd(out + I2 + I1 * out_h, sum);
                             }
