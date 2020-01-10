@@ -1,6 +1,7 @@
 #ifndef GRAPHDOT_MARGINALIZED_KERNEL_DERIVATIVE_H_
 #define GRAPHDOT_MARGINALIZED_KERNEL_DERIVATIVE_H_
 
+#include <algorithm>
 #include "util_cuda.h"
 #include "graph.h"
 
@@ -115,9 +116,10 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
     };
 
     constexpr static int shmem_bytes_per_warp =
-        3 * octile::size_bytes +
-        1 * rhs::size_bytes + 
-        2 * nzlist::size_bytes;
+        2 * octile::size_bytes +
+        2 * nzlist::size_bytes +
+        // the staging buffer can share space with rhs due to temporal mutual exclusion
+        std::max(octile::size_bytes, rhs::size_bytes);
 
     // Expand a submatrix in compact format in shared memory
     template<class CompactTile>
@@ -170,7 +172,10 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         const int i1_lower       = (lane + warp_size) / octile_h;
         const int i2             =  lane              % octile_h;
 
-        octile octilex {cache + warp_id_local * shmem_bytes_per_warp};
+        octile octilex {cache
+                        + warp_id_local * shmem_bytes_per_warp
+                        + octile::size_bytes * 2
+                        + nzlist::size_bytes * 2};
 
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             const int   i1 = i / n2;
@@ -225,8 +230,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
                 if (warp_id_local < nt1) {
                     // load the first submatrix in compact format into shared memory
-                    octile octile1 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes};
-                    nzlist nzlist1 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
+                    octile octile1 {cache + warp_id_local * shmem_bytes_per_warp};
+                    nzlist nzlist1 {cache + warp_id_local * shmem_bytes_per_warp + octile::size_bytes};
                     load(lane, g1.octile[O1 + warp_id_local], octile1, nzlist1, octilex);
                 }
 
@@ -238,8 +243,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
                     if (warp_id_local < nt2) {
                         // load the second submatrix in compact fornat into shared memory
-                        octile octile2 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
-                        nzlist nzlist2 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes + octile2.size_bytes};
+                        octile octile2 {cache + warp_id_local * shmem_bytes_per_warp + octile::size_bytes + nzlist::size_bytes};
+                        nzlist nzlist2 {cache + warp_id_local * shmem_bytes_per_warp + octile::size_bytes + nzlist::size_bytes + octile::size_bytes};
                         load(lane, g2.octile[O2 + warp_id_local], octile2, nzlist2, octilex);
                     }
 
@@ -259,9 +264,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                         const int I2   = o2.upper;
                         const int J2   = o2.left;
 
-                        octile octile1 {cache + p1 * shmem_bytes_per_warp + octilex.size_bytes };
-                        octile octile2 {cache + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
-                        rhs    rhs     {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes * 2 + nzlist::size_bytes * 2};
+                        octile octile1 {cache + p1 * shmem_bytes_per_warp};
+                        octile octile2 {cache + p2 * shmem_bytes_per_warp + octile::size_bytes + nzlist::size_bytes};
+                        rhs    rhs     {cache + warp_id_local * shmem_bytes_per_warp + octile::size_bytes * 2 + nzlist::size_bytes * 2};
 
                         // load RHS
                         int j1 = lane / octile_w;
@@ -332,8 +337,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
                         } else {
                             // sparse x sparse
-                            nzlist nzlist1 {cache + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
-                            nzlist nzlist2 {cache + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
+                            nzlist nzlist1 {cache + p1 * shmem_bytes_per_warp + octile::size_bytes};
+                            nzlist nzlist2 {cache + p2 * shmem_bytes_per_warp + octile::size_bytes + nzlist::size_bytes + octile::size_bytes};
 
                             for (int i = lane; i < nnz1 * nnz2; i += warp_size) {
                                 int  k1 = i / nnz2;
@@ -522,147 +527,13 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         const int i1_lower       = (lane + warp_size) / octile_h;
         const int i2             =  lane              % octile_h;
 
-        octile octilex {cache + warp_id_local * shmem_bytes_per_warp};
+        octile octilex {cache
+                        + warp_id_local * shmem_bytes_per_warp
+                        + octile::size_bytes * 2
+                        + nzlist::size_bytes * 2};
 
-        #if 0
-        for (int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local) {
-
-            const int nt1 = min(g1.n_octile - O1, warp_num_local);
-
-            if (warp_id_local < nt1) {
-                // load the first submatrix in compact format into shared memory
-                octile octile1 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes};
-                nzlist nzlist1 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
-                load(lane, g1.octile[O1 + warp_id_local], octile1, nzlist1, octilex);
-            }
-
-            __syncthreads();
-
-            for (int O2 = 0; O2 < g2.n_octile; O2 += warp_num_local) {
-
-                const int nt2 = min(g2.n_octile - O2, warp_num_local);
-
-                if (warp_id_local < nt2) {
-                    // load the second submatrix in compact fornat into shared memory
-                    octile octile2 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
-                    nzlist nzlist2 {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes + octile2.size_bytes};
-                    load(lane, g2.octile[O2 + warp_id_local], octile2, nzlist2, octilex);
-                }
-
-                __syncthreads();
-
-                for (int t = warp_id_local; t < nt1 * nt2; t += warp_num_local) {
-
-                    const int p1 = t / nt2;
-                    const int p2 = t % nt2;
-
-                    const auto o1  = g1.octile[O1 + p1];
-                    const auto o2  = g2.octile[O2 + p2];
-                    const int nnz1 = __popcll(o1.nzmask);
-                    const int nnz2 = __popcll(o2.nzmask);
-                    const int I1   = o1.upper;
-                    const int J1   = o1.left;
-                    const int I2   = o2.upper;
-                    const int J2   = o2.left;
-
-                    octile octile1 {cache + p1 * shmem_bytes_per_warp + octilex.size_bytes };
-                    octile octile2 {cache + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes + nzlist::size_bytes};
-                    rhs    rhs     {cache + warp_id_local * shmem_bytes_per_warp + octilex.size_bytes + octile::size_bytes * 2 + nzlist::size_bytes * 2};
-
-                    // load RHS
-                    int j1 = lane / octile_w;
-                    int j2 = lane % octile_w;
-                    if (J1 + j1                        < n1 && J2 + j2 < n2) {
-                        rhs (j1,                        j2) = make_float2(
-                            scratch.p((J1 + j1                       ) * n2 + (J2 + j2)),
-                            scratch.p((J1 + j1                       ) * n2 + (J2 + j2) + N)
-                        );
-                    }
-                    if (J1 + j1 + warp_size / octile_w < n1 && J2 + j2 < n2) {
-                        rhs (j1 + warp_size / octile_w, j2) = make_float2(
-                            scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2)),
-                            scratch.p((J1 + j1 + warp_size / octile_w) * n2 + (J2 + j2) + N)
-                        );
-                    }
-
-                    if (nnz1 * nnz2 >= 256) {
-                        // dense x dense
-                        float2 sum_upper = make_float2(0, 0);
-                        float2 sum_lower = make_float2(0, 0);
-
-                        #if 1
-                        for (int j1 = 0, colmask1 = 1; j1 < octile_w && j1 < g1.n_node - J1; ++j1, colmask1 <<= 1) {
-                            auto e1_upper = octile1(i1_upper, j1);
-                            auto e1_lower = octile1(i1_lower, j1);
-                            bool m1_upper = o1.nzmask_r_bytes[i1_upper] & colmask1;
-                            bool m1_lower = o1.nzmask_r_bytes[i1_lower] & colmask1;
-                
-                            #pragma unroll (octile_w)
-                            for (int j2 = 0, colmask2 = 1; j2 < octile_w; ++j2, colmask2 <<= 1) {
-                                if (o2.nzmask_r_bytes[i2] & colmask2) {
-                                    auto e2 = octile2(i2, j2);
-                                    auto r  = rhs(j1, j2);
-                                    sum_upper.x -= r.x * (m1_upper ? edge_kernel(e1_upper, e2) : 0.f);
-                                    sum_upper.y -= r.y * (m1_upper ? edge_kernel(e1_upper, e2) : 0.f);
-                                    sum_lower.x -= r.x * (m1_lower ? edge_kernel(e1_lower, e2) : 0.f);
-                                    sum_lower.y -= r.y * (m1_lower ? edge_kernel(e1_lower, e2) : 0.f);
-                                }
-                            }
-                        }
-                        #else
-                        for (int j1 = 0; j1 < octile_w && j1 < g1.n_node - J1; ++j1) {
-                            auto e1_upper = octile1 (i1_upper, j1);
-                            auto e1_lower = octile1 (i1_lower, j1);
-                            auto m1_upper = 1ULL << (i1_upper + j1 * octile_h);
-                            auto m1_lower = 1ULL << (i1_lower + j1 * octile_h);
-                
-                            #pragma unroll (octile_w)
-                            for (int j2 = 0, mask = 1; j2 < octile_w; ++j2, mask <<= 1) {
-                                auto e2 = octile2 (i2, j2);
-                                auto r  = rhs (j1, j2);
-                                auto m2 = 1ULL << (i2 + j2 * octile_h);
-                                if ((o1.nzmask & m1_upper) && (o2.nzmask & m2)) {
-                                    sum_upper -= edge_kernel(e1_upper, e2) * r;
-                                }
-                                if ((o1.nzmask & m1_lower) && (o2.nzmask & m2)) {
-                                    sum_lower -= edge_kernel(e1_lower, e2) * r ;
-                                }
-                            }
-                        }
-                        #endif
-
-                        atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2)), sum_upper.x);
-                        atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2)), sum_lower.x);
-                        atomicAdd(&scratch.Ap((I1 + i1_upper) * n2 + (I2 + i2) + N), sum_upper.y);
-                        atomicAdd(&scratch.Ap((I1 + i1_lower) * n2 + (I2 + i2) + N), sum_lower.y);
-
-                    } else {
-                        // sparse x sparse
-                        nzlist nzlist1 {cache + p1 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes};
-                        nzlist nzlist2 {cache + p2 * shmem_bytes_per_warp + octilex.size_bytes + octile1.size_bytes + nzlist1.size_bytes + octile2.size_bytes};
-
-                        for (int i = lane; i < nnz1 * nnz2; i += warp_size) {
-                            int  k1 = i / nnz2;
-                            int  k2 = i - k1 * nnz2;
-                            int  p1 = nzlist1(k1);
-                            int  p2 = nzlist2(k2);
-                            int  i1 = p1 % octile_h;
-                            int  j1 = p1 / octile_h;
-                            int  i2 = p2 % octile_h;
-                            int  j2 = p2 / octile_h;
-                            auto e1 = octile1(p1);
-                            auto e2 = octile2(p2);
-                            auto r  = rhs(j1, j2);
-                            auto e  = -edge_kernel(e1, e2);
-                            atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2)), e * r.x);
-                            atomicAdd(&scratch.Ap((I1 + i1) * n2 + (I2 + i2) + N), e * r.y);
-                        }
-                    }
-                }
-
-                __syncthreads();
-            }
-        }
+        #if 1
+        
         #endif
     }
 };
