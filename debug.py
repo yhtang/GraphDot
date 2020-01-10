@@ -96,7 +96,7 @@ graph = Graph.from_networkx(weighted_graph1, weight='w')
 knode = TensorProduct(hybridization=KroneckerDelta(0.3),
                       charge=SquareExponential(1.0))
 kedge = TensorProduct(order=KroneckerDelta(0.3),
-                      length=SquareExponential(0.05))
+                      length=SquareExponential(1.0))
 
 mlgk = MarginalizedGraphKernel(knode, kedge, q=0.1)
 
@@ -124,7 +124,7 @@ print(dKdZ)
 
 print(dKdV)
 
-eps = 1e-3
+eps = 1e-2
 for i in range(len(mlgk.theta)):
     theta = mlgk.theta
 
