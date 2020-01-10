@@ -135,6 +135,39 @@ class CUDABackend(Backend):
             self._module, self._compiler_message = self._compile(self.source)
         return self._module
 
+    @staticmethod
+    def gencode_kernel(kernel, name):
+        fun, jac = kernel.gen_expr('x1', 'x2', jac=True)
+
+        kernel_src = Template(r'''
+        using ${name}_theta_t = ${theta_t};
+
+        struct ${name}_t : ${name}_theta_t {
+
+            constexpr static int jac_dims = ${jac_dims};
+
+            template<class X> __device__ __inline__
+            auto operator() (X const &x1, X const &x2) const {
+                return ${expr};
+            }
+
+            template<class X> __device__ __inline__
+            void _j_a_c_o_b_i_a_n_(float j[], X const &x1, X const &x2) const {
+                ${jac;\n};
+            }
+        };
+
+        __constant__ ${name}_t ${name};
+        ''').render(
+            name=name,
+            jac_dims=len(jac),
+            theta_t=decltype(kernel),
+            expr=fun,
+            jac=[f'''j[{i}] = {expr}''' for i, expr in enumerate(jac)],
+        )
+
+        return kernel_src
+
     def __call__(self, graphs, node_kernel, edge_kernel, p, q, jobs, starts,
                  output, output_shape, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
@@ -172,37 +205,8 @@ class CUDABackend(Backend):
             edge_kernel = TensorProduct(weight=_Multiply(),
                                         label=edge_kernel)
 
-        node_kernel_src = Template(r'''
-        using node_theta_t = ${theta_t};
-
-        struct node_kernel_t : node_theta_t {
-            template<class V> __device__ __inline__
-            auto operator() (V const &v1, V const &v2) const {
-                return ${expr};
-            }
-        };
-
-        __constant__ node_kernel_t node_kernel;
-        ''').render(
-            theta_t=decltype(node_kernel),
-            expr=node_kernel.gen_expr('v1', 'v2')
-        )
-
-        edge_kernel_src = Template(r'''
-        using edge_theta_t = ${theta_t};
-
-        struct edge_kernel_t : edge_theta_t {
-            template<class T> __device__ __inline__
-            auto operator() (T const &e1, T const &e2) const {
-                return ${expr};
-            }
-        };
-
-        __constant__ edge_kernel_t edge_kernel;
-        ''').render(
-            theta_t=decltype(edge_kernel),
-            expr=edge_kernel.gen_expr('e1', 'e2')
-        )
+        node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')
+        edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel')
 
         with self.template.context(traits=traits) as template:
             self.source = template.render(

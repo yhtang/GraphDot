@@ -75,7 +75,14 @@ def MLGK(G, knode, kedge, q, q0):
             left = np.linalg.solve(Zl, rhs4z)
             dK[i, j] = (right.sum() - left.sum()) / (2 * eps)
 
-    return kappa, dK
+    DVx = np.zeros((N * N, len(knode.theta)))
+
+    for i, n1 in G.nodes.iterrows():
+        for j, n2 in G.nodes.iterrows():
+            f, jac = knode(n1, n2, jac=True)
+            DVx[i*N+j, :] = jac
+
+    return kappa, dK, np.sum(dK.diagonal()[:, None] * DVx, axis=0)
 
 
 weighted_graph1 = nx.Graph(title='H2O')
@@ -95,18 +102,42 @@ mlgk = MarginalizedGraphKernel(knode, kedge, q=0.1)
 
 # print(graph)
 
-R, dR = mlgk([graph], eval_gradient=True, nodal=True)
+R, dR = mlgk([graph], eval_gradient=True, nodal=False)
 
 print(mlgk.hyperparameters)
 
-print(R.sum())
+print(R)
 
-print(-np.outer(dR[:, :, 0].ravel(), R.ravel()))
+print(dR)
+
+# print(R.sum())
+
+# print(-np.outer(dR[:, :, 0].ravel(), R.ravel()))
 
 # print(mlgk.backend.source)
 
-K, dKdZ = MLGK(graph, knode, kedge, q=0.1, q0=0.1)
+K, dKdZ, dKdV = MLGK(graph, knode, kedge, q=0.1, q0=0.1)
 
 print(K)
 
 print(dKdZ)
+
+print(dKdV)
+
+eps = 1e-3
+for i in range(len(mlgk.theta)):
+    theta = mlgk.theta
+
+    t = np.exp(theta)
+    t[i] += eps
+    mlgk.theta = np.log(t)
+    Rr = mlgk([graph])
+
+    t = np.exp(theta)
+    t[i] -= eps
+    mlgk.theta = np.log(t)
+    Rl = mlgk([graph])
+
+    mlgk.theta = theta
+
+    print((Rr - Rl)/(2 * eps))
