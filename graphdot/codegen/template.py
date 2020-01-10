@@ -51,6 +51,7 @@ class Template:
                 text = re.sub(pattern, lambda m: m.group(1).join(repl), text)
             else:
                 pattern = r'\${%s}' % symbol
+                repl = str(repl)
                 if self.escape is False:
                     repl = repl.replace('\\', r'\\')
                 text = re.sub(pattern, repl, text)
