@@ -54,35 +54,49 @@ def MLGK(G, knode, kedge, q, q0):
     Dx = np.kron(D / (1.0 - q), D / (1.0 - q))
     Ax = np.kron(A, A)
 
-    rhs = Dx * np.ones(N * N) * q * q / q0 / q0
+    qx = np.ones(N * N) * q * q / q0 / q0
+    px = np.ones(N * N)
+    rhs = Dx * qx
     linsys = np.diag(Dx / Vx) - Ax * Ex
     solution, _ = sp.linalg.cg(linsys, rhs, atol=1e-7,
                                M=sp.diags([Vx / Dx], [0]))
-    kappa = solution.sum()
+    kappa = px.dot(solution)
 
-    dK = np.zeros((N * N, N * N))
-    eps = 1e-3
-    Px = Ax / Dx[:, None]
-    Z = np.diag(1 / Vx) - Px * Ex
-    rhs4z = np.ones(N * N) * q * q / q0 / q0
-    for i in range(N * N):
-        for j in range(N * N):
-            Zr = Z.copy()
-            Zr[i, j] += eps
-            right = np.linalg.solve(Zr, rhs4z)
-            Zl = Z.copy()
-            Zl[i, j] -= eps
-            left = np.linalg.solve(Zl, rhs4z)
-            dK[i, j] = (right.sum() - left.sum()) / (2 * eps)
+    YDq, _ = sp.linalg.cg(linsys, Dx * qx, atol=1e-7)
+    Yp, _ = sp.linalg.cg(linsys, px, atol=1e-7)
+
+    dKdZ = -np.outer(Dx * Yp, YDq)
+    dKdY = -np.outer(Yp, YDq)
+
+    # eps = 1e-3
+    # Px = Ax / Dx[:, None]
+    # Z = np.diag(1 / Vx) - Px * Ex
+    # rhs4z = np.ones(N * N) * q * q / q0 / q0
+    # for i in range(N * N):
+    #     for j in range(N * N):
+    #         Zr = Z.copy()
+    #         Zr[i, j] += eps
+    #         right = np.linalg.solve(Zr, rhs4z)
+    #         Zl = Z.copy()
+    #         Zl[i, j] -= eps
+    #         left = np.linalg.solve(Zl, rhs4z)
+    #         dK[i, j] = (right.sum() - left.sum()) / (2 * eps)
 
     DVx = np.zeros((N * N, len(knode.theta)))
 
     for i, n1 in G.nodes.iterrows():
         for j, n2 in G.nodes.iterrows():
             f, jac = knode(n1, n2, jac=True)
-            DVx[i*N+j, :] = jac
+            DVx[i * N + j, :] = -np.array(jac) / Vx[i * N + j]**2
 
-    return kappa, dK, np.sum(dK.diagonal()[:, None] * DVx, axis=0)
+    dKdV = np.sum(dKdZ.diagonal()[:, None] * DVx, axis=0)
+
+    # YDq_raw, _ = sp.linalg.cg(linsys, np.kron(D, D) * qx, atol=1e-7)
+    # YDq_raw = YDq * (1 - q)**2
+    # dKdq = ((2 / q) + 2 / (1 - q)) * kappa - 2 / (1 - q)**3 * Yp.dot(Dx / Vx * YDq)
+    dKdq = 2 / (1 - q) * px.dot(YDq) - 2 / (1 - q)**3 * Yp.dot(np.kron(D, D) / Vx * YDq)
+
+    return kappa, dKdZ, dKdV, dKdq
 
 
 weighted_graph1 = nx.Graph(title='H2O')
@@ -104,11 +118,11 @@ mlgk = MarginalizedGraphKernel(knode, kedge, q=0.1)
 
 R, dR = mlgk([graph], eval_gradient=True, nodal=False)
 
-print(mlgk.hyperparameters)
+print('mlgk.hyperparameters', mlgk.hyperparameters)
 
-print(R)
+print('R\n', R, sep='')
 
-print(dR)
+print('dR\n', dR, sep='')
 
 # print(R.sum())
 
@@ -116,13 +130,21 @@ print(dR)
 
 # print(mlgk.backend.source)
 
-K, dKdZ, dKdV = MLGK(graph, knode, kedge, q=0.1, q0=0.1)
+eps = 1e-5
 
-print(K)
+K, dKdZ, dKdV, dKdq = MLGK(graph, knode, kedge, q=0.1, q0=0.1)
+Kr, _, _, _ = MLGK(graph, knode, kedge, q=0.1 + eps, q0=0.1 + eps)
+Kl, _, _, _ = MLGK(graph, knode, kedge, q=0.1 - eps, q0=0.1 - eps)
 
-print(dKdZ)
+print('K\n', K, sep='')
 
-print(dKdV)
+print('dKdZ\n', dKdZ, sep='')
+
+print('dKdV\n', dKdV, sep='')
+
+print('dKdq\n', dKdq, sep='')
+
+print('dKdq::numeric\n', (Kr - Kl) / (2 * eps), sep='')
 
 eps = 1e-2
 for i in range(len(mlgk.theta)):
@@ -140,4 +162,4 @@ for i in range(len(mlgk.theta)):
 
     mlgk.theta = theta
 
-    print((Rr - Rl)/(2 * eps))
+    print('dK/d_%d' % i, (Rr - Rl)/(2 * eps))
