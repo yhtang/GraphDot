@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "util_cuda.h"
 #include "graph.h"
+#include "fmath.h"
 
 namespace graphdot {
 
@@ -180,9 +181,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             const int   i1 = i / n2;
             const int   i2 = i % n2;
-            const float d1 = g1.degree[i1] / (1 - q);
-            const float d2 = g2.degree[i2] / (1 - q);
-            const float dx = d1 * d2;
+            const float d1 = g1.degree[i1];
+            const float d2 = g2.degree[i2];
+            const float dx = d1 * d2 / ipow<2>(1 - q);
             const float vx = node_kernel(g1.node[i1], g2.node[i2]);
 
             // b  = Dx . qx
@@ -210,11 +211,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             scratch.r(i + N) = rX;
             scratch.z(i + N) = zX;
             scratch.p(i + N) = pX;
-
-            // Ap = diag(A . p0)
-            //    = Dx . Vx^-1 . p0
-            scratch.Ap(i    ) = dx / vx * p0;
-            scratch.Ap(i + N) = dx / vx * pX;
         }
         __syncthreads();
 
@@ -222,6 +218,22 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
         int k;
         for (k = 0; k < N; ++k) {
+            // Ap = A * p, diagonal part
+            // diag(A . p0) = Dx . Vx^-1 . p0
+            for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                const int i1 = i / n2;
+                const int i2 = i % n2;
+                const float d1 = g1.degree[i1];
+                const float d2 = g2.degree[i2];
+                const float dx = d1 * d2 / ipow<2>(1 - q);
+                const float vx = node_kernel(g1.node[i1], g2.node[i2]);
+            
+                #pragma unroll 2
+                for(int k = 0; k < 2; ++k) {
+                    scratch.Ap(i + k * N)  = dx / vx * scratch.p(i + k * N);
+                }
+            }
+            __syncthreads();
 
             // Ap = A * p, off-diagonal part
             for (int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local) {
@@ -415,22 +427,14 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             if (rTr < 1e-20f * N * N * 2) break;
 
+            // beta = rTz_next / rTz;
             auto beta = rTz_next / rTz;
 
             // p = r + beta * p;
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                const int i1 = i / n2;
-                const int i2 = i % n2;
-                const float d1 = g1.degree[i1] / (1 - q);
-                const float d2 = g2.degree[i2] / (1 - q);
-                const float dx = d1 * d2;
-                const float vx = node_kernel(g1.node[i1], g2.node[i2]);
-            
                 #pragma unroll 2
                 for(int k = 0; k < 2; ++k) {
-                    const float p  = scratch.z(i + k * N) + beta * scratch.p(i + k * N);
-                    scratch.p(i + k * N)   = p;
-                    scratch.Ap(i + k * N)  = dx / vx * p;
+                    scratch.p(i + k * N) = scratch.z(i + k * N) + beta * scratch.p(i + k * N);;
                 }
             }
             __syncthreads();
