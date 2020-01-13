@@ -152,7 +152,14 @@ extern "C" {
                     }
                     __syncthreads();
 
-                    // solver_t::derivative_q(jac + jac_starts[0]);
+                    solver_t::derivative_q(
+                        node_kernel,
+                        g1, g2,
+                        p1, p2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[0],
+                        q);
 
                     solver_t::derivative_node(
                         node_kernel,

@@ -462,6 +462,47 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
     }
 
     template<class NodeKernel>
+    __inline__ __device__ static void derivative_q(
+        NodeKernel const node_kernel,
+        Graph const    g1,
+        Graph const    g2,
+        float const  * p1,
+        float const  * p2,
+        scratch_t      scratch,
+        char * const   cache,
+        float * const  dK,
+        const float    q) {
+
+        using namespace graphdot::cuda;
+
+        const int lane = laneid();
+        const int n1   = g1.n_node;
+        const int n2   = g2.n_node;
+        const int N    = n1 * n2;
+
+        float dq_local = 0;
+
+        float rrq = 1.0f / (1.0f - q);
+        float rrq3 = rrq * rrq * rrq;
+
+        for (int i = threadIdx.x; i < N; i += blockDim.x) {
+            const int i1 = i / n2;
+            const int i2 = i % n2;
+            const float rd1 = g1.degree[i1];// / (1 - q);
+            const float rd2 = g2.degree[i2];// / (1 - q);
+            const float rdx = rd1 * rd2;        
+            const float YDq = scratch.x(i);
+            const float Yp  = scratch.x(i + N);
+            const float v = node_kernel(g1.node[i1], g2.node[i2]);
+
+            dq_local += 2 * rrq * p1[i1] * p2[i2] * YDq - 2 * rrq3 * Yp * rdx / v * YDq;
+        }
+
+        dq_local = warp_sum(dq_local);
+        if (lane == 0) atomicAdd(dK, dq_local);
+    }
+
+    template<class NodeKernel>
     __inline__ __device__ static void derivative_node(
         NodeKernel const node_kernel,
         Graph const    g1,
