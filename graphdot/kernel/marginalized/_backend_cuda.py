@@ -116,8 +116,7 @@ class CUDABackend(Backend):
     @property
     @functools.lru_cache(maxsize=1)
     def template(self):
-        # return Template(os.path.join(os.path.dirname(__file__), 'template.cu'))
-        return Template(os.path.join(os.path.dirname(__file__), 'template_derivative.cu'))
+        return Template(os.path.join(os.path.dirname(__file__), 'template.cu'))
 
     @property
     def source(self):

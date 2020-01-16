@@ -67,20 +67,35 @@ extern "C" {
                 }
             }
 
-            solver_t::compute(node_kernel, edge_kernel, g1, g2, scratch, shmem, q, q0);
+            if (?{traits.eval_gradient is True}) {
+                solver_t::compute_duo(
+                    node_kernel,
+                    edge_kernel,
+                    g1, g2,
+                    scratch,
+                    shmem,
+                    p1, p2,
+                    q, q0);
+            } else {
+                solver_t::compute(
+                    node_kernel,
+                    edge_kernel,
+                    g1, g2,
+                    scratch,
+                    shmem,
+                    q, q0);
+            }
             __syncthreads();
 
             /********* post-processing *********/
 
             // apply starting probability and min-path truncation
-            for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                int i1 = i / n2;
-                int i2 = i % n2;
-                auto r = scratch.x(i);
-                if (?{traits.lmin == 1}) {
-                    r -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+            if (?{traits.lmin == 1}) {
+                for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                    int i1 = i / n2;
+                    int i2 = i % n2;
+                    scratch.x(i) -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
-                scratch.x(i) = r * p1[i1] * p2[i2];
             }
 
             // write to output buffer
@@ -88,23 +103,24 @@ extern "C" {
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
                     int i2 = i % n2;
-                    auto r = scratch.x(i);
-                    out[I1 + i1 + i2 * g1.n_node] = r;
+                    out[I1 + i1 + i2 * g1.n_node] = scratch.x(i) * p1[i1] * p2[i2];
                 }
             }
             if (?{traits.nodal is True}) {
                 if (?{traits.diagonal is True}) {
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
-                        out[I1 + i1] = scratch.x(i1 + i1 * n1);
+                        out[I1 + i1] = scratch.x(i1 + i1 * n1) * p1[i1] * p1[i1];
                     }
                 } else {
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
-                        auto r = scratch.x(i);
+                        auto r = scratch.x(i) * p1[i1] * p2[i2];
                         out[(I1 + i1) + (I2 + i2) * out_h] = r;
                         if (?{traits.symmetric is True}) {
-                            if (job.x != job.y) out[(I2 + i2) + (I1 + i1) * out_h] = r;
+                            if (job.x != job.y) {
+                                out[(I2 + i2) + (I1 + i1) * out_h] = r;
+                            }
                         }
                     }    
                 }
@@ -112,7 +128,9 @@ extern "C" {
             if (?{traits.nodal is False}) {
                 float32 sum = 0;
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                    sum += scratch.x(i);
+                    int i1 = i / n2;
+                    int i2 = i % n2;
+                    sum += scratch.x(i) * p1[i1] * p2[i2];
                 }
                 sum = graphdot::cuda::warp_sum(sum);
                 if (graphdot::cuda::laneid() == 0) {
@@ -123,6 +141,56 @@ extern "C" {
                         if (?{traits.symmetric is True}) {
                             if (job.x != job.y) {
                                 atomicAdd(out + I2 + I1 * out_h, sum);
+                            }
+                        }
+                    }
+                }
+
+                if (?{traits.eval_gradient is True}) {
+
+                    constexpr static int jac_starts[] {
+                        0,
+                        1,
+                        1 + node_kernel.jac_dims,
+                        1 + node_kernel.jac_dims + edge_kernel.jac_dims
+                    };
+
+                    __shared__ float jac[jac_starts[3]];
+
+                    for (int i = threadIdx.x; i < jac_starts[3]; i += blockDim.x) {
+                        jac[i] = 0;
+                    }
+                    __syncthreads();
+
+                    solver_t::derivative_q(
+                        node_kernel,
+                        g1, g2,
+                        p1, p2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[0],
+                        q);
+
+                    solver_t::derivative_node(
+                        node_kernel,
+                        g1, g2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[1],
+                        q);
+
+                    solver_t::derivative_edge(
+                        edge_kernel,
+                        g1, g2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[2]);
+
+                    for (int i = threadIdx.x; i < jac_starts[3]; i += blockDim.x) {
+                        out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                        if (?{traits.symmetric is True}) {
+                            if (job.x != job.y) {
+                                out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = jac[i];
                             }
                         }
                     }

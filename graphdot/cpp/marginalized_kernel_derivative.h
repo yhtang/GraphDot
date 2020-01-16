@@ -425,7 +425,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTr      = sum1;
             rTz_next = sum2;
 
-            if (rTr < 1e-20f * N * N * 2) break;
+            if (sqrtf(rTr) < 1e-10f * 2 * N) break;
 
             // beta = rTz_next / rTz;
             auto beta = rTz_next / rTz;
@@ -630,7 +630,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
                     octile octile1 {cache + p1 * shmem_bytes_per_warp};
                     octile octile2 {cache + p2 * shmem_bytes_per_warp + octile::size_bytes + nzlist::size_bytes};
-                    // rhs    rhs     {cache + warp_id_local * shmem_bytes_per_warp + octile::size_bytes * 2 + nzlist::size_bytes * 2};
                     float * YDq = (float *)(cache + warp_id_local * shmem_bytes_per_warp + octile::size_bytes * 2 + nzlist::size_bytes * 2);
                     float * Yp  = YDq + octile_w * octile_w;
 
