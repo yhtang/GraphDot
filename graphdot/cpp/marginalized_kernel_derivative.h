@@ -124,7 +124,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
     // Expand a submatrix in compact format in shared memory
     template<class CompactTile>
-    __device__ __inline__ static void load(const int lane, CompactTile const & ctile, octile & oct, nzlist & nzl, octile & swap) {
+    __device__ __inline__ static void load(const int lane, CompactTile const ctile, octile oct, nzlist nzl, octile swap) {
         
         using namespace graphdot::cuda;
         
