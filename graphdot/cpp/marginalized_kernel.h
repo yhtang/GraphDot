@@ -179,9 +179,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             const int   i1 = i / n2;
             const int   i2 = i % n2;
-            const float d1 = g1.degree[i1] / (1 - q);
-            const float d2 = g2.degree[i2] / (1 - q);
-            const float dx = d1 * d2;
+            const float d1 = g1.degree[i1];
+            const float d2 = g2.degree[i2];
+            const float dx = d1 * d2 / ipow<2>(1 - q);
             const float vx = node_kernel(g1.node[i1], g2.node[i2]);
 
             // b  = Dx . qx
@@ -383,6 +383,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             if (rTr < 1e-20f * N * N) break;
 
+            // beta = rTz_next / rTz;
             auto beta = rTz_next / rTz;
 
             // p = r + beta * p;
