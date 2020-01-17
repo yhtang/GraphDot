@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import copy
+from collections import namedtuple
 import numpy as np
 from graphdot.util import Timer
 from ._backend_factory import backend_factory
@@ -50,30 +51,23 @@ class MarginalizedGraphKernel:
             Note that a custom probability does not have to be normalized.
         q: float in (0, 1)
             The probability for the random walk to stop during each step.
-        context: :py:class:`pycuda.driver.Context` instance
-            The CUDA context for launching kernels, Will use a default one if
-            none is given.
-        block_per_sm: int
-            Tunes the GPU kernel.
-        block_size: int
-            Tunes the GPU kernel.
     """
-    class _Traits:
-        NODAL = 1
-        BLOCK = 2
-        SYMMETRIC = 4
-        LMIN1 = 8
-        DIAGONAL = 16
+    trait_t = namedtuple(
+        'Traits', 'diagonal, symmetric, nodal, lmin, eval_gradient'
+    )
 
-        def __new__(cls, **kwargs):
-            traits = 0
-            nodal = kwargs.pop('nodal', False)
-            traits |= cls.NODAL if nodal is not False else 0
-            traits |= cls.BLOCK if nodal == 'block' else 0
-            traits |= cls.SYMMETRIC if kwargs.pop('symmetric', False) else 0
-            traits |= cls.LMIN1 if kwargs.pop('lmin1', False) else 0
-            traits |= cls.DIAGONAL if kwargs.pop('diagonal', False) else 0
-            return traits
+    @classmethod
+    def traits(cls, diagonal=False, symmetric=False, nodal=False, lmin=0,
+               eval_gradient=False):
+        traits = cls.trait_t(
+            diagonal, symmetric, nodal, lmin, eval_gradient
+        )
+        if traits.eval_gradient is True:
+            if nodal is not False:
+                raise ValueError(
+                    'Gradients can only be evaluated with nodal=False'
+                )
+        return traits
 
     def __init__(self, node_kernel, edge_kernel, p='default', q=0.01,
                  q_bounds=(1e-4, 1 - 1e-4), backend='auto'):
@@ -95,7 +89,8 @@ class MarginalizedGraphKernel:
         else:
             return p
 
-    def __call__(self, X, Y=None, nodal=False, lmin=0, timer=False):
+    def __call__(self, X, Y=None, eval_gradient=False, nodal=False, lmin=0,
+                 timer=False):
         """Compute pairwise similarity matrix between graphs
 
         Parameters
@@ -124,10 +119,16 @@ class MarginalizedGraphKernel:
         """
         timer = Timer()
         backend = self.backend
+        traits = self.traits(
+            symmetric=Y is None,
+            nodal=nodal,
+            lmin=lmin,
+            eval_gradient=eval_gradient
+        )
 
         ''' generate jobs '''
         timer.tic('generating jobs')
-        if Y is None:
+        if traits.symmetric:
             i, j = np.triu_indices(len(X))
             i, j = i.astype(np.uint32), j.astype(np.uint32)
         else:
@@ -142,9 +143,9 @@ class MarginalizedGraphKernel:
 
         ''' create output buffer '''
         timer.tic('creating output buffer')
-        if Y is None:
+        if traits.symmetric:
             starts = backend.zeros(len(X) + 1, dtype=np.uint32)
-            if nodal is True:
+            if traits.nodal is True:
                 sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
                 np.cumsum(sizes, out=starts[1:])
                 n_nodes_X = int(starts[-1])
@@ -154,7 +155,7 @@ class MarginalizedGraphKernel:
                 output_shape = (len(X), len(X))
         else:
             starts = backend.zeros(len(X) + len(Y) + 1, dtype=np.uint32)
-            if nodal is True:
+            if traits.nodal is True:
                 sizes = np.array([len(g.nodes) for g in X]
                                  + [len(g.nodes) for g in Y],
                                  dtype=np.uint32)
@@ -167,26 +168,26 @@ class MarginalizedGraphKernel:
                 starts[:len(X)] = np.arange(len(X))
                 starts[len(X):] = np.arange(len(Y) + 1)
                 output_shape = (len(X), len(Y))
-        output = backend.empty(output_shape[0] * output_shape[1], np.float32)
+        if traits.eval_gradient is True:
+            output_shape = (*output_shape, 1 + self.n_dims)
+        output = backend.empty(int(np.prod(output_shape)), np.float32)
         timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
         timer.tic('calling GPU kernel (overall)')
-        traits = self._Traits(symmetric=Y is None,
-                              nodal=nodal,
-                              lmin1=lmin == 1)
-        backend(np.concatenate((X, Y)) if Y is not None else X,
-                self.node_kernel,
-                self.edge_kernel,
-                self.p,
-                self.q,
-                jobs,
-                starts,
-                output,
-                output_shape,
-                np.uint32(traits),
-                timer,
-                )
+        backend(
+            np.concatenate((X, Y)) if Y is not None else X,
+            self.node_kernel,
+            self.edge_kernel,
+            self.p,
+            self.q,
+            jobs,
+            starts,
+            output,
+            output_shape,
+            traits,
+            timer,
+        )
         timer.toc('calling GPU kernel (overall)')
 
         ''' collect result '''
@@ -198,7 +199,10 @@ class MarginalizedGraphKernel:
             timer.report(unit='ms')
         timer.reset()
 
-        return output
+        if traits.eval_gradient is True:
+            return output[:, :, 0], output[:, :, 1:]
+        else:
+            return output
 
     def diag(self, X, nodal=False, lmin=0, timer=False):
         """Compute the self-similarities for a list of graphs
@@ -263,21 +267,19 @@ class MarginalizedGraphKernel:
 
         ''' call GPU kernel '''
         timer.tic('calling GPU kernel (overall)')
-        traits = self._Traits(diagonal=True,
-                              nodal=nodal,
-                              lmin1=lmin == 1)
-        backend(X,
-                self.node_kernel,
-                self.edge_kernel,
-                self.p,
-                self.q,
-                jobs,
-                starts,
-                output,
-                (output_length, 1),
-                traits,
-                timer,
-                )
+        backend(
+            X,
+            self.node_kernel,
+            self.edge_kernel,
+            self.p,
+            self.q,
+            jobs,
+            starts,
+            output,
+            (output_length, 1),
+            self.traits(diagonal=True, nodal=nodal, lmin=lmin),
+            timer,
+        )
         timer.toc('calling GPU kernel (overall)')
 
         ''' post processing '''
@@ -308,32 +310,37 @@ class MarginalizedGraphKernel:
         return len(self.theta)
 
     @property
-    def theta_folded(self):
-        return [self.q,
-                self.node_kernel.theta,
-                self.edge_kernel.theta
-                ]
+    def hyperparameters(self):
+        return namedtuple(
+            'GraphKernelHyperparameters',
+            ['q', 'node', 'edge']
+        )(self.q,
+          self.node_kernel.theta,
+          self.edge_kernel.theta)
 
     @property
     def theta(self):
-        return np.log(np.fromiter(flatten(self.theta_folded), np.float))
+        return np.log(np.fromiter(flatten(self.hyperparameters), np.float))
 
     @theta.setter
     def theta(self, value):
         (self.q,
          self.node_kernel.theta,
          self.edge_kernel.theta
-         ) = fold_like(np.exp(value), self.theta_folded)
+         ) = fold_like(np.exp(value), self.hyperparameters)
 
     @property
-    def bounds_folded(self):
-        return (self.q_bounds,
-                self.node_kernel.bounds,
-                self.edge_kernel.bounds)
+    def hyperparameter_bounds(self):
+        return namedtuple(
+            'GraphKernelHyperparameterBounds',
+            ['q', 'node', 'edge']
+        )(self.q_bounds,
+          self.node_kernel.bounds,
+          self.edge_kernel.bounds)
 
     @property
     def bounds(self):
-        return np.log(np.fromiter(flatten(self.bounds_folded),
+        return np.log(np.fromiter(flatten(self.hyperparameter_bounds),
                                   np.float)).reshape(-1, 2, order='C')
 
     def clone_with_theta(self, theta):

@@ -21,6 +21,18 @@ from ._octilegraph import OctileGraph
 
 
 class CUDABackend(Backend):
+    """
+
+    Parameters
+    ----------
+    context: :py:class:`pycuda.driver.Context` instance
+        The CUDA context for launching kernels, Will use a default one if
+        none is given.
+    block_per_sm: int
+        Tunes the GPU kernel.
+    block_size: int
+        Tunes the GPU kernel.
+    """
 
     @staticmethod
     def array(ndarray):
@@ -122,6 +134,40 @@ class CUDABackend(Backend):
             self._module, self._compiler_message = self._compile(self.source)
         return self._module
 
+    @staticmethod
+    def gencode_kernel(kernel, name):
+        fun, jac = kernel.gen_expr('x1', 'x2', jac=True)
+
+        kernel_src = Template(r'''
+        using ${name}_theta_t = ${theta_t};
+
+        struct ${name}_t : ${name}_theta_t {
+
+            constexpr static int jac_dims = ${jac_dims};
+
+            template<class X> __device__ __inline__
+            auto operator() (X const &x1, X const &x2) const {
+                return ${expr};
+            }
+
+            template<class X> __device__ __inline__
+            void _j_a_c_o_b_i_a_n_(float j[], X const &x1, X const &x2) const {
+                ${jac;\n};
+            }
+        };
+
+        __constant__ ${name}_t ${name};
+        ''').render(
+            name=name,
+            jac_dims=len(jac),
+            theta_t=decltype(kernel),
+            expr=fun,
+            # jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
+            jac=['j[{}] = {}'.format(i, expr) for i, expr in enumerate(jac)],
+        )
+
+        return kernel_src
+
     def __call__(self, graphs, node_kernel, edge_kernel, p, q, jobs, starts,
                  output, output_shape, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
@@ -159,42 +205,16 @@ class CUDABackend(Backend):
             edge_kernel = TensorProduct(weight=_Multiply(),
                                         label=edge_kernel)
 
-        node_kernel_src = Template(r'''
-        using node_theta_t = ${theta_t};
+        node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')
+        edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel')
 
-        struct node_kernel_t : node_theta_t {
-            template<class V> __device__ __inline__
-            auto operator() (V const &v1, V const &v2) const {
-                return ${expr};
-            }
-        };
-
-        __constant__ node_kernel_t node_kernel;
-        ''').render(
-            theta_t=decltype(node_kernel),
-            expr=node_kernel.gen_expr('v1', 'v2')
-        )
-
-        edge_kernel_src = Template(r'''
-        using edge_theta_t = ${theta_t};
-
-        struct edge_kernel_t : edge_theta_t {
-            template<class T> __device__ __inline__
-            auto operator() (T const &e1, T const &e2) const {
-                return ${expr};
-            }
-        };
-
-        __constant__ edge_kernel_t edge_kernel;
-        ''').render(
-            theta_t=decltype(edge_kernel),
-            expr=edge_kernel.gen_expr('e1', 'e2')
-        )
-
-        self.source = self.template.render(node_kernel=node_kernel_src,
-                                           edge_kernel=edge_kernel_src,
-                                           node_t=decltype(node_type),
-                                           edge_t=decltype(edge_type))
+        with self.template.context(traits=traits) as template:
+            self.source = template.render(
+                node_kernel=node_kernel_src,
+                edge_kernel=edge_kernel_src,
+                node_t=decltype(node_type),
+                edge_t=decltype(edge_type)
+            )
         timer.toc('code generation')
 
         ''' JIT '''
@@ -211,7 +231,7 @@ class CUDABackend(Backend):
                                  // self.device.WARP_SIZE)
 
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        self._allocate_scratch(launch_block_count, max_graph_size**2)
+        self._allocate_scratch(launch_block_count, 2 * max_graph_size**2)
 
         p_node_kernel, _ = self.module.get_global('node_kernel')
         cuda.memcpy_htod(p_node_kernel, np.array([node_kernel.state],
@@ -235,9 +255,9 @@ class CUDABackend(Backend):
             i_job_global,
             np.uint32(len(jobs)),
             np.uint32(output_shape[0]),
+            np.uint32(output_shape[1]),
             np.float32(q),
             np.float32(q),  # placeholder for q0
-            np.uint32(traits),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,
