@@ -1,3 +1,6 @@
+## 0.3.1
+- Analytic computation of graph kernel derivatives with respect to hyperparameters.
+
 ## 0.3.0
 - Users can now define new base kernels easily using SymPy expression #45.
 - Better scikit-learn interoperability.
