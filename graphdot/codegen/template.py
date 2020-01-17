@@ -44,7 +44,7 @@ class Template:
         """
 
         text = self.template
-        for symbol in substitutions:
+        for symbol in sorted(substitutions, key=lambda s: (-len(s), s)):
             repl = substitutions[symbol]
             if isinstance(repl, (list, tuple)):
                 pattern = r'\${%s([^}]*)}' % symbol
