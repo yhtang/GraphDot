@@ -35,7 +35,7 @@ def test_simple_kernel(kernel):
     assert(kernel(-inf, 0) <= 1)
     ''' random input '''
     random.seed(0)
-    for _ in range(10000):
+    for _ in range(1000):
         i = random.paretovariate(0.1)
         j = random.paretovariate(0.1)
         assert(kernel(i, j) >= 0 and kernel(i, j) <= 1)
@@ -64,7 +64,6 @@ def test_constant_kernel():
     assert(kernel(1.0, 'a') == 1)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
 
 
 def test_kronecker_delta_kernel():
@@ -86,7 +85,6 @@ def test_kronecker_delta_kernel():
     assert(kernel(1.0, 'a') == 0.5)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
 
 
 def test_square_exponential_kernel():
@@ -101,7 +99,6 @@ def test_square_exponential_kernel():
     assert(kernel(inf, -inf) == 0)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
 
 
 def test_multiply_quasikernel():
@@ -115,7 +112,6 @@ def test_multiply_quasikernel():
         assert(kernel(r1, r2) == r1 * r2)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
-    assert(isinstance(kernel.gen_constexpr('x', 'y'), str))
     ''' representation generation '''
     assert(isinstance(str(kernel), str))
     assert(isinstance(repr(kernel), str))
@@ -139,7 +135,7 @@ def test_tensor_product_2(k1, k2):
             assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
                    == pytest.approx(mirror(dict(x=i1, y=i2),
                                            dict(x=j1, y=j2))))
-    for _ in range(10000):
+    for _ in range(1000):
         i1 = random.paretovariate(0.1)
         j1 = random.paretovariate(0.1)
         i2 = random.paretovariate(0.1)
@@ -160,7 +156,6 @@ def test_tensor_product_2(k1, k2):
     assert(repr(k2) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
-    assert(isinstance(k.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -194,7 +189,6 @@ def test_tensor_product_3(k1, k2, k3):
     assert(repr(k3) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
-    assert(isinstance(k.gen_constexpr('x', 'y'), str))
 
 
 # # @pytest.mark.parametrize('kernel', kernels)
@@ -229,7 +223,7 @@ def test_kernel_add_constant(kernel):
         random.seed(0)
         mirror = eval(repr(kadd))  # representation meaningness test
         assert(mirror.theta == kadd.theta)
-        for _ in range(10000):
+        for _ in range(1000):
             i = random.paretovariate(0.1)
             j = random.paretovariate(0.1)
             assert(kadd(i, j) == kernel(i, j) + 1)
@@ -246,7 +240,6 @@ def test_kernel_add_constant(kernel):
         kadd.theta = kadd.theta
         ''' C++ code generation '''
         assert(kadd.dtype.isalignedstruct)
-        assert(isinstance(kadd.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -277,7 +270,6 @@ def test_kernel_add_kernel(k1, k2):
     kadd.theta = kadd.theta
     ''' C++ code generation '''
     assert(kadd.dtype.isalignedstruct)
-    assert(isinstance(kadd.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('kernel', kernels)
@@ -287,7 +279,7 @@ def test_kernel_mul_constant(kernel):
         random.seed(0)
         mirror = eval(repr(kmul))  # representation meaningness test
         assert(mirror.theta == kmul.theta)
-        for _ in range(10000):
+        for _ in range(1000):
             i = random.paretovariate(0.1)
             j = random.paretovariate(0.1)
             assert(kmul(i, j) == kernel(i, j) * 2)
@@ -304,7 +296,6 @@ def test_kernel_mul_constant(kernel):
         kmul.theta = kmul.theta
         ''' C++ code generation '''
         assert(kmul.dtype.isalignedstruct)
-        assert(isinstance(kmul.gen_constexpr('x', 'y'), str))
 
 
 @pytest.mark.parametrize('k1', kernels)
@@ -335,4 +326,3 @@ def test_kernel_mul_kernel(k1, k2):
     kmul.theta = kmul.theta
     ''' C++ code generation '''
     assert(kmul.dtype.isalignedstruct)
-    assert(isinstance(kmul.gen_constexpr('x', 'y'), str))

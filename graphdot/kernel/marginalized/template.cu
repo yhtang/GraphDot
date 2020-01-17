@@ -18,14 +18,6 @@ using solver_t  = graphdot::marginalized::labeled_compact_block_dynsched_pcg<gra
 
 __constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
 
-struct trait_t {
-    constexpr static uint32 NODAL     = 1;
-    constexpr static uint32 BLOCK     = 2;
-    constexpr static uint32 SYMMETRIC = 4;
-    constexpr static uint32 LMIN1     = 8;
-    constexpr static uint32 DIAGONAL  = 16;
-};
-
 extern "C" {
     __global__ void graph_kernel_solver(
         graph_t const   * graphs,
@@ -33,13 +25,13 @@ extern "C" {
         scratch_t       * scratches,
         uint2           * jobs,
         uint32          * starts,
-        float32         * R,
+        float32         * out,
         uint32          * i_job_global,
         const uint32      n_jobs,
-        const uint32      R_stride,
+        const uint32      out_h,
+        const uint32      out_w,
         const float32     q,
-        const float32     q0,
-        const uint32      traits
+        const float32     q0
     ) {
         extern __shared__ char shmem[];
         __shared__ uint32 i_job;
@@ -63,73 +55,143 @@ extern "C" {
             auto const p1  = p[job.x];
             auto const p2  = p[job.y];
 
-            // flush output to zero for later atomic accumulations
-            if (!(traits & trait_t::NODAL) && threadIdx.x == 0) {
-                if (traits & trait_t::DIAGONAL) {
-                    R[I1] = 0.f;
+            // wipe output buffer for atomic accumulations
+            if (?{traits.nodal is False}) {
+                if (?{traits.diagonal is True}) {
+                    out[I1] = 0.f;
                 } else {
-                    R[I1 + I2 * R_stride] = 0.f;
-                    if ((traits & trait_t::SYMMETRIC) && job.x != job.y) {
-                        R[I2 + I1 * R_stride] = 0.f;
+                    out[I1 + I2 * out_h] = 0.f;
+                    if (?{traits.symmetric is True}) {
+                        if (job.x != job.y) out[I2 + I1 * out_h] = 0.f;
                     }
                 }
             }
 
-            solver_t::compute(node_kernel, edge_kernel, g1, g2, scratch, shmem, q, q0);
+            if (?{traits.eval_gradient is True}) {
+                solver_t::compute_duo(
+                    node_kernel,
+                    edge_kernel,
+                    g1, g2,
+                    scratch,
+                    shmem,
+                    p1, p2,
+                    q, q0);
+            } else {
+                solver_t::compute(
+                    node_kernel,
+                    edge_kernel,
+                    g1, g2,
+                    scratch,
+                    shmem,
+                    q, q0);
+            }
             __syncthreads();
 
             /********* post-processing *********/
 
-            // apply starting probability and 'lmins == 1'
-            for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                int i1 = i / n2;
-                int i2 = i % n2;
-                auto r = scratch.x(i);
-                if (traits & trait_t::LMIN1) {
-                    r -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+            // apply starting probability and min-path truncation
+            if (?{traits.lmin == 1}) {
+                for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                    int i1 = i / n2;
+                    int i2 = i % n2;
+                    scratch.x(i) -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
-                scratch.x(i) = r * p1[i1] * p2[i2];
             }
 
             // write to output buffer
-            if (traits & trait_t::NODAL) {
-                if (traits & trait_t::BLOCK) {
-                    for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                        int i1 = i / n2;
-                        int i2 = i % n2;
-                        auto r = scratch.x(i);
-                        R[I1 + i1 + i2 * g1.n_node] = r;
-                    }
-                } else if (traits & trait_t::DIAGONAL) {
+            if (?{traits.nodal == "block"}) {
+                for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                    int i1 = i / n2;
+                    int i2 = i % n2;
+                    out[I1 + i1 + i2 * g1.n_node] = scratch.x(i) * p1[i1] * p2[i2];
+                }
+            }
+            if (?{traits.nodal is True}) {
+                if (?{traits.diagonal is True}) {
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
-                        auto i = i1 + i1 * n2;
-                        auto r = scratch.x(i);
-                        R[I1 + i1] = r;
+                        out[I1 + i1] = scratch.x(i1 + i1 * n1) * p1[i1] * p1[i1];
                     }
                 } else {
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
-                        auto r = scratch.x(i);
-                        R[(I1 + i1) + (I2 + i2) * R_stride] = r;
-                        if ((traits & trait_t::SYMMETRIC) && job.x != job.y) {
-                            R[(I2 + i2) + (I1 + i1) * R_stride] = r;
+                        auto r = scratch.x(i) * p1[i1] * p2[i2];
+                        out[(I1 + i1) + (I2 + i2) * out_h] = r;
+                        if (?{traits.symmetric is True}) {
+                            if (job.x != job.y) {
+                                out[(I2 + i2) + (I1 + i1) * out_h] = r;
+                            }
                         }
-                    }
+                    }    
                 }
-            } else {
+            }
+            if (?{traits.nodal is False}) {
                 float32 sum = 0;
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                    sum += scratch.x(i);
+                    int i1 = i / n2;
+                    int i2 = i % n2;
+                    sum += scratch.x(i) * p1[i1] * p2[i2];
                 }
                 sum = graphdot::cuda::warp_sum(sum);
                 if (graphdot::cuda::laneid() == 0) {
-                    if (traits & trait_t::DIAGONAL) {
-                        atomicAdd(R + I1, sum);
+                    if (?{traits.diagonal is True}) {
+                        atomicAdd(out + I1, sum);
                     } else {
-                        atomicAdd(R + I1 + I2 * R_stride, sum);
-                        if ((traits & trait_t::SYMMETRIC) && job.x != job.y) {
-                            atomicAdd(R + I2 + I1 * R_stride, sum);
+                        atomicAdd(out + I1 + I2 * out_h, sum);
+                        if (?{traits.symmetric is True}) {
+                            if (job.x != job.y) {
+                                atomicAdd(out + I2 + I1 * out_h, sum);
+                            }
+                        }
+                    }
+                }
+
+                if (?{traits.eval_gradient is True}) {
+
+                    constexpr static int jac_starts[] {
+                        0,
+                        1,
+                        1 + node_kernel.jac_dims,
+                        1 + node_kernel.jac_dims + edge_kernel.jac_dims
+                    };
+
+                    __shared__ float jac[jac_starts[3]];
+
+                    for (int i = threadIdx.x; i < jac_starts[3]; i += blockDim.x) {
+                        jac[i] = 0;
+                    }
+                    __syncthreads();
+
+                    solver_t::derivative_q(
+                        node_kernel,
+                        g1, g2,
+                        p1, p2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[0],
+                        q);
+
+                    solver_t::derivative_node(
+                        node_kernel,
+                        g1, g2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[1],
+                        q);
+
+                    solver_t::derivative_edge(
+                        edge_kernel,
+                        g1, g2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[2]);
+
+                    for (int i = threadIdx.x; i < jac_starts[3]; i += blockDim.x) {
+                        out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                        if (?{traits.symmetric is True}) {
+                            if (job.x != job.y) {
+                                out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                            }
                         }
                     }
                 }

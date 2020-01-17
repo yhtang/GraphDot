@@ -45,16 +45,17 @@ def MLGK(G, knode, kedge, q, q0, nodal=False):
 
     Dx = np.kron(D / (1.0 - q), D / (1.0 - q))
     Ax = np.kron(A, A)
-
-    rhs = Dx * np.ones(N * N) * q * q / q0 / q0
     linsys = np.diag(Dx / Vx) - Ax * Ex
-    solution, _ = sp.linalg.cg(linsys, rhs, atol=1e-7,
-                               M=sp.diags([Vx / Dx], [0]))
+
+    qx = np.ones(N * N) * q * q / q0 / q0
+    px = np.ones(N * N)
+
+    solution, _ = sp.linalg.cg(linsys, Dx * qx, atol=1e-7)
 
     if nodal is True:
         return solution.reshape(N, -1)
     else:
-        return solution.sum()
+        return px.dot(solution)
 
 
 class Hybrid:
@@ -201,6 +202,51 @@ def test_mlgk_cross_similarity(caseitem):
             assert(x == pytest.approx(y, 1e-6))
         for x, y in zip(mlgk(G, G[1:],).ravel(), R[:, 1:].ravel()):
             assert(x == pytest.approx(y, 1e-6))
+
+
+@pytest.mark.parametrize('caseitem', case_dict.items())
+def test_mlgk_derivative(caseitem):
+    '''derivative w.r.t. hyperparameters'''
+
+    _, case = caseitem
+
+    print('Case', _)
+
+    G = case['graphs']
+    knode = case['knode']
+    kedge = case['kedge']
+    for q in case['q']:
+
+        mlgk = MarginalizedGraphKernel(knode, kedge, q=q)
+
+        R, dR = mlgk(G, nodal=False, eval_gradient=True)
+
+        assert(len(dR.shape) == 3)
+        assert(R.shape[0] == dR.shape[0])
+        assert(R.shape[1] == dR.shape[1])
+        assert(dR.shape[2] >= 1)
+
+        eps = 1e-4
+        for i in range(len(mlgk.theta)):
+
+            theta = mlgk.theta
+
+            t = np.exp(theta)
+            t[i] += eps
+            mlgk.theta = np.log(t)
+            Rr = mlgk(G)
+
+            t = np.exp(theta)
+            t[i] -= eps
+            mlgk.theta = np.log(t)
+            Rl = mlgk(G)
+
+            mlgk.theta = theta
+
+            dR_fdiff = (Rr - Rl) / (2 * eps)
+
+            for a, b in zip(dR[:, :, i].ravel(), dR_fdiff.ravel()):
+                assert(a == pytest.approx(b, 1e-2))
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())

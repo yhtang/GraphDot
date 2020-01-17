@@ -4,8 +4,6 @@ import numpy as np
 from graphdot.codegen.typetool import cpptype, rowtype
 from graphdot.cuda.array import umzeros, umempty
 
-__all__ = ['OctileGraph']
-
 # only works with python >= 3.6
 # @cpptype(n_node=np.int32, n_octile=np.int32, degree=np.uintp,
 #          node=np.uintp, octile=np.uintp)
