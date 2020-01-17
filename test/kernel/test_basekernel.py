@@ -35,7 +35,7 @@ def test_simple_kernel(kernel):
     assert(kernel(-inf, 0) <= 1)
     ''' random input '''
     random.seed(0)
-    for _ in range(10000):
+    for _ in range(1000):
         i = random.paretovariate(0.1)
         j = random.paretovariate(0.1)
         assert(kernel(i, j) >= 0 and kernel(i, j) <= 1)
@@ -135,7 +135,7 @@ def test_tensor_product_2(k1, k2):
             assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
                    == pytest.approx(mirror(dict(x=i1, y=i2),
                                            dict(x=j1, y=j2))))
-    for _ in range(10000):
+    for _ in range(1000):
         i1 = random.paretovariate(0.1)
         j1 = random.paretovariate(0.1)
         i2 = random.paretovariate(0.1)
@@ -223,7 +223,7 @@ def test_kernel_add_constant(kernel):
         random.seed(0)
         mirror = eval(repr(kadd))  # representation meaningness test
         assert(mirror.theta == kadd.theta)
-        for _ in range(10000):
+        for _ in range(1000):
             i = random.paretovariate(0.1)
             j = random.paretovariate(0.1)
             assert(kadd(i, j) == kernel(i, j) + 1)
@@ -279,7 +279,7 @@ def test_kernel_mul_constant(kernel):
         random.seed(0)
         mirror = eval(repr(kmul))  # representation meaningness test
         assert(mirror.theta == kmul.theta)
-        for _ in range(10000):
+        for _ in range(1000):
             i = random.paretovariate(0.1)
             j = random.paretovariate(0.1)
             assert(kmul(i, j) == kernel(i, j) * 2)
