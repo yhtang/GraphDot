@@ -52,14 +52,22 @@ class MarginalizedGraphKernel:
         q: float in (0, 1)
             The probability for the random walk to stop during each step.
     """
-    @staticmethod
-    def traits(diagonal=False, symmetric=False, nodal=False, lmin=0,
+    trait_t = namedtuple(
+        'Traits', 'diagonal, symmetric, nodal, lmin, eval_gradient'
+    )
+
+    @classmethod
+    def traits(cls, diagonal=False, symmetric=False, nodal=False, lmin=0,
                eval_gradient=False):
-        return namedtuple(
-            'Traits', 'diagonal, symmetric, nodal, lmin, eval_gradient'
-        )(
+        traits = cls.trait_t(
             diagonal, symmetric, nodal, lmin, eval_gradient
         )
+        if traits.eval_gradient is True:
+            if nodal is not False:
+                raise ValueError(
+                    'Gradients can only be evaluated with nodal=False'
+                )
+        return traits
 
     def __init__(self, node_kernel, edge_kernel, p='default', q=0.01,
                  q_bounds=(1e-4, 1 - 1e-4), backend='auto'):
@@ -111,10 +119,16 @@ class MarginalizedGraphKernel:
         """
         timer = Timer()
         backend = self.backend
+        traits = self.traits(
+            symmetric=Y is None,
+            nodal=nodal,
+            lmin=lmin,
+            eval_gradient=eval_gradient
+        )
 
         ''' generate jobs '''
         timer.tic('generating jobs')
-        if Y is None:
+        if traits.symmetric:
             i, j = np.triu_indices(len(X))
             i, j = i.astype(np.uint32), j.astype(np.uint32)
         else:
@@ -129,9 +143,9 @@ class MarginalizedGraphKernel:
 
         ''' create output buffer '''
         timer.tic('creating output buffer')
-        if Y is None:
+        if traits.symmetric:
             starts = backend.zeros(len(X) + 1, dtype=np.uint32)
-            if nodal is True:
+            if traits.nodal is True:
                 sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
                 np.cumsum(sizes, out=starts[1:])
                 n_nodes_X = int(starts[-1])
@@ -141,7 +155,7 @@ class MarginalizedGraphKernel:
                 output_shape = (len(X), len(X))
         else:
             starts = backend.zeros(len(X) + len(Y) + 1, dtype=np.uint32)
-            if nodal is True:
+            if traits.nodal is True:
                 sizes = np.array([len(g.nodes) for g in X]
                                  + [len(g.nodes) for g in Y],
                                  dtype=np.uint32)
@@ -154,7 +168,7 @@ class MarginalizedGraphKernel:
                 starts[:len(X)] = np.arange(len(X))
                 starts[len(X):] = np.arange(len(Y) + 1)
                 output_shape = (len(X), len(Y))
-        if eval_gradient is True:
+        if traits.eval_gradient is True:
             output_shape = (*output_shape, 1 + self.n_dims)
         output = backend.empty(int(np.prod(output_shape)), np.float32)
         timer.toc('creating output buffer')
@@ -171,12 +185,7 @@ class MarginalizedGraphKernel:
             starts,
             output,
             output_shape,
-            self.traits(
-                symmetric=Y is None,
-                nodal=nodal,
-                lmin=lmin,
-                eval_gradient=eval_gradient
-            ),
+            traits,
             timer,
         )
         timer.toc('calling GPU kernel (overall)')
@@ -190,7 +199,7 @@ class MarginalizedGraphKernel:
             timer.report(unit='ms')
         timer.reset()
 
-        if eval_gradient is True:
+        if traits.eval_gradient is True:
             return output[:, :, 0], output[:, :, 1:]
         else:
             return output
