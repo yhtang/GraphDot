@@ -124,18 +124,34 @@ class BaseKernel:
             # @cached_property
             @property
             def _vars_and_hypers(self):
-                return [*self._vars, *self._hyperdefs.keys()]
+                if not hasattr(self, '_vars_and_hypers_cached'):
+                    self._vars_and_hypers_cached = [
+                        *self._vars, *self._hyperdefs.keys()
+                    ]
+                return self._vars_and_hypers_cached
 
             # @cached_property
             @property
             def _fun(self):
-                return lambdify(self._vars_and_hypers, self._expr)
+                if not hasattr(self, '_fun_cached'):
+                    self._fun_cached = lambdify(
+                        self._vars_and_hypers,
+                        self._expr
+                    )
+                return self._fun_cached
+                # return lambdify(self._vars_and_hypers, self._expr)
 
             # @cached_property
             @property
             def _jac(self):
-                return [lambdify(self._vars_and_hypers, sy.diff(expr, h))
-                        for h in self._hyperdefs]
+                if not hasattr(self, '_jac_cached'):
+                    self._jac_cached = [
+                        lambdify(self._vars_and_hypers, sy.diff(expr, h))
+                        for h in self._hyperdefs
+                    ]
+                return self._jac_cached
+                # return [lambdify(self._vars_and_hypers, sy.diff(expr, h))
+                #         for h in self._hyperdefs]
 
             def __call__(self, x1, x2, jac=False):
                 if jac is True:
