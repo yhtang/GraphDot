@@ -20,7 +20,8 @@ class cached_property:
             raise TypeError(
                 "Cannot assign the same cached_property "
                 "to two different names "
-                f"({self.attrname!r} and {name!r})."
+                # f"({self.attrname!r} and {name!r})."
+                "({!r} and {name!r}).".format(self.attrname, name)
             )
 
     def __get__(self, instance, owner=None):
@@ -34,8 +35,13 @@ class cached_property:
             cache = instance.__dict__
         except AttributeError:
             msg = (
-                f"No '__dict__' attribute on {type(instance).__name__!r} "
-                f"instance to cache {self.attrname!r} property."
+                # f"No '__dict__' attribute on {type(instance).__name__!r} "
+                # f"instance to cache {self.attrname!r} property."
+                "No '__dict__' attribute on {!r} "
+                "instance to cache {!r} property.".format(
+                    type(instance).__name__,
+                    self.attrname
+                )
             )
             raise TypeError(msg) from None
         val = cache.get(self.attrname, _NOT_FOUND)
@@ -50,9 +56,14 @@ class cached_property:
                     except TypeError:
                         msg = (
                             "The '__dict__' attribute on "
-                            f"{type(instance).__name__!r} instance "
+                            # f"{type(instance).__name__!r} instance "
+                            "{!r} instance "
                             "does not support item assignment for "
-                            f"caching {self.attrname!r} property."
+                            # f"caching {self.attrname!r} property."
+                            "caching {!r} property.".format(
+                                type(instance).__name__,
+                                self.attrname,
+                            )
                         )
                         raise TypeError(msg) from None
         return val

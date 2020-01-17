@@ -162,7 +162,8 @@ class CUDABackend(Backend):
             jac_dims=len(jac),
             theta_t=decltype(kernel),
             expr=fun,
-            jac=[f'''j[{i}] = {expr}''' for i, expr in enumerate(jac)],
+            # jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
+            jac=['j[{}] = {}'.format(i, expr) for i, expr in enumerate(jac)],
         )
 
         return kernel_src
