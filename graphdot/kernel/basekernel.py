@@ -11,7 +11,6 @@ from sympy.utilities.lambdify import lambdify
 from graphdot.codegen import Template
 from graphdot.codegen.typetool import cpptype
 from graphdot.codegen.sympy_printer import cudacxxcode
-from graphdot.util.cached_property import cached_property
 
 __all__ = ['BaseKernel',
            'Constant',
@@ -122,15 +121,18 @@ class BaseKernel:
                                 )
                             )
 
-            @cached_property
+            # @cached_property
+            @property
             def _vars_and_hypers(self):
                 return [*self._vars, *self._hyperdefs.keys()]
 
-            @cached_property
+            # @cached_property
+            @property
             def _fun(self):
                 return lambdify(self._vars_and_hypers, self._expr)
 
-            @cached_property
+            # @cached_property
+            @property
             def _jac(self):
                 return [lambdify(self._vars_and_hypers, sy.diff(expr, h))
                         for h in self._hyperdefs]
