@@ -1,3 +1,6 @@
+## 0.3.2
+- Miscellaneous bug fixes.
+
 ## 0.3.1
 - Analytic computation of graph kernel derivatives with respect to hyperparameters.
 
