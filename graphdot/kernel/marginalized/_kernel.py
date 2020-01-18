@@ -90,7 +90,7 @@ class MarginalizedGraphKernel:
             return p
 
     def __call__(self, X, Y=None, eval_gradient=False, nodal=False, lmin=0,
-                 timer=False):
+                 timing=False):
         """Compute pairwise similarity matrix between graphs
 
         Parameters
@@ -195,7 +195,7 @@ class MarginalizedGraphKernel:
         output = output.reshape(*output_shape, order='F')
         timer.toc('collecting result')
 
-        if timer:
+        if timing:
             timer.report(unit='ms')
         timer.reset()
 
