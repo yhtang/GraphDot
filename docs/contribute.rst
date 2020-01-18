@@ -33,6 +33,7 @@ When submitting an issue, please try to follow the guidelines below:
      import graphdot; print('GraphDot', graphdot.__version__)
      import numpy; print('NumPy', numpy.__version__)
      import pycuda; print('PyCUDA', pycuda.VERSION)
+     import sympy; print('SymPy', sympy.__version__)
 
 
 Contributing Code

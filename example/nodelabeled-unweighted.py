@@ -6,10 +6,10 @@ import numpy as np
 import networkx as nx
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.marginalized.basekernel import TensorProduct
-from graphdot.kernel.marginalized.basekernel import SquareExponential
-from graphdot.kernel.marginalized.basekernel import KroneckerDelta
-from graphdot.kernel.marginalized.basekernel import Constant
+from graphdot.kernel.basekernel import TensorProduct
+from graphdot.kernel.basekernel import SquareExponential
+from graphdot.kernel.basekernel import KroneckerDelta
+from graphdot.kernel.basekernel import Constant
 
 # {1.0, 1} -- {2.0, 1}
 g1 = nx.Graph()

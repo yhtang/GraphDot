@@ -957,11 +957,13 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                     const float dK_dY_lower = -Yp[i1_lower * octile_h + i2] * YDq[j1 * octile_w + j2];
                                     float jac_upper[EdgeKernel::jac_dims];
                                     float jac_lower[EdgeKernel::jac_dims];
-                                    edge_kernel._j_a_c_o_b_i_a_n_(jac_upper, e1_upper, e2);
-                                    edge_kernel._j_a_c_o_b_i_a_n_(jac_lower, e1_lower, e2);
+                                    if (m1_upper) edge_kernel._j_a_c_o_b_i_a_n_(jac_upper, e1_upper, e2);
+                                    if (m1_lower) edge_kernel._j_a_c_o_b_i_a_n_(jac_lower, e1_lower, e2);
                                     #pragma unroll (EdgeKernel::jac_dims)
                                     for(int j = 0; j < EdgeKernel::jac_dims; ++j) {
-                                        dK_local[j] -= dK_dY_upper * jac_upper[j] + dK_dY_lower * jac_lower[j];
+                                        dK_local[j] -=
+                                            dK_dY_upper * (m1_upper ? jac_upper[j] : 0.f) + 
+                                            dK_dY_lower * (m1_lower ? jac_lower[j] : 0.f);
                                     }
                                 }
                             }
@@ -1003,7 +1005,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         #pragma unroll (EdgeKernel::jac_dims)
         for(int j = 0; j < EdgeKernel::jac_dims; ++j) {
             dK_local[j] = warp_sum(dK_local[j]);
-            if (lane == 0) atomicAdd(dK + j, dK_local[j]);
+            if (lane == 0) {
+                atomicAdd(dK + j, dK_local[j]);
+            }
         }
     }
 };
