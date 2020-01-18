@@ -1,5 +1,4 @@
 pytest
-scipy
 coverage
 pytest-cov
 pytest-benchmark
