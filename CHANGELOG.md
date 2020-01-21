@@ -1,3 +1,7 @@
+## 0.3.3
+- Allow M3 metric to use partial charge information.
+- Made the element, bond, and charge parameters adjustable in the M3 metric.
+
 ## 0.3.2
 - Miscellaneous bug fixes.
 
