@@ -13,7 +13,9 @@ from graphdot.kernel.basekernel import SquareExponential
 class M3:
     """The Marginalized MiniMax (M3) metric between molecules"""
 
-    def __init__(self, use_charge=False, adjacency='default', q=0.01):
+    def __init__(self, use_charge=False, adjacency='default', q=0.01,
+                 element_delta=0.2, bond_eps=0.02, charge_eps=0.2):
+
         self.use_charge = use_charge
         if adjacency == 'default':
             self.adjacency = AtomicAdjacency(shape='tent2', zoom=0.75)
@@ -22,12 +24,14 @@ class M3:
         self.q = q
         if use_charge:
             self.node_kernel = TensorProduct(
-                element=KroneckerDelta(0.2),
-                charge=SquareExponential(0.2),
+                element=KroneckerDelta(element_delta),
+                charge=SquareExponential(charge_eps),
             )
         else:
-            self.node_kernel = TensorProduct(element=KroneckerDelta(0.2))
-        self.edge_kernel = TensorProduct(length=SquareExponential(0.02))
+            self.node_kernel = TensorProduct(
+                element=KroneckerDelta(element_delta)
+            )
+        self.edge_kernel = TensorProduct(length=SquareExponential(bond_eps))
 
     def __call__(self, atoms1, atoms2):
         args = dict(use_charge=self.use_charge, adjacency=self.adjacency)
