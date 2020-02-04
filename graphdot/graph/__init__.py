@@ -9,6 +9,7 @@ graph formats.
 import uuid
 from itertools import product
 import numpy as np
+import warnings
 from scipy.spatial import cKDTree
 from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.minipandas import DataFrame
@@ -177,11 +178,9 @@ class Graph:
         i, j, w, r = list(zip(*[(i, j, w, r)
                                 for (i, j), (w, r) in edgedict.items()]))
 
-
         for y in x:
             if y > cutoff:
-                return warnings.warn("Zero degree atom detected." +
-                " Review length scale and cutoff setting.")
+                return warnings.warn("Zero degree atom detected.")
 
         edges = DataFrame({
             '!i': np.array(i, dtype=np.uint32),
