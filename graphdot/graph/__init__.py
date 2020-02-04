@@ -179,7 +179,7 @@ class Graph:
                                 for (i, j), (w, r) in edgedict.items()]))
 
         for y in x:
-            if y > cutoff:
+            if y > cutoff.all():
                 return warnings.warn("Zero degree atom detected.")
 
         edges = DataFrame({
