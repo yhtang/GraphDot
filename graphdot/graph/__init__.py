@@ -177,6 +177,12 @@ class Graph:
         i, j, w, r = list(zip(*[(i, j, w, r)
                                 for (i, j), (w, r) in edgedict.items()]))
 
+
+        for y in x:
+            if y > cutoff:
+                return warnings.warn("Zero degree atom detected." +
+                " Review length scale and cutoff setting.")
+
         edges = DataFrame({
             '!i': np.array(i, dtype=np.uint32),
             '!j': np.array(j, dtype=np.uint32),
