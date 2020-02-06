@@ -30,12 +30,12 @@ smiles_list = [
 graphs = [Graph.from_smiles(smi) for smi in smiles_list]
 
 # define node and edge kernelets
-knode = TensorProduct(aromatic=KroneckerDelta(0.8, 1.0),
+knode = TensorProduct(aromatic=KroneckerDelta(0.8),
                       charge=SquareExponential(1.0),
-                      element=KroneckerDelta(0.5, 1.0),
+                      element=KroneckerDelta(0.5),
                       hcount=SquareExponential(1.0))
 
-kedge = TensorProduct(order=KroneckerDelta(0.5, 1.0))
+kedge = TensorProduct(order=KroneckerDelta(0.5))
 
 # compose the marginalized graph kernel and compute pairwise similarity
 kernel = MarginalizedGraphKernel(knode, kedge, q=0.05)
