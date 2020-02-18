@@ -177,7 +177,6 @@ class Graph:
                     edgedict[(i, j)] = (w, r)
         i, j, w, r = list(zip(*[(i, j, w, r)
                                 for (i, j), (w, r) in edgedict.items()]))
-
         for y in x:
             if y.any() > cutoff.all():
                 return warnings.warn("Zero degree atom detected.")
@@ -188,6 +187,11 @@ class Graph:
             '!w': np.array(w, dtype=np.float32),
             'length': np.array(r, dtype=np.float32),
         })
+
+
+        print("nodes", nodes)
+        print("edgedict", edgedict)
+        print("edges", edges)
 
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
                    formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
