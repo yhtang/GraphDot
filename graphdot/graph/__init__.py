@@ -177,9 +177,14 @@ class Graph:
                     edgedict[(i, j)] = (w, r)
         i, j, w, r = list(zip(*[(i, j, w, r)
                                 for (i, j), (w, r) in edgedict.items()]))
-        for y in x:
-            if y.any() > cutoff.all():
-                return warnings.warn("Zero degree atom detected.")
+
+        for atom in edgedict.keys():
+            if atom[0] in nodes and atom[1] in nodes:
+                continue
+            elif atom[0] in nodes:
+                return warnings.warn("Zero degree atom detected:", atom[1])
+            else:
+                return warnings.warn("Zero degree atom detected:", atom[0])
 
         edges = DataFrame({
             '!i': np.array(i, dtype=np.uint32),
