@@ -9,6 +9,7 @@ graph formats.
 import uuid
 from itertools import product
 import numpy as np
+import warnings
 from scipy.spatial import cKDTree
 from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.minipandas import DataFrame
