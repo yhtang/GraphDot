@@ -185,8 +185,9 @@ class Graph:
             'length': np.array(r, dtype=np.float32),
         })
 
+        flat_atomkey = [i for slt in [*edgedict.keys()] for i in slt]
         for atom in nodes:
-            if atom not in i and atom not in j and atom not in w:
+            if atom not in flat_atomkey:
                 return warnings.warn("Zero degree atom found:" + str(atom))
 
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
