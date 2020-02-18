@@ -193,10 +193,6 @@ class Graph:
             'length': np.array(r, dtype=np.float32),
         })
 
-        print("nodes", nodes)
-        print("edgedict", edgedict)
-        print("edges", edges)
-
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
                    formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
 
