@@ -182,9 +182,9 @@ class Graph:
             if atom[0] in nodes and atom[1] in nodes:
                 continue
             elif atom[0] in nodes:
-                return warnings.warn("Zero degree atom detected:", atom[1])
+                return warnings.warn("Zero degree atom detected:" + str(atom[1]))
             else:
-                return warnings.warn("Zero degree atom detected:", atom[0])
+                return warnings.warn("Zero degree atom detected:" + str(atom[0]))
 
         edges = DataFrame({
             '!i': np.array(i, dtype=np.uint32),
