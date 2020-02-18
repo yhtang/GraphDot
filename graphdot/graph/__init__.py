@@ -186,7 +186,7 @@ class Graph:
         })
 
         flat_atomkey = [i for slt in [*edgedict.keys()] for i in slt]
-        for atom in nodes:
+        for atom in nodes['element']:
             if atom not in flat_atomkey:
                 return warnings.warn("Zero degree atom found:" + str(atom))
 
