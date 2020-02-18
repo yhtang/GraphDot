@@ -184,6 +184,10 @@ class Graph:
             'length': np.array(r, dtype=np.float32),
         })
 
+        for atom in nodes:
+            if atom not in i and atom not in j and atom not in w:
+                return warnings.warn("Zero degree atom found:" + str(atom))
+
         return cls(nodes, edges, title='Molecule {formula} {id}'.format(
                    formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
 
