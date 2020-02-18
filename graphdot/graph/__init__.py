@@ -9,7 +9,6 @@ graph formats.
 import uuid
 from itertools import product
 import numpy as np
-import warnings
 from scipy.spatial import cKDTree
 from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.minipandas import DataFrame
@@ -177,14 +176,6 @@ class Graph:
                     edgedict[(i, j)] = (w, r)
         i, j, w, r = list(zip(*[(i, j, w, r)
                                 for (i, j), (w, r) in edgedict.items()]))
-
-        #for atom in edgedict.keys():
-        #    if atom[0] in nodes and atom[1] in nodes:
-        #        continue
-        #    elif atom[0] in nodes:
-        #        return warnings.warn("Zero degree atom found:" + str(atom[1]))
-        #    else:
-        #        return warnings.warn("Zero degree atom found:" + str(atom[0]))
 
         edges = DataFrame({
             '!i': np.array(i, dtype=np.uint32),
