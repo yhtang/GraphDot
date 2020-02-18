@@ -188,7 +188,6 @@ class Graph:
             'length': np.array(r, dtype=np.float32),
         })
 
-
         print("nodes", nodes)
         print("edgedict", edgedict)
         print("edges", edges)
