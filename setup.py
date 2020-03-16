@@ -40,9 +40,19 @@ setup(
     license='BSD',
     author='Yu-Hang Tang',
     tests_require=['tox'],
-    install_requires=['numpy', 'scipy', 'numba', 'pandas', 'pycuda',
-                      'networkx'] +
-                     ['ase', 'pymatgen', 'pysmiles', 'mendeleev'],
+    install_requires=[
+        'numpy>=1.16',
+        'scipy>=1.3.0',
+        'sympy>=1.3',
+        'pandas>=0.24',
+        'networkx>=2.4',
+        'pycuda>=2019',
+    ] + [
+        'ase>=3.17',
+        'pymatgen>=2019',
+        'pysmiles',
+        'mendeleev'
+    ],
     extras_require={
         'docs': ['sphinx', 'sphinx-rtd-theme'],
     },
