@@ -1,3 +1,6 @@
+## 0.3.4
+- Specified minimum version of sympy in installation requirements.
+
 ## 0.3.3
 - Allow M3 metric to use partial charge information.
 - Made the element, bond, and charge parameters adjustable in the M3 metric.
