@@ -70,12 +70,13 @@ class MarginalizedGraphKernel:
         return traits
 
     def __init__(self, node_kernel, edge_kernel, p='default', q=0.01,
-                 q_bounds=(1e-4, 1 - 1e-4), backend='auto'):
+                 q_bounds=(1e-4, 1 - 1e-4), dtype=np.float, backend='auto'):
         self.node_kernel = node_kernel
         self.edge_kernel = edge_kernel
         self.p = self._get_starting_probability(p)
         self.q = q
         self.q_bounds = q_bounds
+        self.dtype = dtype
 
         self.backend = backend_factory(backend)
 
@@ -200,11 +201,14 @@ class MarginalizedGraphKernel:
         timer.reset()
 
         if traits.eval_gradient is True:
-            return output[:, :, 0], output[:, :, 1:]
+            return (
+                output[:, :, 0].astype(self.dtype),
+                output[:, :, 1:].astype(self.dtype)
+            )
         else:
-            return output
+            return output.astype(self.dtype)
 
-    def diag(self, X, nodal=False, lmin=0, timer=False):
+    def diag(self, X, nodal=False, lmin=0, timing=False):
         """Compute the self-similarities for a list of graphs
 
         Parameters
@@ -289,11 +293,11 @@ class MarginalizedGraphKernel:
                       for s, n in zip(starts[:-1], sizes)]
         timer.toc('collecting result')
 
-        if timer:
+        if timing:
             timer.report(unit='ms')
         timer.reset()
 
-        return output
+        return output.astype(self.dtype)
 
     """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
 

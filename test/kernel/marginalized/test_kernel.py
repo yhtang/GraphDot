@@ -375,3 +375,30 @@ def test_mlgk_large():
 
     assert(dot.shape == (1, 1))
     assert(dot.item() == pytest.approx(gold))
+
+
+def test_mlgk_dtype():
+    g = nx.Graph()
+    n = 8
+    for i, row in enumerate(np.random.randint(0, 2, (n, n))):
+        g.add_node(i, type=0)
+        for j, pred in enumerate(row[:i]):
+            if pred:
+                g.add_edge(i, j, weight=1)
+
+    dfg = Graph.from_networkx(g, weight='weight')
+
+    q = 0.5
+    node_kernel = TensorProduct(type=KroneckerDelta(1.0))
+    edge_kernel = Constant(1.0)
+
+    for dtype in [np.float, np.float32, np.float64]:
+        mlgk = MarginalizedGraphKernel(
+            node_kernel,
+            edge_kernel,
+            q=q,
+            dtype=dtype
+        )
+
+        assert(mlgk([dfg]).dtype == dtype)
+        assert(mlgk.diag([dfg]).dtype == dtype)
