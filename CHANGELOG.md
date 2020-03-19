@@ -1,3 +1,6 @@
+## 0.3.5
+- Added a `dtype` option to the `MarginalizedGraphKernel` to specify the type of returned matrix elements.
+
 ## 0.3.4
 - Specified minimum version of sympy in installation requirements.
 
