@@ -200,7 +200,6 @@ class CUDABackend(Backend):
 
         ''' code generation '''
         timer.tic('code generation')
-
         if weighted:
             edge_kernel = TensorProduct(weight=_Multiply(),
                                         label=edge_kernel)

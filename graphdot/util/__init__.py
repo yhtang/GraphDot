@@ -25,10 +25,10 @@ class Timer:
         self.dt = OrderedDict()
 
     def tic(self, tag):
-        self.t[tag] = time.process_time()
+        self.t[tag] = time.perf_counter()
 
     def toc(self, tag):
-        self.dt[tag] = time.process_time() - self.t[tag]
+        self.dt[tag] = time.perf_counter() - self.t[tag]
         del self.t[tag]
 
     def report(self, unit='s'):
