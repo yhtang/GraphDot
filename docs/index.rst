@@ -41,7 +41,7 @@ Contents
    installation
    example
    quickstart
-   userguide
+   marginalized
    api
    contribute
 
