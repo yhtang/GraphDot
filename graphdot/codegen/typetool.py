@@ -22,15 +22,12 @@ _convertible = {
 }
 
 
-# def cpptype(dtype=[], **kwtype):  # only works with python>=3.6
-def cpptype(dtype=[]):
+def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
     """
     cpptype is a class decorator that simplifies the translation of python
     objects to corresponding C++ structures.
     """
-    # only works with python >= 3.6
-    # dtype = np.dtype(dtype + list(kwtype.items()), align=True)
-    dtype = np.dtype(dtype, align=True)
+    dtype = np.dtype(dtype + list(kwtypes.items()), align=True)
 
     def decor(clss):
         class CppType(type):
@@ -52,10 +49,7 @@ def cpptype(dtype=[]):
             @property
             def state(self):
                 state = []
-                # break for python < 3.6 since field ordered not preserved
-                # for key, (field, _) in Class.dtype.fields.items():
-                for key in Class.dtype.names:
-                    field, _ = Class.dtype.fields[key]
+                for key, (field, _) in Class.dtype.fields.items():
                     if field.names is not None:
                         state.append(getattr(self, key).state)
                     # elif field.subdtype is not None:

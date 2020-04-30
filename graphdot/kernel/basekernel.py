@@ -298,9 +298,7 @@ class KernelOperator(BaseKernel):
 
     @staticmethod
     def add(k1, k2):
-        # only works with python >= 3.6
-        # @cpptype(k1=k1.dtype, k2=k2.dtype)
-        @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
+        @cpptype(k1=k1.dtype, k2=k2.dtype)
         class Add(KernelOperator):
 
             opstr = '+'
@@ -329,9 +327,7 @@ class KernelOperator(BaseKernel):
 
     @staticmethod
     def mul(k1, k2):
-        # only works with python >= 3.6
-        # @cpptype(k1=k1.dtype, k2=k2.dtype)
-        @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
+        @cpptype(k1=k1.dtype, k2=k2.dtype)
         class Mul(KernelOperator):
 
             opstr = '*'
@@ -420,9 +416,7 @@ def Constant(c, c_bounds=(0, np.inf)):
         A kernel instance of corresponding behavior
     """
 
-    # only works with python >= 3.6
-    # @cpptype(constant=np.float32)
-    @cpptype([('c', np.float32)])
+    @cpptype(c=np.float32)
     class ConstantKernel(BaseKernel):
         def __init__(self, c, c_bounds):
             self.c = float(c)
@@ -480,9 +474,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         A kernel instance of corresponding behavior
     """
 
-    # only works with python >= 3.6
-    # @cpptype(lo=np.float32, hi=np.float32)
-    @cpptype([('h', np.float32)])
+    @cpptype(h=np.float32)
     class KroneckerDeltaKernel(BaseKernel):
 
         def __init__(self, h, h_bounds):
