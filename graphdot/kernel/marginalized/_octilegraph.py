@@ -9,8 +9,8 @@ from graphdot.cuda.array import umzeros, umempty
 class OctileGraph(object):
     """ Python counterpart of C++ class graphdot::graph_t """
 
-    @cpptype([('elements', np.uintp), ('nzmask', '<u8'), ('nzmask_r', '<u8'),
-              ('upper', np.int32), ('left', np.int32)])
+    @cpptype(elements=np.uintp, nzmask='<u8', nzmask_r='<u8',
+             upper=np.int32, left=np.int32)
     class Octile(object):
         def __init__(self, upper, left, nzmask, nzmask_r, elements):
             self.upper = upper
