@@ -87,12 +87,15 @@ def decltype(type, name=''):
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
             return f'constexpr static _empty {name} {{}}'
-    # elif type.subdtype is not None:
+    # elif type.ndim > 0:
     #     return Template(r'''${type} ${name}${dim}''').render(
     #         type=type.name, name=
     #     )
     else:
-        return f'{str(type.name)} {name}'
+        if type.kind == 'S':
+            return f'char {name}[{type.itemsize}]'
+        else:
+            return f'{str(type.name)} {name}'
 
 
 def rowtype(df, pack=True, exclude=[]):
