@@ -35,7 +35,7 @@ class Tox(TestCommand):
 setup(
     name='graphdot',
     version=__version__,
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     url='https://gitlab.com/yhtang/graphdot',
     license='BSD',
     author='Yu-Hang Tang',

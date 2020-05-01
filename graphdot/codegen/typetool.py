@@ -22,15 +22,12 @@ _convertible = {
 }
 
 
-# def cpptype(dtype=[], **kwtype):  # only works with python>=3.6
-def cpptype(dtype=[]):
+def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
     """
     cpptype is a class decorator that simplifies the translation of python
     objects to corresponding C++ structures.
     """
-    # only works with python >= 3.6
-    # dtype = np.dtype(dtype + list(kwtype.items()), align=True)
-    dtype = np.dtype(dtype, align=True)
+    dtype = np.dtype(dtype + list(kwtypes.items()), align=True)
 
     def decor(clss):
         class CppType(type):
@@ -42,7 +39,7 @@ def cpptype(dtype=[]):
                 return dtype
 
             def __repr__(cls):
-                return '@cpptype({})\n{}'.format(repr(dtype), repr(clss))
+                return f'@cpptype({repr(dtype)})\n{repr(clss)}'
 
         class Class(clss, metaclass=CppType):
             @property
@@ -52,10 +49,7 @@ def cpptype(dtype=[]):
             @property
             def state(self):
                 state = []
-                # break for python < 3.6 since field ordered not preserved
-                # for key, (field, _) in Class.dtype.fields.items():
-                for key in Class.dtype.names:
-                    field, _ = Class.dtype.fields[key]
+                for key, (field, _) in Class.dtype.fields.items():
                     if field.names is not None:
                         state.append(getattr(self, key).state)
                     # elif field.subdtype is not None:
@@ -72,15 +66,8 @@ def cpptype(dtype=[]):
                     t = Class.dtype.fields[name][0]
                     if np.dtype(type(value)).kind not in _convertible[t.kind]:
                         raise ValueError(
-                            # f"Cannot set attribute '{name}' (C++ type {t}) "
-                            # f"with value {value} of {type(value)}"
-                            "Cannot set attribute '{name}' (C++ type {t}) "
-                            "with value {value} of {type}".format(
-                                name=name,
-                                t=t,
-                                value=value,
-                                type=type(value)
-                            )
+                            f"Cannot set attribute '{name}' (C++ type {t}) "
+                            f"with value {value} of {type(value)}"
                         )
                 super().__setattr__(name, value)
 
@@ -99,15 +86,13 @@ def decltype(type, name=''):
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
-            # return f'constexpr static _empty {name} {{}}'
-            return 'constexpr static _empty {} {{}}'.format(name)
+            return f'constexpr static _empty {name} {{}}'
     # elif type.subdtype is not None:
     #     return Template(r'''${type} ${name}${dim}''').render(
     #         type=type.name, name=
     #     )
     else:
-        # return f'{str(type.name)} {name}'
-        return '{} {}'.format(str(type.name), name)
+        return f'{str(type.name)} {name}'
 
 
 def rowtype(df, pack=True, exclude=[]):

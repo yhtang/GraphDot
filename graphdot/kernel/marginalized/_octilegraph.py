@@ -4,16 +4,13 @@ import numpy as np
 from graphdot.codegen.typetool import cpptype, rowtype
 from graphdot.cuda.array import umzeros, umempty
 
-# only works with python >= 3.6
-# @cpptype(n_node=np.int32, n_octile=np.int32, degree=np.uintp,
-#          node=np.uintp, octile=np.uintp)
-@cpptype([('n_node', np.int32), ('n_octile', np.int32), ('p_degree', np.uintp),
-          ('p_node', np.uintp), ('p_octile', np.uintp)])
+@cpptype(n_node=np.int32, n_octile=np.int32, p_degree=np.uintp,
+         p_node=np.uintp, p_octile=np.uintp)
 class OctileGraph(object):
     """ Python counterpart of C++ class graphdot::graph_t """
 
-    @cpptype([('elements', np.uintp), ('nzmask', '<u8'), ('nzmask_r', '<u8'),
-              ('upper', np.int32), ('left', np.int32)])
+    @cpptype(elements=np.uintp, nzmask='<u8', nzmask_r='<u8',
+             upper=np.int32, left=np.int32)
     class Octile(object):
         def __init__(self, upper, left, nzmask, nzmask_r, elements):
             self.upper = upper
