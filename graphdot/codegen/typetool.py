@@ -87,10 +87,12 @@ def decltype(type, name=''):
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
             return f'constexpr static _empty {name} {{}}'
-    # elif type.ndim > 0:
-    #     return Template(r'''${type} ${name}${dim}''').render(
-    #         type=type.name, name=
-    #     )
+    elif type.ndim > 0:
+        return Template(r'${type} ${name}[${shape][}]').render(
+            type=type.base,
+            name=name,
+            shape=type.shape
+        )
     else:
         if type.kind == 'S':
             return f'char {name}[{type.itemsize}]'
