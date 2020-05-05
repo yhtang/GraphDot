@@ -121,7 +121,11 @@ decltype_cases = [
     (np.bool_, 'bool'),
     (np.uint16, 'uint16'),
     (np.int32, 'int32'),
-    (np.float64, 'float64')
+    (np.float64, 'float64'),
+    ('S1', 'char [1]'),
+    ('S2', 'char [2]'),
+    ('S5', 'char [5]'),
+    ('S10', 'char [10]'),
 ]
 
 
@@ -135,6 +139,17 @@ def test_decltype_compose():
     assert(decltype(np.float32) in decltype(comp1))
     assert(decltype(np.int16) in decltype(comp1))
     assert(decltype(comp1, 'x') in decltype(comp2))
+
+
+@pytest.mark.parametrize('element_type', [
+    np.bool_, np.byte, np.int, np.float, np.float32, np.float64, np.intp
+])
+@pytest.mark.parametrize('size', [
+    (1,), (8,), (1, 1), (2, 3), (3, 5, 8)
+])
+def test_decltype_array(element_type, size):
+    assert(decltype(str(size)+np.dtype(element_type).name) ==
+           decltype(element_type) + ''.join(["[%d]" % d for d in size]))
 
 
 def test_decltype_empty():
