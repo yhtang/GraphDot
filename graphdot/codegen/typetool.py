@@ -90,28 +90,28 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
 
             def __setattr__(self, name, value):
                 if name in Class.dtype.names:
-                    t = Class.dtype.fields[name][0]
-                    if _dtype_util.is_array(t):
+                    ltype = Class.dtype.fields[name][0]
+                    if _dtype_util.is_array(ltype):
                         if not isinstance(value, np.ndarray):
                             value = np.array(value)
-                        if value.shape != t.shape:
+                        if value.shape != ltype.shape:
                             raise ValueError(
                                 f"Cannot set array attribute '{name}' with "
                                 f"value of mismatching shape:\n"
                                 f"{value}"
                             )
-                        if value.dtype.kind not in _convertible[t.kind]:
+                        if value.dtype.kind not in _convertible[ltype.kind]:
                             raise ValueError(
                                 f"Cannot set attribute '{name}' "
-                                f"(C++ type {decltype(t)}) "
+                                f"(C++ type {decltype(ltype)}) "
                                 f"with values of {value.dtype}"
                             )
                     else:
-                        vtype = np.dtype(type(value))
-                        if vtype.kind not in _convertible[t.kind]:
+                        rtype = np.dtype(type(value))
+                        if rtype.kind not in _convertible[ltype.kind]:
                             raise ValueError(
                                 f"Cannot set attribute '{name}' "
-                                f"(C++ type {decltype(t)}) "
+                                f"(C++ type {decltype(ltype)}) "
                                 f"with value {value} of {type(value)}"
                             )
                 super().__setattr__(name, value)
