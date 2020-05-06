@@ -117,7 +117,7 @@ def test_decltype_compose():
 ])
 def test_decltype_array(element_type, size):
     assert(decltype(str(size)+np.dtype(element_type).name) ==
-           decltype(element_type) + ''.join(["[%d]" % d for d in size]))
+           decltype(element_type) + ' ' + ''.join(["[%d]" % d for d in size]))
 
 
 def test_decltype_empty():

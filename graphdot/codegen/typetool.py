@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import itertools as it
 import numpy as np
 from graphdot.codegen import Template
+
 
 __all__ = ['cpptype', 'decltype', 'rowtype']
 
@@ -20,6 +22,16 @@ _convertible = {
     'U': 'U',
     'V': 'V'
 }
+
+
+class _dtype_util:
+    @staticmethod
+    def is_object(t):
+        return t.names is not None
+
+    @staticmethod
+    def is_array(t):
+        return t.subdtype is not None
 
 
 def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
@@ -50,13 +62,23 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
             def state(self):
                 state = []
                 for key, (field, _) in Class.dtype.fields.items():
-                    if field.names is not None:
+                    if _dtype_util.is_object(field):
                         state.append(getattr(self, key).state)
-                    # elif field.subdtype is not None:
-                    #     subtype, subshape = field.subdtype
-                    #     subary = np.array(getattr(self, key), dtype=subtype)
-                    #     assert(subary.shape == subshape)
-                    #     state.append(subary.tolist())
+                    elif _dtype_util.is_array(field):
+                        pass
+                        # subtype, subshape = field.subdtype
+                        # if _dtype_util.is_object(subtype):
+                        #     for coord in it.product(*map(range, subshape)):
+                        #         subary.append(raw[coord].state)
+                        # else:
+                        #     raw = np.array(getattr(self, key), dtype=subtype) #  # for tuple indexing
+                        #     if raw.shape != subshape:
+                        #         raise
+                        #     subary = raw.tolist()
+                        # # subary = np.array(, dtype=subtype)
+                        # # assert(subary.shape == subshape)
+                        # # state.append(subary.tolist())
+                        # state.append(subary)
                     else:
                         state.append(field.type(getattr(self, key)))
                 return tuple(state)
@@ -80,16 +102,16 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
 
 def decltype(type, name=''):
     type = np.dtype(type, align=True)  # convert np.float32 etc. to dtype
-    if type.names is not None:
+    if _dtype_util.is_object(type):
         if len(type.names):
             return Template(r'struct{${members;};}${name}').render(
                 name=name,
                 members=[decltype(type.fields[v][0], v) for v in type.names])
         else:
             return f'constexpr static _empty {name} {{}}'
-    elif type.ndim > 0:
+    elif _dtype_util.is_array(type):
         return Template(r'${type} ${name}[${shape][}]').render(
-            type=type.base,
+            type=decltype(type.base),
             name=name,
             shape=type.shape
         )
@@ -97,7 +119,7 @@ def decltype(type, name=''):
         if type.kind == 'S':
             return f'char {name}[{type.itemsize}]'
         else:
-            return f'{str(type.name)} {name}'
+            return f'{str(type.name)} {name}'.strip()
 
 
 def rowtype(df, pack=True, exclude=[]):
