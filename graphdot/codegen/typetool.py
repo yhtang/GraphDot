@@ -65,20 +65,25 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
                     if _dtype_util.is_object(field):
                         state.append(getattr(self, key).state)
                     elif _dtype_util.is_array(field):
-                        pass
-                        # subtype, subshape = field.subdtype
-                        # if _dtype_util.is_object(subtype):
-                        #     for coord in it.product(*map(range, subshape)):
-                        #         subary.append(raw[coord].state)
-                        # else:
-                        #     raw = np.array(getattr(self, key), dtype=subtype) #  # for tuple indexing
-                        #     if raw.shape != subshape:
-                        #         raise
-                        #     subary = raw.tolist()
-                        # # subary = np.array(, dtype=subtype)
-                        # # assert(subary.shape == subshape)
-                        # # state.append(subary.tolist())
-                        # state.append(subary)
+                        states = getattr(self, key)
+                        if not isinstance(states, np.ndarray):
+                            raise TypeError(
+                                f'attribute {key} declared as an array'
+                                f'but the actual type is not a numpy'
+                                f'ndarray.'
+                            )
+                        if states.shape != field.shape:
+                            raise ValueError(
+                                f'attribute {key}: '
+                                f'actual shape of {raw.shape} does not '
+                                f'match declared shape of {field.shape}.'
+                            )
+                        if _dtype_util.is_object(field.base):
+                            states = [
+                                states[coord].state for coord
+                                in it.product(*map(range, field.shape))
+                            ]
+                        state.append(np.reshape(states, field.shape).tolist())
                     else:
                         state.append(field.type(getattr(self, key)))
                 return tuple(state)
@@ -86,11 +91,29 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
             def __setattr__(self, name, value):
                 if name in Class.dtype.names:
                     t = Class.dtype.fields[name][0]
-                    if np.dtype(type(value)).kind not in _convertible[t.kind]:
-                        raise ValueError(
-                            f"Cannot set attribute '{name}' (C++ type {t}) "
-                            f"with value {value} of {type(value)}"
-                        )
+                    if _dtype_util.is_array(t):
+                        if not isinstance(value, np.ndarray):
+                            value = np.array(value)
+                        if value.shape != t.shape:
+                            raise ValueError(
+                                f"Cannot set array attribute '{name}' with "
+                                f"value of mismatching shape:\n"
+                                f"{value}"
+                            )
+                        if value.dtype.kind not in _convertible[t.kind]:
+                            raise ValueError(
+                                f"Cannot set attribute '{name}' "
+                                f"(C++ type {decltype(t)}) "
+                                f"with values of {value.dtype}"
+                            )
+                    else:
+                        vtype = np.dtype(type(value))
+                        if vtype.kind not in _convertible[t.kind]:
+                            raise ValueError(
+                                f"Cannot set attribute '{name}' "
+                                f"(C++ type {decltype(t)}) "
+                                f"with value {value} of {type(value)}"
+                            )
                 super().__setattr__(name, value)
 
             # TODO: need a nicer __repr__
