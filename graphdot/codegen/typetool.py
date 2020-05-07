@@ -75,7 +75,7 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
                         if states.shape != field.shape:
                             raise ValueError(
                                 f'attribute {key}: '
-                                f'actual shape of {raw.shape} does not '
+                                f'actual shape of {states.shape} does not '
                                 f'match declared shape of {field.shape}.'
                             )
                         if _dtype_util.is_object(field.base):
@@ -83,35 +83,38 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
                                 states[coord].state for coord
                                 in it.product(*map(range, field.shape))
                             ]
-                        state.append(np.reshape(states, field.shape).tolist())
+                        state.append(
+                            np.array(states, dtype=field.base)
+                              .reshape(field.shape).tolist())
                     else:
                         state.append(field.type(getattr(self, key)))
                 return tuple(state)
 
             def __setattr__(self, name, value):
                 if name in Class.dtype.names:
-                    ltype = Class.dtype.fields[name][0]
-                    if _dtype_util.is_array(ltype):
+                    lt = Class.dtype.fields[name][0]
+                    if _dtype_util.is_array(lt):
                         if not isinstance(value, np.ndarray):
                             value = np.array(value)
-                        if value.shape != ltype.shape:
+                        if value.shape != lt.shape:
                             raise ValueError(
                                 f"Cannot set array attribute '{name}' with "
                                 f"value of mismatching shape:\n"
                                 f"{value}"
                             )
-                        if value.dtype.kind not in _convertible[ltype.kind]:
-                            raise ValueError(
-                                f"Cannot set attribute '{name}' "
-                                f"(C++ type {decltype(ltype)}) "
-                                f"with values of {value.dtype}"
-                            )
+                        for t in map(np.dtype, value.ravel()):
+                            if t.kind not in _convertible[lt.base.kind]:
+                                raise TypeError(
+                                    f"Cannot set attribute '{name}' "
+                                    f"(C++ type {decltype(lt)}) "
+                                    f"with values of {value.dtype}"
+                                )
                     else:
-                        rtype = np.dtype(type(value))
-                        if rtype.kind not in _convertible[ltype.kind]:
-                            raise ValueError(
+                        rt = np.dtype(type(value))
+                        if rt.kind not in _convertible[lt.kind]:
+                            raise TypeError(
                                 f"Cannot set attribute '{name}' "
-                                f"(C++ type {decltype(ltype)}) "
+                                f"(C++ type {decltype(lt)}) "
                                 f"with value {value} of {type(value)}"
                             )
                 super().__setattr__(name, value)
