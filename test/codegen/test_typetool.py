@@ -118,7 +118,6 @@ def test_cpptype_array():
 
         Faulty().state
 
-
     # test array-of-objects states
     @cpptype(a=np.int, b=np.bool_)
     class Object:
@@ -136,7 +135,7 @@ def test_cpptype_array():
     assert(len(aoo.state) == 1)
     assert(len(aoo.state[0]) == 4)
     assert(len(aoo.state[0][0]) == 2)
-    
+
 
 @pytest.mark.parametrize('case', [
     (np.bool_, 'bool'),
