@@ -24,6 +24,10 @@ _convertible = {
 }
 
 
+def can_cast(src, dst):
+    return src.kind in _convertible[dst.kind]
+
+
 class _dtype_util:
     @staticmethod
     def is_object(t):
@@ -103,7 +107,7 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
                                 f"{value}"
                             )
                         for t in map(np.dtype, value.ravel()):
-                            if t.kind not in _convertible[lt.base.kind]:
+                            if not can_cast(t, lt.base):
                                 raise TypeError(
                                     f"Cannot set attribute '{name}' "
                                     f"(C++ type {decltype(lt)}) "
@@ -111,7 +115,7 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
                                 )
                     else:
                         rt = np.dtype(type(value))
-                        if rt.kind not in _convertible[lt.kind]:
+                        if not can_cast(rt, lt):
                             raise TypeError(
                                 f"Cannot set attribute '{name}' "
                                 f"(C++ type {decltype(lt)}) "
