@@ -6,12 +6,12 @@ from graphdot.cuda.array import umzeros, umempty
 
 @cpptype(n_node=np.int32, n_octile=np.int32, p_degree=np.uintp,
          p_node=np.uintp, p_octile=np.uintp)
-class OctileGraph(object):
+class OctileGraph:
     """ Python counterpart of C++ class graphdot::graph_t """
 
     @cpptype(elements=np.uintp, nzmask='<u8', nzmask_r='<u8',
              upper=np.int32, left=np.int32)
-    class Octile(object):
+    class Octile:
         def __init__(self, upper, left, nzmask, nzmask_r, elements):
             self.upper = upper
             self.left = left
