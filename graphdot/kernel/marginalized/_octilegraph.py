@@ -80,7 +80,6 @@ class OctileGraph:
         lf[:] = j - j % 8
 
         perm = np.lexsort(indices, axis=0)
-        indices[:, :] = indices[:, perm]
         self.edge_aos = umempty(nnz * 2, edge_type)
         self.edge_aos[:] = edge_aos[perm % nnz]  # mod nnz due to symmetry
 
