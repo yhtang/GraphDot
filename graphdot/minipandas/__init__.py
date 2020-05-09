@@ -5,7 +5,17 @@ import numpy as np
 import pandas as pd
 
 
+def _as_1darray(array):
+    _1darray = np.empty(
+        len(array),
+        dtype=np.find_common_type([], map(type, array))
+    )
+    _1darray[:] = array
+    return _1darray
+
+
 class Series(np.ndarray):
+    '''A thin wrapper to customize serialization behavior'''
     def __repr__(self):
         return np.array2string(self, separator=',', max_line_width=1e20)
 
@@ -23,8 +33,8 @@ class DataFrame:
 
     def __setitem__(self, key, value):
         if not isinstance(value, np.ndarray):
-            value = np.array(value).view(Series)
-        self.columns[key] = value
+            value = _as_1darray(value)
+        self.columns[key] = value.view(Series)
 
     def __repr__(self):
         return repr(self.columns)
