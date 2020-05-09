@@ -66,3 +66,11 @@ class DataFrame:
 
     def to_pandas(self):
         return pd.DataFrame(self.columns)
+
+    def copy(self, deep=False):
+        if deep:
+            return self.__class__({
+                key: np.copy(value) for key, value in self.columns.items()
+            })
+        else:
+            return self.__class__(self.columns)
