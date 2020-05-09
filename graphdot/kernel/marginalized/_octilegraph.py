@@ -27,7 +27,7 @@ class OctileGraph(object):
         nnz = len(edges)
 
         ''' add phantom label if none exists to facilitate C++ interop '''
-        assert(len(edges.columns) >= 1)
+        assert(len(nodes.columns) >= 1)
         if len(nodes.columns) == 1:
             nodes['labeled'] = np.zeros(len(nodes), np.bool_)
 
