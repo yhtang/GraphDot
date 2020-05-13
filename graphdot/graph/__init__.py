@@ -10,6 +10,7 @@ from graphdot.minipandas import DataFrame
 from ._from_ase import _from_ase
 from ._from_networkx import _from_networkx
 from ._from_pymatgen import _from_pymatgen
+from ._from_rdkit import _from_rdkit
 
 
 __all__ = ['Graph']
@@ -119,6 +120,11 @@ class Graph:
         raise RuntimeError(
             'from_smiles has been deprecated, use from_rdkit instead.'
         )
+
+    @classmethod
+    def from_rdkit(cls, mol):
+        """Convert a RDKit molecule to a graph"""
+        return _from_rdkit(cls, mol)
 
     # @classmethod
     # def from_graphviz(cls, molecule):
