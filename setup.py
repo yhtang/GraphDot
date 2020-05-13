@@ -50,7 +50,6 @@ setup(
     ] + [
         'ase>=3.17',
         'pymatgen>=2019',
-        'pysmiles',
         'mendeleev'
     ],
     extras_require={
