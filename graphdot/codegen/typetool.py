@@ -79,6 +79,7 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
                 return f'@cpptype({repr(dtype)})\n{repr(clss)}'
 
         class Class(clss, metaclass=CppType):
+
             @property
             def dtype(self):
                 return Class.dtype
@@ -145,6 +146,8 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
                 super().__setattr__(name, value)
 
             # TODO: need a nicer __repr__
+
+        Class.__name__ = clss.__name__
 
         return Class
 
