@@ -67,7 +67,6 @@ class OctileGraph:
                                 buffer[h:h + s], dtype=elem_type
                             ).view(self.CustomType.FrozenArray)
                         df.drop([key], inplace=True)
-                        print(f'df[{tag}].dtype ', df[tag].dtype)
                     else:
                         raise TypeError(
                             f'Unsupported non-scalar attribute {key} '
@@ -89,10 +88,6 @@ class OctileGraph:
         self.node_type = node_type = nodes.rowtype(pack=True)
         self.nodes_aos = umempty(len(nodes), dtype=node_type)
         self.nodes_aos[:] = list(nodes.iterstates())
-
-        print('node_type', node_type)
-        print('self.nodes_aos.dtype', self.nodes_aos.dtype)
-        print('self.nodes_aos\n', self.nodes_aos, sep='')
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
@@ -121,12 +116,6 @@ class OctileGraph:
             edges_aos = np.fromiter(edges[edge_type.names].iterstates(),
                                     dtype=edge_type, count=nnz)
         degree[degree == 0] = 1.0
-
-        print()
-        print('edge_label_type ', edge_label_type)
-        print('edge_type', edge_type)
-        print('edges_aos.dtype', edges_aos.dtype)
-        print('edges_aos\n', edges_aos, sep='')
 
         ''' collect non-zero edge octiles '''
         indices = np.empty((4, nnz * 2), dtype=np.uint32, order='C')
