@@ -28,10 +28,31 @@ def can_cast(src, dst):
     return src.kind in _convertible[dst.kind]
 
 
+def common_min_type(iterable, coerce=True, min_float=np.float32):
+    '''Find the common minimum scalar type that can safely hold all elements of
+    an iterable.'''
+    t = None
+    for i in iterable:
+        r = np.min_scalar_type(i) if np.isscalar(i) else np.object
+        t = t or r
+        if t != r and not coerce:
+            return None
+        t = np.promote_types(t, r)
+
+    if coerce and t.kind == 'f':
+        t = np.promote_types(t, min_float)
+
+    return t
+
+
 class _dtype_util:
     @staticmethod
     def is_object(t):
         return t.names is not None
+
+    @staticmethod
+    def is_opaque_object(t):
+        return t.kind == 'O'
 
     @staticmethod
     def is_array(t):
@@ -130,26 +151,36 @@ def cpptype(dtype=[], **kwtypes):  # kwtypes only works with python>=3.6
     return decor
 
 
-def decltype(type, name=''):
-    type = np.dtype(type, align=True)  # convert np.float32 etc. to dtype
-    if _dtype_util.is_object(type):
-        if len(type.names):
+def decltype(t, name='', custom_types={}):
+    if name and not name.isidentifier():
+        raise ValueError(
+            f'Name {name} is not a valid Python/C++ identifier.'
+        )
+    t = np.dtype(t, align=True)  # convert np.float32 etc. to dtype
+    if _dtype_util.is_opaque_object(t):
+        if t not in custom_types:
+            raise TypeError(
+                f'No custom callback provided for opaque type {t.name}'
+            )
+        return custom_types[t.name](t)  # WIP
+    elif _dtype_util.is_object(t):
+        if len(t.names):
             return Template(r'struct{${members;};}${name}').render(
                 name=name,
-                members=[decltype(type.fields[v][0], v) for v in type.names])
+                members=[decltype(t.fields[v][0], v) for v in t.names])
         else:
             return f'constexpr static _empty {name} {{}}'
-    elif _dtype_util.is_array(type):
-        return Template(r'${type} ${name}[${shape][}]').render(
-            type=decltype(type.base),
+    elif _dtype_util.is_array(t):
+        return Template(r'${t} ${name}[${shape][}]').render(
+            t=decltype(t.base),
             name=name,
-            shape=type.shape
+            shape=t.shape
         )
     else:
-        if type.kind == 'S':
-            return f'char {name}[{type.itemsize}]'
+        if t.kind == 'S':
+            return f'char {name}[{t.itemsize}]'
         else:
-            return f'{str(type.name)} {name}'.strip()
+            return f'{str(t.name)} {name}'.strip()
 
 
 def rowtype(df, pack=True, exclude=[]):
