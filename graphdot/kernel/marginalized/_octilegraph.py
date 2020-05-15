@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import itertools as it
+import json
 import numpy as np
-from graphdot.codegen.typetool import cpptype, rowtype
-from graphdot.cuda.array import umzeros, umempty
+from graphdot.codegen.typetool import cpptype, rowtype, common_min_type
+from graphdot.cuda.array import umzeros, umempty, umlike
 
 @cpptype(n_node=np.int32, n_octile=np.int32, p_degree=np.uintp,
          p_node=np.uintp, p_octile=np.uintp)
@@ -19,25 +21,64 @@ class OctileGraph:
             self.nzmask_r = nzmask_r
             self.elements = elements
 
+    class CustomType:
+        @cpptype(ptr=np.intp, size=np.int32)
+        class FrozenArray(np.ndarray):
+            pass
+
     def __init__(self, graph):
 
-        nodes = graph.nodes
-        edges = graph.edges
+        self.nodes = nodes = graph.nodes.copy(deep=False)
+        self.edges = edges = graph.edges.copy(deep=False)
         self.n_node = len(nodes)
         nnz = len(edges)
 
+        ''' substitute columns corresponding to object-type node/edge 
+        attributes to their GPU counterparts '''
+        for df in [nodes, edges]:
+            for key in list(df.columns):
+                if not np.issctype(df[key].dtype):
+                    attr_type = common_min_type(df[key], coerce=False)
+                    if attr_type in [list, tuple]:
+                        elem_type = common_min_type(
+                            it.chain.from_iterable(df[key])
+                        )
+                        buffer = memoryview(umlike(np.fromiter(
+                            it.chain.from_iterable(df[key]),
+                            dtype=elem_type
+                        )))
+                        size = np.fromiter(map(len, df[key]), dtype=np.int)
+                        head = np.cumsum(size) - size
+                        tag = '{key}::frozenarray::{dtype}'.format(
+                            key=key,
+                            dtype=json.dumps(elem_type.descr)
+                        )
+                        df[tag] = np.empty_like(df[key], dtype=np.object)
+                        for i, (h, s) in enumerate(zip(head, size)):
+                            df[tag][i] = np.frombuffer(
+                                buffer[h:h + s], dtype=elem_type
+                            ).view(self.CustomType.FrozenArray)
+                        df.drop([key])
+                        print(f'df[{tag}].dtype ', df[tag].dtype)
+                    else:
+                        raise TypeError(
+                            f'Unsupported non-scalar attribute {key} '
+                            f'of type {attr_type}'
+                        )
+
         ''' add phantom label if none exists to facilitate C++ interop '''
-        assert(len(nodes.columns) >= 1)
-        if len(nodes.columns) == 1:
+        assert(len(nodes) >= 1)
+        if len(nodes) == 1:
             nodes['labeled'] = np.zeros(len(nodes), np.bool_)
 
-        assert(len(edges.columns) >= 2)
-        if len(edges.columns) == 2:
-            assert('!i' in edges.columns and '!j' in edges.columns)
+        assert(len(edges) >= 2)
+        if len(edges) == 2:
+            assert('!i' in edges and '!j' in edges)
             edges['labeled'] = np.zeros(len(edges), np.bool_)
 
         ''' determine node type '''
         self.node_type = node_type = rowtype(nodes, exclude=['!i'])
+        print('node_type', node_type)
         self.node = umempty(len(nodes), dtype=node_type)
         self.node[:] = list(zip(*[nodes[key] for key in node_type.names]))
 
@@ -45,7 +86,7 @@ class OctileGraph:
             and compute node degrees '''
         self.degree = degree = umzeros(self.n_node, dtype=np.float32)
         edge_label_type = rowtype(edges, exclude=['!i', '!j', '!w'])
-        if '!w' in edges.columns:  # weighted graph
+        if '!w' in edges:  # weighted graph
             self.weighted = True
             edge_type = np.dtype([('weight', np.float32),
                                   ('label', edge_label_type)], align=True)
@@ -54,7 +95,7 @@ class OctileGraph:
             np.add.at(degree, edges['!j'], edges['!w'])
 
             if edge_label_type.itemsize != 0:
-                labels = zip(*[edges[t] for t in edge_label_type.names])
+                labels = zip(*[edges[attr_type] for attr_type in edge_label_type.names])
             else:
                 labels = [None] * len(edges)
             edge_aos = np.fromiter(zip(edges['!w'], labels), dtype=edge_type,
@@ -64,7 +105,7 @@ class OctileGraph:
             self.edge_type = edge_type = edge_label_type
             np.add.at(degree, edges['!i'], 1.0)
             np.add.at(degree, edges['!j'], 1.0)
-            edge_aos = np.fromiter(zip(*[edges[t] for t in edge_type.names]),
+            edge_aos = np.fromiter(zip(*[edges[attr_type] for attr_type in edge_type.names]),
                                    dtype=edge_type, count=nnz)
         degree[degree == 0] = 1.0
 
