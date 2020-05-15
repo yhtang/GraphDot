@@ -54,9 +54,9 @@ class DataFrame:
 
     @property
     def columns(self):
-        yield from self._data.keys()
+        return list(self._data.keys())
 
-    def rowtype(self, pack=True, exclude=[]):
+    def rowtype(self, pack=False):
 
         def element_type(key, array):
             if array.dtype != np.object:
@@ -71,17 +71,19 @@ class DataFrame:
                         )
                 return t
 
-        sel = np.array([key for key in self.columns if key not in exclude])
-        etypes = {key: element_type(key, self[key]) for key in sel}
+        etypes = {key: element_type(key, self[key]) for key in self.columns}
+        cols = np.array(list(self.columns))
         if pack is True:
-            perm = np.argsort([-etypes[key].itemsize for key in sel])
-            sel = sel[perm]
+            perm = np.argsort([-etypes[key].itemsize for key in self.columns])
+            cols = cols[perm]
         packed_dtype = np.dtype([(key, etypes[key].newbyteorder('='))
-                                for key in sel], align=True)
+                                for key in cols], align=True)
         return packed_dtype
 
     def rows(self):
-        visible = [key for key in self._data if not key.startswith('!')]
+        '''Iterate over rows in the form of named tuples while skipping columns
+        that do not have valid field names.'''
+        visible = [key for key in self._data if key.isidentifier()]
 
         class RowTuple(namedtuple('RowTuple', visible)):
             def __getitem__(self, key):
@@ -95,10 +97,19 @@ class DataFrame:
             yield RowTuple(*[self._data[key][i] for key in visible])
 
     def itertuples(self):
+        '''Alias of `rows()` for API compatibility with pandas.'''
         yield from self.rows()
 
     def iterrows(self):
+        '''Iterate in (row_id, row_content) tuples.'''
         yield from enumerate(self.rows())
+
+    def iterstates(self):
+        '''Iterate over rows, use the .state attribute if element is not
+        scalar.'''
+
+        for row in zip(*[self[key] for key in self.columns]):
+            yield tuple(i if np.isscalar(i) else i.state for i in row)
 
     def to_pandas(self):
         return pd.DataFrame(self._data)
@@ -111,6 +122,9 @@ class DataFrame:
         else:
             return self.__class__(self._data)
 
-    def drop(self, keys):
-        for key in keys:
-            del self._data[key]
+    def drop(self, keys, inplace=False):
+        if inplace is True:
+            for key in keys:
+                del self._data[key]
+        else:
+            return self[[k for k in self.columns if k not in keys]]
