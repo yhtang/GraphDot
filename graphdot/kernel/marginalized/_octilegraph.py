@@ -66,7 +66,7 @@ class OctileGraph:
                             df[tag][i] = np.frombuffer(
                                 buffer[h:h + s], dtype=elem_type
                             ).view(self.CustomType.FrozenArray)
-                        df.drop([key])
+                        df.drop([key], inplace=True)
                         print(f'df[{tag}].dtype ', df[tag].dtype)
                     else:
                         raise TypeError(
@@ -75,55 +75,58 @@ class OctileGraph:
                         )
 
         ''' add phantom label if none exists to facilitate C++ interop '''
-        assert(len(nodes) >= 1)
-        if len(nodes) == 1:
+        assert(len(nodes.columns) >= 1)
+        if len(nodes.columns) == 1:
             nodes['labeled'] = np.zeros(len(nodes), np.bool_)
 
-        assert(len(edges) >= 2)
-        if len(edges) == 2:
+        assert(len(edges.columns) >= 2)
+        if len(edges.columns) == 2:
             assert('!i' in edges and '!j' in edges)
             edges['labeled'] = np.zeros(len(edges), np.bool_)
 
         ''' determine node type '''
-        self.node_type = node_type = nodes.rowtype(exclude=['!i'])
-        print('node_type', node_type)
-        self.node = umempty(len(nodes), dtype=node_type)
+        nodes.drop(['!i'], inplace=True)
+        self.node_type = node_type = nodes.rowtype(pack=True)
+        self.nodes_aos = umempty(len(nodes), dtype=node_type)
+        self.nodes_aos[:] = list(nodes.iterstates())
 
-        def stateiter(df, types):
-            for row in zip(*[df[key] for key in types.names]):
-                yield tuple(i if np.isscalar(i) else i.state for i in row)
-        print('list(stateiter(nodes, node_type))\n', list(stateiter(nodes, node_type)), sep='')
-        print('self.node.dtype', self.node.dtype)
-        self.node[:] = list(stateiter(nodes, node_type))
-        # self.node[:] = list(zip(*[nodes[key] for key in node_type.names]))
-        print('self.node\n', self.node, sep='')
+        print('node_type', node_type)
+        print('self.nodes_aos.dtype', self.nodes_aos.dtype)
+        print('self.nodes_aos\n', self.nodes_aos, sep='')
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
         self.degree = degree = umzeros(self.n_node, dtype=np.float32)
-        edge_label_type = edges.rowtype(exclude=['!i', '!j', '!w'])
+        edge_label_type = edges.drop(['!i', '!j', '!w']).rowtype(pack=True)
         if '!w' in edges:  # weighted graph
             self.weighted = True
-            edge_type = np.dtype([('weight', np.float32),
-                                  ('label', edge_label_type)], align=True)
-            self.edge_type = edge_type
+            self.edge_type = edge_type = np.dtype(
+                [('weight', np.float32), ('label', edge_label_type)],
+                align=True
+            )
             np.add.at(degree, edges['!i'], edges['!w'])
             np.add.at(degree, edges['!j'], edges['!w'])
 
             if edge_label_type.itemsize != 0:
-                labels = zip(*[edges[attr_type] for attr_type in edge_label_type.names])
+                labels = list(edges[edge_label_type.names].iterstates())
             else:
                 labels = [None] * len(edges)
-            edge_aos = np.fromiter(zip(edges['!w'], labels), dtype=edge_type,
-                                   count=nnz)
+            edges_aos = np.fromiter(zip(edges['!w'], labels), dtype=edge_type,
+                                    count=nnz)
         else:
             self.weighted = False
             self.edge_type = edge_type = edge_label_type
             np.add.at(degree, edges['!i'], 1.0)
             np.add.at(degree, edges['!j'], 1.0)
-            edge_aos = np.fromiter(zip(*[edges[attr_type] for attr_type in edge_type.names]),
-                                   dtype=edge_type, count=nnz)
+            edges_aos = np.fromiter(edges[edge_type.names].iterstates(),
+                                    dtype=edge_type, count=nnz)
         degree[degree == 0] = 1.0
+
+        print()
+        print('edge_label_type ', edge_label_type)
+        print('edge_type', edge_type)
+        print('edges_aos.dtype', edges_aos.dtype)
+        print('edges_aos\n', edges_aos, sep='')
 
         ''' collect non-zero edge octiles '''
         indices = np.empty((4, nnz * 2), dtype=np.uint32, order='C')
@@ -137,8 +140,8 @@ class OctileGraph:
         lf[:] = j - j % 8
 
         perm = np.lexsort(indices, axis=0)
-        self.edge_aos = umempty(nnz * 2, edge_type)
-        self.edge_aos[:] = edge_aos[perm % nnz]  # mod nnz due to symmetry
+        self.edges_aos = umempty(nnz * 2, edge_type)
+        self.edges_aos[:] = edges_aos[perm % nnz]  # mod nnz due to symmetry
 
         diff = np.empty(nnz * 2)
         diff[1:] = (up[:-1] != up[1:]) | (lf[:-1] != lf[1:])
@@ -153,7 +156,7 @@ class OctileGraph:
 
         self.octiles = octiles = umempty(self.n_octile, self.Octile.dtype)
         octiles[:] = list(
-            zip(int(self.edge_aos.base) + oct_offset * edge_type.itemsize,
+            zip(int(self.edges_aos.base) + oct_offset * edge_type.itemsize,
                 nzmasks,
                 nzmasks_r,
                 up[oct_offset],
@@ -170,4 +173,4 @@ class OctileGraph:
 
     @property
     def p_node(self):
-        return int(self.node.base)
+        return int(self.nodes_aos.base)
