@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import ctypes
 import itertools as it
 import json
 import numpy as np
-from graphdot.codegen.typetool import cpptype, rowtype, common_min_type
+from graphdot.codegen.typetool import cpptype, common_min_type
 from graphdot.cuda.array import umzeros, umempty, umlike
 
 @cpptype(n_node=np.int32, n_octile=np.int32, p_degree=np.uintp,
@@ -24,7 +25,13 @@ class OctileGraph:
     class CustomType:
         @cpptype(ptr=np.intp, size=np.int32)
         class FrozenArray(np.ndarray):
-            pass
+            @property
+            def ptr(self):
+                return ctypes.addressof(ctypes.c_char.from_buffer(self.base))
+
+            @property
+            def size(self):
+                return len(self)
 
     def __init__(self, graph):
 
@@ -49,6 +56,7 @@ class OctileGraph:
                         )))
                         size = np.fromiter(map(len, df[key]), dtype=np.int)
                         head = np.cumsum(size) - size
+                        # mangle key with type information
                         tag = '{key}::frozenarray::{dtype}'.format(
                             key=key,
                             dtype=json.dumps(elem_type.descr)
@@ -77,15 +85,23 @@ class OctileGraph:
             edges['labeled'] = np.zeros(len(edges), np.bool_)
 
         ''' determine node type '''
-        self.node_type = node_type = rowtype(nodes, exclude=['!i'])
+        self.node_type = node_type = nodes.rowtype(exclude=['!i'])
         print('node_type', node_type)
         self.node = umempty(len(nodes), dtype=node_type)
-        self.node[:] = list(zip(*[nodes[key] for key in node_type.names]))
+
+        def stateiter(df, types):
+            for row in zip(*[df[key] for key in types.names]):
+                yield tuple(i if np.isscalar(i) else i.state for i in row)
+        print('list(stateiter(nodes, node_type))\n', list(stateiter(nodes, node_type)), sep='')
+        print('self.node.dtype', self.node.dtype)
+        self.node[:] = list(stateiter(nodes, node_type))
+        # self.node[:] = list(zip(*[nodes[key] for key in node_type.names]))
+        print('self.node\n', self.node, sep='')
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
         self.degree = degree = umzeros(self.n_node, dtype=np.float32)
-        edge_label_type = rowtype(edges, exclude=['!i', '!j', '!w'])
+        edge_label_type = edges.rowtype(exclude=['!i', '!j', '!w'])
         if '!w' in edges:  # weighted graph
             self.weighted = True
             edge_type = np.dtype([('weight', np.float32),
