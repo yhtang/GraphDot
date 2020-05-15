@@ -27,7 +27,12 @@ class DataFrame:
                 self[key] = value
 
     def __getitem__(self, key):
-        return self._data[key]
+        if isinstance(key, str):
+            return self._data[key]
+        elif hasattr(key, '__iter__'):
+            return self.__class__({k: self._data[k] for k in key})
+        else:
+            raise TypeError(f'Invalid column index {key}')
 
     def __setitem__(self, key, value):
         if not isinstance(value, np.ndarray):
@@ -51,11 +56,36 @@ class DataFrame:
     def columns(self):
         yield from self._data.keys()
 
+    def rowtype(self, pack=True, exclude=[]):
+
+        def element_type(key, array):
+            if array.dtype != np.object:
+                return array.dtype
+            else:
+                t = None
+                for element in array:
+                    t = t or element.dtype
+                    if t != element.dtype:
+                        raise TypeError(
+                            f'Inconsistent type between rows of column {key}'
+                        )
+                return t
+
+        sel = np.array([key for key in self.columns if key not in exclude])
+        etypes = {key: element_type(key, self[key]) for key in sel}
+        if pack is True:
+            perm = np.argsort([-etypes[key].itemsize for key in sel])
+            sel = sel[perm]
+        packed_dtype = np.dtype([(key, etypes[key].newbyteorder('='))
+                                for key in sel], align=True)
+        return packed_dtype
+
     def rows(self):
         visible = [key for key in self._data if not key.startswith('!')]
 
         class RowTuple(namedtuple('RowTuple', visible)):
             def __getitem__(self, key):
+                '''To support both member access and index access.'''
                 if isinstance(key, str):
                     return getattr(self, key)
                 else:

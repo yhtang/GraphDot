@@ -5,7 +5,7 @@ import numpy as np
 from graphdot.codegen import Template
 
 
-__all__ = ['cpptype', 'decltype', 'rowtype']
+__all__ = ['cpptype', 'decltype']
 
 
 _convertible = {
@@ -181,13 +181,3 @@ def decltype(t, name='', custom_types={}):
             return f'char {name}[{t.itemsize}]'
         else:
             return f'{str(t.name)} {name}'.strip()
-
-
-def rowtype(df, pack=True, exclude=[]):
-    selection = np.array([key for key in df.columns if key not in exclude])
-    if pack is True:
-        perm = np.argsort([-df[key].dtype.itemsize for key in selection])
-        selection = selection[perm]
-    packed_dtype = np.dtype([(key, df[key].dtype.newbyteorder('='))
-                             for key in selection], align=True)
-    return packed_dtype
