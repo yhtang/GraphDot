@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 import exrex
 from graphdot.codegen.typetool import cpptype, decltype
-from graphdot.minipandas import DataFrame
 
 
 class ListSpecs:
