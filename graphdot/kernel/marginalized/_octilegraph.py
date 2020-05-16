@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import ctypes
 import itertools as it
-import json
 import numpy as np
 from graphdot.codegen.typetool import cpptype, common_min_type
 from graphdot.cuda.array import umzeros, umempty, umlike
@@ -50,6 +49,11 @@ class OctileGraph:
                         elem_type = common_min_type(
                             it.chain.from_iterable(df[key])
                         )
+                        if elem_type.names:
+                            raise TypeError(
+                                f'List-like graphs attribute must have scalar'
+                                f'elements. Attribute {key} is {elem_type}.'
+                            )
                         buffer = memoryview(umlike(np.fromiter(
                             it.chain.from_iterable(df[key]),
                             dtype=elem_type
@@ -57,9 +61,9 @@ class OctileGraph:
                         size = np.fromiter(map(len, df[key]), dtype=np.int)
                         head = np.cumsum(size) - size
                         # mangle key with type information
-                        tag = '{key}::frozenarray::{dtype}'.format(
+                        tag = '${key}::frozen_array::{dtype}'.format(
                             key=key,
-                            dtype=json.dumps(elem_type.descr)
+                            dtype=elem_type.str
                         )
                         df[tag] = np.empty_like(df[key], dtype=np.object)
                         for i, (h, s) in enumerate(zip(head, size)):
