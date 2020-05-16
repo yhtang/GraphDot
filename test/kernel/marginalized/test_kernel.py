@@ -89,7 +89,7 @@ labeled_graph1.add_edge('O1', 'H2', order=2, length=1.0)
 
 labeled_graph2 = nx.Graph(title='H2')
 labeled_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
-labeled_graph2.add_node('H2', hybridization=Hybrid.SP, charge=1)
+labeled_graph2.add_node('H2', hybridization=Hybrid.SP, charge=-1)
 labeled_graph2.add_edge('H1', 'H2', order=2, length=1.0)
 
 weighted_graph1 = nx.Graph(title='H2O')
@@ -101,7 +101,7 @@ weighted_graph1.add_edge('O1', 'H2', order=2, length=1.0, w=2.0)
 
 weighted_graph2 = nx.Graph(title='H2')
 weighted_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
-weighted_graph2.add_node('H2', hybridization=Hybrid.SP, charge=1)
+weighted_graph2.add_node('H2', hybridization=Hybrid.SP, charge=-1)
 weighted_graph2.add_edge('H1', 'H2', order=2, length=1.0, w=3.0)
 
 case_dict = {
@@ -226,10 +226,11 @@ def test_mlgk_derivative(caseitem):
         assert(R.shape[1] == dR.shape[1])
         assert(dR.shape[2] >= 1)
 
-        eps = 1e-4
         for i in range(len(mlgk.theta)):
 
             theta = mlgk.theta
+
+            eps = np.exp(theta)[i] * 4e-3
 
             t = np.exp(theta)
             t[i] += eps
@@ -246,7 +247,7 @@ def test_mlgk_derivative(caseitem):
             dR_fdiff = (Rr - Rl) / (2 * eps)
 
             for a, b in zip(dR[:, :, i].ravel(), dR_fdiff.ravel()):
-                assert(a == pytest.approx(b, 1e-2))
+                assert(a == pytest.approx(b, 0.05))
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
