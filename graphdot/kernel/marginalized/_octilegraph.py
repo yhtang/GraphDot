@@ -40,7 +40,7 @@ class OctileGraph:
         self.n_node = len(nodes)
         nnz = len(edges)
 
-        ''' substitute columns corresponding to object-type node/edge 
+        ''' substitute columns corresponding to object-type node/edge
         attributes to their GPU counterparts '''
         for df in [nodes, edges]:
             for key in list(df.columns):
