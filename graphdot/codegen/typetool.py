@@ -45,6 +45,20 @@ def common_min_type(iterable, coerce=True, min_float=np.float32):
     return t
 
 
+def have_same_fields(t1, t2):
+    if bool(t1.fields) != bool(t2.fields):
+        return False
+    if t1.fields and t2.fields:
+        if len(t1.fields) != len(t2.fields):
+            return False
+        if set(t1.fields) != set(t2.fields):
+            return False
+        for f in t1.fields:
+            if not have_same_fields(t1.fields[f][0], t2.fields[f][0]):
+                return False
+    return True
+
+
 class _dtype_util:
     @staticmethod
     def is_object(t):

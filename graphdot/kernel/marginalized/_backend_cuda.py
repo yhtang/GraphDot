@@ -64,15 +64,6 @@ class CUDABackend(Backend):
     def __deepcopy__(self, memo):
         return copy.copy(self)
 
-    def _assert_homogeneous(self, x, y):
-        try:
-            assert(x.weighted == y.weighted)
-            assert(x.node_type == y.node_type)
-            assert(x.edge_type == y.edge_type)
-        except AssertionError as e:
-            raise TypeError('All graphs must be of the same type: %s' %
-                            str(e))
-
     def _allocate_scratch(self, count, capacity):
         if (self.scratch is None or len(self.scratch) < count or
                 self.scratch[0].capacity < capacity):
@@ -178,8 +169,6 @@ class CUDABackend(Backend):
 
         for i, g in enumerate(graphs):
             idx, ps, og = self._register_graph(g, p)
-            if i > 0:
-                self._assert_homogeneous(og_last, og)
             og_last = og
             og_indices[i] = idx
             starting_p[i] = int(ps.base)

@@ -3,6 +3,7 @@
 import copy
 from collections import namedtuple
 import numpy as np
+from graphdot.codegen.typetool import have_same_fields
 from graphdot.util import Timer
 from ._backend_factory import backend_factory
 
@@ -90,6 +91,31 @@ class MarginalizedGraphKernel:
         else:
             return p
 
+    def _assert_homogeneous(self, X):
+        '''Ensure that all graphs have the same type.'''
+        x0 = next(iter(X))
+        t_node_0, t_edge_0 = x0.nodes.rowtype(), x0.edges.rowtype()
+        for x in X:
+            t_node, t_edge = x.nodes.rowtype(), x.edges.rowtype()
+            for part, t, t0 in [('node', t_node, t_node_0),
+                                ('edge', t_edge, t_edge_0)]:
+                if t != t0:
+                    if have_same_fields(t, t0):
+                        raise TypeError(
+                            f'The two graphs have the same set of {part} '
+                            'attributes but with different data types, try to '
+                            'fix with `Graph.homogenize`.\n'
+                            f'First graph: {x0}\n'
+                            f'Second graph: {x}\n'
+                        )
+                    else:
+                        raise TypeError(
+                            f'The two graphs have different sets of {part} '
+                            'attributes and cannot be compared.\n'
+                            f'First graph: {x0}\n'
+                            f'Second graph: {x}\n'
+                        )
+
     def __call__(self, X, Y=None, eval_gradient=False, nodal=False, lmin=0,
                  timing=False):
         """Compute pairwise similarity matrix between graphs
@@ -126,6 +152,9 @@ class MarginalizedGraphKernel:
             lmin=lmin,
             eval_gradient=eval_gradient
         )
+
+        ''' assert graph attributes are compatible with each other '''
+        self._assert_homogeneous(X + Y if Y is not None else X)
 
         ''' generate jobs '''
         timer.tic('generating jobs')
@@ -239,6 +268,9 @@ class MarginalizedGraphKernel:
         """
         timer = Timer()
         backend = self.backend
+
+        ''' assert graph attributes are compatible with each other '''
+        self._assert_homogeneous(X)
 
         ''' generate jobs '''
         timer.tic('generating jobs')
