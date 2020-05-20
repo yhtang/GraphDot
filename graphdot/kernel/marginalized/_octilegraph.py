@@ -44,7 +44,7 @@ class OctileGraph:
         for df in [nodes, edges]:
             for key in list(df.columns):
                 if not np.issctype(df[key].dtype):
-                    if df[key].element_type in [list, tuple]:
+                    if df[key].element_type in [list, tuple, np.ndarray]:
                         inner_type = common_min_type(
                             it.chain.from_iterable(df[key])
                         )

@@ -7,9 +7,10 @@ this library, and provides conversion and importing methods from popular
 graph formats.
 """
 import uuid
-from itertools import product
+import itertools as it
 import numpy as np
 from scipy.spatial import cKDTree
+from graphdot.codegen.typetool import common_min_type
 from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.minipandas import DataFrame
 
@@ -49,6 +50,67 @@ class Graph:
                    repr(self.nodes),
                    repr(self.edges),
                    repr(self.title))
+
+    @staticmethod
+    def is_type_consistent(graphs):
+        '''Check if all graphs have the same set of nodal/edge attributes.'''
+        first = next(iter(graphs))
+        node_t = first.nodes.rowtype()
+        edge_t = first.edges.rowtype()
+        for second in graphs:
+            if second.nodes.rowtype() != node_t:
+                return ('nodes', first, second)
+            elif second.edges.rowtype() != edge_t:
+                return ('edges', first, second)
+        return True
+
+    @staticmethod
+    def normalize_types(graphs):
+        '''Ensure that each attribute has the same data type across graphs'''
+        attributes = {}
+        for component in ['nodes', 'edges']:
+            first = None
+            for g in graphs:
+                second = set(getattr(g, component).columns)
+                first = first or second
+                if second != first:
+                    raise TypeError(
+                        f'Graph {g} with node attributes {second} '
+                        'does not match with the other graphs.'
+                    )
+            attributes[component] = first
+        for component in ['nodes', 'edges']:
+            group = [getattr(g, component) for g in graphs]
+            for key in attributes[component]:
+                t = common_min_type(
+                    it.chain.from_iterable([g[key] for g in group])
+                )
+                if t == np.object:
+                    t = common_min_type(
+                        it.chain.from_iterable([g[key] for g in group]),
+                        coerce=False
+                    )
+                if t is None:
+                    raise TypeError(
+                        f'Cannot normalize attribute {key} containing mixed '
+                        'object types'
+                    )
+
+                if np.issctype(t):
+                    for g in group:
+                        g[key] = g[key].astype(t)
+                elif t in [list, tuple]:
+                    t_sub = common_min_type(
+                        it.chain.from_iterable(
+                            it.chain.from_iterable([g[key] for g in group])
+                        )
+                    )
+                    if t_sub is None:
+                        raise TypeError(
+                            f'Cannot find a common type for elements in {key}.'
+                        )
+                    for g in group:
+                        g[key] = [np.array(seq, dtype=t_sub) for seq in g[key]]
 
     # @classmethod
     # def from_auto(cls, graph):
@@ -168,7 +230,7 @@ class Graph:
             nodes['charge'] = atoms.get_initial_charges().astype(np.float32)
 
         pbc = np.logical_and(atoms.pbc, use_pbc)
-        images = [(atoms.cell.T * image).sum(axis=1) for image in product(
+        images = [(atoms.cell.T * image).sum(axis=1) for image in it.product(
             *tuple([-1, 0, 1] if p else [0] for p in pbc))]
         x = atoms.get_positions()
         x_images = np.vstack([x + i for i in images])

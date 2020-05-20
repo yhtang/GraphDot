@@ -70,8 +70,11 @@ class CUDABackend(Backend):
             assert(x.node_type == y.node_type)
             assert(x.edge_type == y.edge_type)
         except AssertionError as e:
-            raise TypeError('All graphs must be of the same type: %s' %
-                            str(e))
+            raise TypeError(
+                f'All nodes/edges must be of the same type: {str(e)}'
+                'If the graph attributes match in name but differ in type, '
+                'try to normalize automatically with `Graph.normalize_types`.'
+            )
 
     def _allocate_scratch(self, count, capacity):
         if (self.scratch is None or len(self.scratch) < count or

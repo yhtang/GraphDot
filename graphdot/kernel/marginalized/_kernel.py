@@ -3,7 +3,7 @@
 import copy
 from collections import namedtuple
 import numpy as np
-from graphdot.codegen.typetool import have_same_fields
+from graphdot.graph import Graph
 from graphdot.util import Timer
 from ._backend_factory import backend_factory
 
@@ -91,31 +91,6 @@ class MarginalizedGraphKernel:
         else:
             return p
 
-    def _assert_homogeneous(self, X):
-        '''Ensure that all graphs have the same type.'''
-        x0 = next(iter(X))
-        node_t_0, edge_t_0 = x0.nodes.rowtype(), x0.edges.rowtype()
-        for x in X:
-            node_t, edge_t = x.nodes.rowtype(), x.edges.rowtype()
-            for part, t, t0 in [('node', node_t, node_t_0),
-                                ('edge', edge_t, edge_t_0)]:
-                if t != t0:
-                    if have_same_fields(t, t0):
-                        raise TypeError(
-                            f'The two graphs have the same set of {part} '
-                            'attributes but with different data types, try to '
-                            'fix with `Graph.homogenize`.\n'
-                            f'First graph: {x0}\n'
-                            f'Second graph: {x}\n'
-                        )
-                    else:
-                        raise TypeError(
-                            f'The two graphs have different sets of {part} '
-                            'attributes and cannot be compared.\n'
-                            f'First graph: {x0}\n'
-                            f'Second graph: {x}\n'
-                        )
-
     def __call__(self, X, Y=None, eval_gradient=False, nodal=False, lmin=0,
                  timing=False):
         """Compute pairwise similarity matrix between graphs
@@ -154,7 +129,16 @@ class MarginalizedGraphKernel:
         )
 
         ''' assert graph attributes are compatible with each other '''
-        self._assert_homogeneous(X + Y if Y is not None else X)
+        pred_or_tuple = Graph.is_type_consistent(X + Y if Y is not None else X)
+        if pred_or_tuple is not True:
+            group, first, second = pred_or_tuple
+            raise TypeError(
+                f'The two graphs have mismatching {group} attributes or '
+                'attribute types. If the attributes match in name but differ '
+                'in type, try `Graph.normalize_types` as an automatic fix.\n'
+                f'First graph: {first}\n'
+                f'Second graph: {second}\n'
+            )
 
         ''' generate jobs '''
         timer.tic('generating jobs')
@@ -270,7 +254,17 @@ class MarginalizedGraphKernel:
         backend = self.backend
 
         ''' assert graph attributes are compatible with each other '''
-        self._assert_homogeneous(X)
+        pred_or_tuple = Graph.is_type_consistent(X)
+        if pred_or_tuple is not True:
+            group, first, second = pred_or_tuple
+            raise TypeError(
+                f'The two graphs have mismatching {group} attributes or '
+                'attribute types.'
+                'If the attribute names do match, then try to normalize data '
+                'types automatically with `Graph.normalize_types`.\n'
+                f'First graph: {first}\n'
+                f'Second graph: {second}\n'
+            )
 
         ''' generate jobs '''
         timer.tic('generating jobs')
