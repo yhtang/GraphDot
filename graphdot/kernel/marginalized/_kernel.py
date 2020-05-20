@@ -94,11 +94,11 @@ class MarginalizedGraphKernel:
     def _assert_homogeneous(self, X):
         '''Ensure that all graphs have the same type.'''
         x0 = next(iter(X))
-        t_node_0, t_edge_0 = x0.nodes.rowtype(), x0.edges.rowtype()
+        node_t_0, edge_t_0 = x0.nodes.rowtype(), x0.edges.rowtype()
         for x in X:
-            t_node, t_edge = x.nodes.rowtype(), x.edges.rowtype()
-            for part, t, t0 in [('node', t_node, t_node_0),
-                                ('edge', t_edge, t_edge_0)]:
+            node_t, edge_t = x.nodes.rowtype(), x.edges.rowtype()
+            for part, t, t0 in [('node', node_t, node_t_0),
+                                ('edge', edge_t, edge_t_0)]:
                 if t != t0:
                     if have_same_fields(t, t0):
                         raise TypeError(

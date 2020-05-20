@@ -29,17 +29,40 @@ def can_cast(src, dst):
 
 
 def common_min_type(iterable, coerce=True, min_float=np.float32):
-    '''Find the common minimum scalar type that can safely hold all elements of
-    an iterable.'''
+    '''Find the common minimum elemet type that can safely hold all elements of
+    an iterable sequence.
+
+    Parameters
+    ----------
+    iterable:
+        Sequence of objects for which a common type is to be inferred.
+    coerce: bool
+        Whether or not to up-cast in case when elements have different
+        but inter-converible types.
+    min_float: dtype
+        The smallest floating-point type that should be returned. Introduced
+        because float16 is not universally supported yet.
+
+    Returns
+    -------
+    t: np.dtype or class
+        If `coerce=True`, t would be the smallest numpy type that can
+        safely contain all the values; otherwise, t would either be the smaller
+        numpy dtype or the Python class that the elements are of.
+    '''
     t = None
     for i in iterable:
-        r = np.min_scalar_type(i) if np.isscalar(i) else np.object
+        r = np.min_scalar_type(i) if np.isscalar(i) else type(i)
         t = t or r
-        if t != r and not coerce:
-            return None
-        t = np.promote_types(t, r)
+        if t != r:
+            if coerce:
+                t = np.promote_types(t, r)
+            else:
+                t = 'N/A'
 
-    if coerce and t.kind == 'f':
+    if isinstance(t, str) and t == 'N/A':
+        t = None
+    elif isinstance(t, np.dtype) and t.kind == 'f':
         t = np.promote_types(t, min_float)
 
     return t

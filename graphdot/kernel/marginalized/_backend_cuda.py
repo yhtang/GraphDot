@@ -176,8 +176,8 @@ class CUDABackend(Backend):
         og_indices_d = umlike(self.graph_cpp[og_indices])
 
         weighted = og_last.weighted
-        node_type = og_last.node_type
-        edge_type = og_last.edge_type
+        node_t = og_last.node_t
+        edge_t = og_last.edge_t
 
         timer.toc('transferring graphs to GPU')
 
@@ -199,8 +199,8 @@ class CUDABackend(Backend):
             self.source = template.render(
                 node_kernel=node_kernel_src,
                 edge_kernel=edge_kernel_src,
-                node_t=decltype(node_type),
-                edge_t=decltype(edge_type)
+                node_t=decltype(node_t),
+                edge_t=decltype(edge_t)
             )
         timer.toc('code generation')
 

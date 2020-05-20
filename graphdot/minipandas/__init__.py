@@ -6,16 +6,28 @@ import pandas as pd
 from graphdot.codegen.typetool import common_min_type
 
 
-def _as_1darray(array):
-    _1darray = np.empty(len(array), dtype=common_min_type(array))
-    _1darray[:] = array
-    return _1darray
-
-
 class Series(np.ndarray):
     '''A thin wrapper to customize serialization behavior'''
     def __repr__(self):
         return np.array2string(self, separator=',', max_line_width=1e20)
+
+    def get_type(self, deep):
+        if deep:
+            return self.element_type
+        else:
+            return self.base.dtype
+
+    def infer_element_type(self):
+        self.element_type = common_min_type(self.base)
+
+    @staticmethod
+    def as_series(iterable):
+        t = common_min_type(iterable)
+        dtype = t if np.issctype(t) else np.object
+        series = np.empty(len(iterable), dtype=dtype).view(Series)
+        series[:] = iterable
+        series.element_type = t
+        return series
 
 
 class DataFrame:
@@ -36,8 +48,11 @@ class DataFrame:
 
     def __setitem__(self, key, value):
         if not isinstance(value, np.ndarray):
-            value = _as_1darray(value)
-        self._data[key] = value.view(Series)
+            value = Series.as_series(value)
+        else:
+            value = value.view(Series)
+            value.infer_element_type()
+        self._data[key] = value
 
     def __repr__(self):
         return repr(self._data)
@@ -56,22 +71,9 @@ class DataFrame:
     def columns(self):
         return list(self._data.keys())
 
-    def rowtype(self, pack=False):
-
-        def element_type(key, array):
-            if array.dtype != np.object:
-                return array.dtype
-            else:
-                t = None
-                for element in array:
-                    t = t or element.dtype
-                    if t != element.dtype:
-                        raise TypeError(
-                            f'Inconsistent type between rows of column {key}'
-                        )
-                return t
-
-        etypes = {key: element_type(key, self[key]) for key in self.columns}
+    def rowtype(self, deep=True, pack=True):
+        etypes = {key: np.dtype(self[key].get_type(deep=deep))
+                  for key in self.columns}
         cols = np.array(list(self.columns))
         if pack is True:
             perm = np.argsort([-etypes[key].itemsize for key in self.columns])
@@ -93,8 +95,8 @@ class DataFrame:
                 else:
                     return super().__getitem__(key)
 
-        for i in range(len(self)):
-            yield RowTuple(*[self._data[key][i] for key in visible])
+        for row in zip(*[self[key] for key in visible]):
+            yield RowTuple(row)
 
     def itertuples(self):
         '''Alias of `rows()` for API compatibility with pandas.'''
