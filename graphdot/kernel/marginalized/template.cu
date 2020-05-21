@@ -1,6 +1,7 @@
 #include <graph.h>
 #include <marginalized_kernel.h>
 #include <fmath.h>
+#include <frozen_array.h>
 #include <numpy_type.h>
 #include <util_cuda.h>
 

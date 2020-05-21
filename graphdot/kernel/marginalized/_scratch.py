@@ -6,7 +6,7 @@ from graphdot.codegen.typetool import cpptype
 
 
 @cpptype(p_buffer=np.uintp, capacity=np.int64)
-class BlockScratch(object):
+class BlockScratch:
     def __init__(self, capacity):
         self.capacity = ((capacity + 15) // 16) * 16
         if capacity <= 0:

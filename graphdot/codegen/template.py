@@ -48,6 +48,7 @@ class Template:
             repl = substitutions[symbol]
             if isinstance(repl, (list, tuple)):
                 pattern = r'\${%s([^}]*)}' % symbol
+                repl = [str(r) for r in repl]
                 text = re.sub(pattern, lambda m: m.group(1).join(repl), text)
             else:
                 pattern = r'\${%s}' % symbol

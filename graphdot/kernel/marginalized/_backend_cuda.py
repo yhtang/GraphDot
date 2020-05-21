@@ -67,11 +67,14 @@ class CUDABackend(Backend):
     def _assert_homogeneous(self, x, y):
         try:
             assert(x.weighted == y.weighted)
-            assert(x.node_type == y.node_type)
-            assert(x.edge_type == y.edge_type)
+            assert(x.node_t == y.node_t)
+            assert(x.edge_t == y.edge_t)
         except AssertionError as e:
-            raise TypeError('All graphs must be of the same type: %s' %
-                            str(e))
+            raise TypeError(
+                f'All nodes/edges must be of the same type: {str(e)}'
+                'If the graph attributes match in name but differ in type, '
+                'try to normalize automatically with `Graph.normalize_types`.'
+            )
 
     def _allocate_scratch(self, count, capacity):
         if (self.scratch is None or len(self.scratch) < count or
@@ -187,8 +190,8 @@ class CUDABackend(Backend):
         og_indices_d = umlike(self.graph_cpp[og_indices])
 
         weighted = og_last.weighted
-        node_type = og_last.node_type
-        edge_type = og_last.edge_type
+        node_t = og_last.node_t
+        edge_t = og_last.edge_t
 
         timer.toc('transferring graphs to GPU')
 
@@ -210,8 +213,8 @@ class CUDABackend(Backend):
             self.source = template.render(
                 node_kernel=node_kernel_src,
                 edge_kernel=edge_kernel_src,
-                node_t=decltype(node_type),
-                edge_t=decltype(edge_type)
+                node_t=decltype(node_t),
+                edge_t=decltype(edge_t)
             )
         timer.toc('code generation')
 

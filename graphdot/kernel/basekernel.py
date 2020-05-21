@@ -213,7 +213,7 @@ class BaseKernel:
                 '    Lower and upper bounds of `${name}`.'
             ).render(
                 name=name,
-                type=str(hdef['dtype']),
+                type=hdef['dtype'],
                 desc=[s.strip() for s in hdef.get('doc', '').split('\n')]
             ) for name, hdef in hyperdefs.items()
         ]
