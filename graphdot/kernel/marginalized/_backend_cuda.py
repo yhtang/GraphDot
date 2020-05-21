@@ -67,8 +67,8 @@ class CUDABackend(Backend):
     def _assert_homogeneous(self, x, y):
         try:
             assert(x.weighted == y.weighted)
-            assert(x.node_type == y.node_type)
-            assert(x.edge_type == y.edge_type)
+            assert(x.node_t == y.node_t)
+            assert(x.edge_t == y.edge_t)
         except AssertionError as e:
             raise TypeError(
                 f'All nodes/edges must be of the same type: {str(e)}'

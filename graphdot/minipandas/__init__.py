@@ -3,7 +3,7 @@
 from collections import namedtuple
 import numpy as np
 import pandas as pd
-from graphdot.codegen.typetool import common_min_type
+from graphdot.codegen.typetool import common_concrete_type, common_min_type
 
 
 class Series(np.ndarray):
@@ -11,22 +11,26 @@ class Series(np.ndarray):
     def __repr__(self):
         return np.array2string(self, separator=',', max_line_width=1e20)
 
-    def get_type(self, deep):
-        if deep:
-            return self.element_type
+    def get_type(self, concrete):
+        if concrete:
+            return self.concrete_type
         else:
-            return self.base.dtype
-
-    def infer_element_type(self):
-        self.element_type = common_min_type(self.base)
+            return self.dtype
 
     @staticmethod
     def as_series(iterable):
-        t = common_min_type(iterable)
-        dtype = t if np.issctype(t) else np.object
-        series = np.empty(len(iterable), dtype=dtype).view(Series)
-        series[:] = iterable
-        series.element_type = t
+        if isinstance(iterable, np.ndarray):
+            series = iterable.view(Series)
+            if np.issctype(series.dtype):
+                series.concrete_type = series.dtype
+            else:
+                series.concrete_type = common_concrete_type.of_values(series)
+        else:
+            t = common_min_type.of_values(iterable)
+            dtype = t if np.issctype(t) else np.object
+            series = np.empty(len(iterable), dtype=dtype).view(Series)
+            series[:] = iterable
+            series.concrete_type = t
         return series
 
 
@@ -47,12 +51,7 @@ class DataFrame:
             raise TypeError(f'Invalid column index {key}')
 
     def __setitem__(self, key, value):
-        if not isinstance(value, np.ndarray):
-            value = Series.as_series(value)
-        else:
-            value = value.view(Series)
-            value.infer_element_type()
-        self._data[key] = value
+        self._data[key] = Series.as_series(value)
 
     def __repr__(self):
         return repr(self._data)
@@ -72,7 +71,7 @@ class DataFrame:
         return list(self._data.keys())
 
     def rowtype(self, deep=True, pack=True):
-        etypes = {key: np.dtype(self[key].get_type(deep=deep))
+        etypes = {key: np.dtype(self[key].get_type(concrete=deep))
                   for key in self.columns}
         cols = np.array(list(self.columns))
         if pack is True:
@@ -95,8 +94,10 @@ class DataFrame:
                 else:
                     return super().__getitem__(key)
 
-        for row in zip(*[self[key] for key in visible]):
-            yield RowTuple(row)
+        # for row in zip(*[self[key] for key in visible]):
+        #     yield RowTuple(row)
+        for i in range(len(self)):
+            yield RowTuple(*[self[key][i] for key in visible])
 
     def itertuples(self):
         '''Alias of `rows()` for API compatibility with pandas.'''

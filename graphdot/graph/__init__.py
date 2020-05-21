@@ -82,25 +82,24 @@ class Graph:
         for component in ['nodes', 'edges']:
             group = [getattr(g, component) for g in graphs]
             for key in attributes[component]:
-                t = common_min_type(
-                    it.chain.from_iterable([g[key] for g in group])
-                )
+                types = [g[key].get_type(concrete=True) for g in group]
+                t = common_min_type.of_types(types)
                 if t == np.object:
-                    t = common_min_type(
-                        it.chain.from_iterable([g[key] for g in group]),
-                        coerce=False
-                    )
+                    t = common_min_type.of_types(types, coerce=False)
                 if t is None:
                     raise TypeError(
                         f'Cannot normalize attribute {key} containing mixed '
                         'object types'
                     )
 
+                # print(component, key, t)
+
                 if np.issctype(t):
                     for g in group:
                         g[key] = g[key].astype(t)
-                elif t in [list, tuple]:
-                    t_sub = common_min_type(
+                        # print(f'g[{key}].dtype', g[key].dtype)
+                elif t in [list, tuple, np.ndarray]:
+                    t_sub = common_min_type.of_values(
                         it.chain.from_iterable(
                             it.chain.from_iterable([g[key] for g in group])
                         )
@@ -111,6 +110,7 @@ class Graph:
                         )
                     for g in group:
                         g[key] = [np.array(seq, dtype=t_sub) for seq in g[key]]
+        return graphs
 
     # @classmethod
     # def from_auto(cls, graph):

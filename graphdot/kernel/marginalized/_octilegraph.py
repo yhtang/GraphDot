@@ -44,16 +44,18 @@ class OctileGraph:
         for df in [nodes, edges]:
             for key in list(df.columns):
                 if not np.issctype(df[key].dtype):
-                    if df[key].element_type in [list, tuple, np.ndarray]:
-                        inner_type = common_min_type(
-                            it.chain.from_iterable(df[key])
+                    if df[key].concrete_type in [list, tuple, np.ndarray]:
+                        inner_type = common_min_type.of_types(
+                            [x.dtype if isinstance(x, np.ndarray)
+                             else common_min_type.of_values(x)
+                             for x in df[key]]
                         )
                         if not np.issctype(inner_type):
                             raise(TypeError(
                                 f'Expect scalar elements in tuple or list'
                                 f'atttributes, got {inner_type}.'
                             ))
-                        if inner_type.names:
+                        if not np.issctype(inner_type):
                             raise TypeError(
                                 f'List-like graphs attribute must have scalar'
                                 f'elements. Attribute {key} is {inner_type}.'
@@ -79,7 +81,7 @@ class OctileGraph:
                     else:
                         raise TypeError(
                             f'Unsupported non-scalar attribute {key} '
-                            f'of type {df[key].element_type}'
+                            f'of type {df[key].concrete_type}'
                         )
 
         ''' add phantom label if none exists to facilitate C++ interop '''

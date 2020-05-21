@@ -101,20 +101,24 @@ weighted_graph1.add_edge('O1', 'H2', order=2, length=1.0, w=2.0)
 
 weighted_graph2 = nx.Graph(title='H2')
 weighted_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
-weighted_graph2.add_node('H2', hybridization=Hybrid.SP, charge=-1)
+weighted_graph2.add_node('H2', hybridization=Hybrid.SP, charge=1)
 weighted_graph2.add_edge('H1', 'H2', order=2, length=1.0, w=3.0)
 
 case_dict = {
     'unlabeled': {
-        'graphs': [Graph.from_networkx(unlabeled_graph1),
-                   Graph.from_networkx(unlabeled_graph2)],
+        'graphs': Graph.normalize_types([
+            Graph.from_networkx(unlabeled_graph1),
+            Graph.from_networkx(unlabeled_graph2)
+        ]),
         'knode': Constant(1.0),
         'kedge': Constant(1.0),
         'q': [0.01, 0.05, 0.1, 0.5]
     },
     'labeled': {
-        'graphs': [Graph.from_networkx(labeled_graph1),
-                   Graph.from_networkx(labeled_graph2)],
+        'graphs': Graph.normalize_types([
+            Graph.from_networkx(labeled_graph1),
+            Graph.from_networkx(labeled_graph2)
+        ]),
         'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
                                charge=SquareExponential(1.0)),
         'kedge': TensorProduct(order=KroneckerDelta(0.3),
@@ -122,8 +126,10 @@ case_dict = {
         'q': [0.01, 0.05, 0.1, 0.5]
     },
     'weighted': {
-        'graphs': [Graph.from_networkx(weighted_graph1, weight='w'),
-                   Graph.from_networkx(weighted_graph2, weight='w')],
+        'graphs': Graph.normalize_types([
+            Graph.from_networkx(weighted_graph1, weight='w'),
+            Graph.from_networkx(weighted_graph2, weight='w')
+        ]),
         'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
                                charge=SquareExponential(1.0)),
         'kedge': TensorProduct(order=KroneckerDelta(0.3),
@@ -209,8 +215,6 @@ def test_mlgk_derivative(caseitem):
     '''derivative w.r.t. hyperparameters'''
 
     _, case = caseitem
-
-    print('Case', _)
 
     G = case['graphs']
     knode = case['knode']
