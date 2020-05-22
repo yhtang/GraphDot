@@ -4,30 +4,25 @@ Installation
 Prerequisites
 --------------------------------------------------------------------------------
 
-GraphDot requires a CUDA Toolkit installation to carry out GPU computations.
-To install it, see https://developer.nvidia.com/cuda-toolkit.
+GraphDot requires a CUDA Toolkit installation for carrying out GPU computations.
+To install it, following the instructions on
+https://developer.nvidia.com/cuda-toolkit.
 
 
 Installation using pip
 --------------------------------------------------------------------------------
 
-For core functionality (GPU-accelerated marginalized graph kernel) only:
+GraphDot can be installed from PyPI as simple as:
 
 .. code-block:: bash
 
     pip install graphdot
 
-For molecular modeling and interoperability with the ASE and pymatgen package:
 
-.. code-block:: bash
-
-    pip install graphdot[molecular]
-
-
-Installation from source
+Install from source
 --------------------------------------------------------------------------------
 
-Ubuntu/Fedora/macOS
+For Ubuntu/Fedora/macOS
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 .. code-block:: bash

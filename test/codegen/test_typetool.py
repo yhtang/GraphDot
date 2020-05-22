@@ -5,17 +5,10 @@ from copy import copy
 import numpy as np
 import pytest
 import exrex
-from graphdot.codegen.typetool import cpptype, decltype, rowtype
-from graphdot.minipandas import DataFrame
-
-cpptype_cases = [
-    ([], tuple()),
-    ()
-]
+from graphdot.codegen.typetool import cpptype, decltype
 
 
-def test_cpptype():
-
+class ListSpecs:
     @cpptype([])
     class Null(object):
         pass
@@ -28,6 +21,26 @@ def test_cpptype():
     class X(object):
         pass
 
+
+class KWSpecs:
+    @cpptype()
+    class Null(object):
+        pass
+
+    @cpptype(x=np.int32, y=np.float32)
+    class A(object):
+        pass
+
+    @cpptype(A=A.dtype, B=np.bool_)
+    class X(object):
+        pass
+
+
+@pytest.mark.parametrize('Null', [ListSpecs.Null, KWSpecs.Null])
+@pytest.mark.parametrize('A', [ListSpecs.A, KWSpecs.A])
+@pytest.mark.parametrize('X', [ListSpecs.X, KWSpecs.X])
+def test_cpptype(Null, A, X):
+
     assert(Null().state == tuple())
     assert('cpptype' in repr(Null))
     assert(Null.dtype.isalignedstruct)
@@ -35,7 +48,7 @@ def test_cpptype():
 
     a = A()
     a.x = 1
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         a.y = 2
     a.y = 1.5
     a.z = False
@@ -48,13 +61,13 @@ def test_cpptype():
     x.A = copy(a)
     x.A.x = 3
     x.A.y = -1.4
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         x.A = 1
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         x.A = 1.5
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         x.A = True
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         x.A = np.zeros(5)
     x.B = True
     assert(len(x.state) == 2)
@@ -64,77 +77,107 @@ def test_cpptype():
     assert(x.dtype.isalignedstruct)
 
 
-# only works with python >= 3.6
-# def test_cpptype_kwtype():
-#
-#     @cpptype()
-#     class Null(object):
-#         pass
-#
-#     @cpptype(x=np.int32, y=np.float32)
-#     class A(object):
-#         pass
-#
-#     @cpptype(A=A.dtype, B=np.bool_)
-#     class X(object):
-#         pass
-#
-#     assert(Null().state == tuple())
-#     assert('cpptype' in repr(Null))
-#     assert(Null.dtype.isalignedstruct)
-#     assert(Null().dtype.isalignedstruct)
-#
-#     a = A()
-#     a.x = 1
-#     with pytest.raises(ValueError):
-#         a.y = 2
-#     a.y = 1.5
-#     a.z = False
-#     assert(len(a.state) == 2)
-#     assert(a.state == (1, pytest.approx(1.5)))
-#     assert(A.dtype.isalignedstruct)
-#     assert(a.dtype.isalignedstruct)
-#
-#     x = X()
-#     x.A = copy(a)
-#     x.A.x = 3
-#     x.A.y = -1.4
-#     with pytest.raises(ValueError):
-#         x.A = 1
-#     with pytest.raises(ValueError):
-#         x.A = 1.5
-#     with pytest.raises(ValueError):
-#         x.A = True
-#     with pytest.raises(ValueError):
-#         x.A = np.zeros(5)
-#     x.B = True
-#     assert(len(x.state) == 2)
-#     assert(len(x.state[0]) == 2)
-#     assert(x.state == ((3, pytest.approx(-1.4)), True))
-#     assert(X.dtype.isalignedstruct)
-#     assert(x.dtype.isalignedstruct)
+def test_cpptype_array():
+
+    @cpptype(w=(np.float32, 4))
+    class Filter:
+        pass
+
+    f = Filter()
+
+    f.w = np.zeros(4)
+    f.w = [0.0, 1.0, 2.0, 3.0]
+    with pytest.raises(ValueError):
+        f.w = 1
+    with pytest.raises(TypeError):
+        f.w = np.zeros(4, dtype=np.bool_)
+    with pytest.raises(TypeError):
+        f.w = [1, 2, 3, 4]
+    with pytest.raises(ValueError):
+        f.w = np.zeros(8)
+
+    assert(len(f.state) == 1)
+    assert(len(f.state[0]) == 4)
+
+    with pytest.raises(TypeError):
+        @cpptype(w=(np.float32, 4))
+        class Faulty:
+            @property
+            def w(self):
+                return [1]
+
+        Faulty().state
+
+    with pytest.raises(ValueError):
+        @cpptype(w=(np.float32, 4))
+        class Faulty:
+            @property
+            def w(self):
+                return np.ones(3)
+
+        Faulty().state
+
+    # test array-of-objects states
+    @cpptype(a=np.int, b=np.bool_)
+    class Object:
+        pass
+
+    @cpptype(array=(Object.dtype, 4))
+    class ArrayOfObjects:
+        pass
+
+    obj = Object()
+    aoo = ArrayOfObjects()
+    obj.a = 1
+    obj.b = False
+    aoo.array = [obj, obj, obj, obj]
+    assert(len(aoo.state) == 1)
+    assert(len(aoo.state[0]) == 4)
+    assert(len(aoo.state[0][0]) == 2)
 
 
-comp1 = np.dtype([('x', np.float32), ('y', np.int16)])
-comp2 = np.dtype([('x', comp1), ('y', np.bool_)])
-decltype_cases = [
+@pytest.mark.parametrize('case', [
     (np.bool_, 'bool'),
     (np.uint16, 'uint16'),
     (np.int32, 'int32'),
-    (np.float64, 'float64')
-]
+    (np.float64, 'float64'),
+])
+def test_decltype_scalar(case):
+    dtype, typestring = case
+    assert(decltype(dtype).strip() == typestring)
 
 
-@pytest.mark.parametrize('case', decltype_cases)
-def test_decltype(case):
+@pytest.mark.parametrize('case', [
+    ('S1', 'char [1]'),
+    ('S2', 'char [2]'),
+    ('S5', 'char [5]'),
+    ('S10', 'char [10]'),
+])
+def test_decltype_string(case):
     dtype, typestring = case
     assert(decltype(dtype).strip() == typestring)
 
 
 def test_decltype_compose():
+    comp1 = np.dtype([('x', np.float32), ('y', np.int16)])
+    comp2 = np.dtype([('x', comp1), ('y', np.bool_)])
+
     assert(decltype(np.float32) in decltype(comp1))
     assert(decltype(np.int16) in decltype(comp1))
     assert(decltype(comp1, 'x') in decltype(comp2))
+
+
+@pytest.mark.parametrize('element_type', [
+    np.bool_, np.byte, np.int, np.float, np.float32, np.float64, np.intp
+])
+@pytest.mark.parametrize('size', [
+    (1,), (8,), (1, 1), (2, 3), (3, 5, 8)
+])
+def test_decltype_array(element_type, size):
+    assert(decltype((element_type, size)) ==
+           decltype(element_type) + ' ' + ''.join(["[%d]" % d for d in size]))
+    assert(decltype(str(size)+np.dtype(element_type).name) ==
+           decltype(element_type) + ' ' + ''.join(["[%d]" % d for d in size]))
 
 
 def test_decltype_empty():
@@ -163,30 +206,3 @@ def test_decltype_order():
             cnext = '%s;' % decltype(type.fields[next][0], next)
             assert(search(cprev, cstr).start() <=
                    search(cnext, cstr).start())
-
-
-rowtype_cases = [
-    # empty dataframe
-    (DataFrame([]), np.dtype([], align=True)),
-    # different types of columns
-    (DataFrame({'A': [1.5, 42.0],
-                'B': [-1, 32768],
-                'C': [False, True]}),
-     np.dtype([('A', np.float64),
-               ('B', np.int64),
-               ('C', np.bool_)], align=True)),
-    # small-big-small layout optimization
-    (DataFrame({'A': [True, False],
-                'B': [-1, 1],
-                'C': [False, True]}),
-     np.dtype([('A', np.bool_),
-               ('B', np.int64),
-               ('C', np.bool_)], align=True)),
-]
-
-
-@pytest.mark.parametrize('case', rowtype_cases)
-def test_rowtype(case):
-    df, dtype = case
-    # assert(rowtype(df, pack=False) == dtype)
-    assert(rowtype(df, pack=False).itemsize >= rowtype(df, pack=True).itemsize)

@@ -38,20 +38,20 @@ def test_octile_graph_unweighted():
     with pytest.raises(AttributeError):
         og.p_node = np.uintp(0)
 
-    assert(og.node_type.isalignedstruct)
-    for name in og.node_type.names:
+    assert(og.node_t.isalignedstruct)
+    for name in og.node_t.names:
         assert(name in dfg.nodes.columns)
-    assert('charge' in og.node_type.names)
-    assert('conjugate' in og.node_type.names)
-    assert('hybridization' in og.node_type.names)
+    assert('charge' in og.node_t.names)
+    assert('conjugate' in og.node_t.names)
+    assert('hybridization' in og.node_t.names)
 
-    assert(og.edge_type.isalignedstruct)
-    for name in og.edge_type.names:
+    assert(og.edge_t.isalignedstruct)
+    for name in og.edge_t.names:
         assert(name in dfg.edges.columns)
     for name in dfg.edges.columns:
         if name in ['!i', '!j']:
             continue
-        assert(name in og.edge_type.names)
+        assert(name in og.edge_t.names)
 
 
 def test_octile_graph_weighted():
@@ -85,24 +85,24 @@ def test_octile_graph_weighted():
     with pytest.raises(AttributeError):
         og.p_node = np.uintp(0)
 
-    assert(og.node_type.isalignedstruct)
-    for name in og.node_type.names:
+    assert(og.node_t.isalignedstruct)
+    for name in og.node_t.names:
         assert(name in dfg.nodes.columns)
-    assert('charge' in og.node_type.names)
-    assert('conjugate' in og.node_type.names)
-    assert('hybridization' in og.node_type.names)
+    assert('charge' in og.node_t.names)
+    assert('conjugate' in og.node_t.names)
+    assert('hybridization' in og.node_t.names)
 
-    assert(og.edge_type.isalignedstruct)
-    assert(len(og.edge_type.names) == 2)
-    assert('weight' in og.edge_type.names)
-    assert('label' in og.edge_type.names)
+    assert(og.edge_t.isalignedstruct)
+    assert(len(og.edge_t.names) == 2)
+    assert('weight' in og.edge_t.names)
+    assert('label' in og.edge_t.names)
 
-    for name in og.edge_type['label'].names:
+    for name in og.edge_t['label'].names:
         assert(name in dfg.edges.columns)
     for name in dfg.edges.columns:
         if name in ['!i', '!j', '!w']:
             continue
-        assert(name in og.edge_type['label'].names)
+        assert(name in og.edge_t['label'].names)
 
     # from pycuda.compiler import SourceModule
     # from graphdot.codegen import Template

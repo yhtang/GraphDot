@@ -99,10 +99,8 @@ class BaseKernel:
                     except KeyError:
                         if symbol not in values:
                             raise KeyError(
-                                # f'Hyperparameter {symbol} not provided '
-                                # f'for {self.__name__}'
-                                'Hyperparameter {} not provided for {}'.format(
-                                    symbol, self.__name__)
+                                f'Hyperparameter {symbol} not provided '
+                                f'for {self.__name__}'
                             )
 
                     try:
@@ -112,13 +110,8 @@ class BaseKernel:
                             bounds[symbol] = self._hyperdefs[symbol]['bounds']
                         except KeyError:
                             raise KeyError(
-                                # f'Bounds for hyperparameter {symbol} of '
-                                # f'kernel {self.__name__} not set, and no '
-                                'Bounds for hyperparameter {} of '
-                                'kernel {} not set, and no '
-                                'default value exists.'.format(
-                                     symbol, self.__name__
-                                )
+                                f'Bounds for hyperparameter {symbol} of '
+                                f'kernel {self.__name__} not set, and no '
                             )
 
             # @cached_property
@@ -165,12 +158,8 @@ class BaseKernel:
             def __repr__(self):
                 return Template('${cls}(${theta, }, ${bounds, })').render(
                     cls=self.__name__,
-                    # theta=[f'{n}={v}' for n, v in self._theta_values.items()],
-                    # bounds=[f'{n}_bounds={v}'
-                    #         for n, v in self._theta_bounds.items()]
-                    theta=['{}={}'.format(n, v)
-                           for n, v in self._theta_values.items()],
-                    bounds=['{}_bounds={}'.format(n, v)
+                    theta=[f'{n}={v}' for n, v in self._theta_values.items()],
+                    bounds=[f'{n}_bounds={v}'
                             for n, v in self._theta_bounds.items()]
                 )
 
@@ -224,7 +213,7 @@ class BaseKernel:
                 '    Lower and upper bounds of `${name}`.'
             ).render(
                 name=name,
-                type=str(hdef['dtype']),
+                type=hdef['dtype'],
                 desc=[s.strip() for s in hdef.get('doc', '').split('\n')]
             ) for name, hdef in hyperdefs.items()
         ]
@@ -280,8 +269,7 @@ class KernelOperator(BaseKernel):
         self.k2 = k2
 
     def __repr__(self):
-        # return f'{repr(self.k1)} {self.opstr} {repr(self.k2)}'
-        return '{} {} {}'.format(repr(self.k1), self.opstr, repr(self.k2))
+        return f'{repr(self.k1)} {self.opstr} {repr(self.k2)}'
 
     @property
     def theta(self):
@@ -298,9 +286,7 @@ class KernelOperator(BaseKernel):
 
     @staticmethod
     def add(k1, k2):
-        # only works with python >= 3.6
-        # @cpptype(k1=k1.dtype, k2=k2.dtype)
-        @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
+        @cpptype(k1=k1.dtype, k2=k2.dtype)
         class Add(KernelOperator):
 
             opstr = '+'
@@ -317,21 +303,17 @@ class KernelOperator(BaseKernel):
                 if jac is True:
                     f1, J1 = self.k1.gen_expr(x, y, True, theta_prefix + 'k1.')
                     f2, J2 = self.k2.gen_expr(x, y, True, theta_prefix + 'k2.')
-                    # return (f'({f1} + {f2})', J1 + J2)
-                    return ('({} + {})'.format(f1, f2), J1 + J2)
+                    return (f'({f1} + {f2})', J1 + J2)
                 else:
                     f1 = self.k1.gen_expr(x, y, False, theta_prefix + 'k1.')
                     f2 = self.k2.gen_expr(x, y, False, theta_prefix + 'k2.')
-                    # return f'({f1} + {f2})'
-                    return '({} + {})'.format(f1, f2)
+                    return f'({f1} + {f2})'
 
         return Add(k1, k2)
 
     @staticmethod
     def mul(k1, k2):
-        # only works with python >= 3.6
-        # @cpptype(k1=k1.dtype, k2=k2.dtype)
-        @cpptype([('k1', k1.dtype), ('k2', k2.dtype)])
+        @cpptype(k1=k1.dtype, k2=k2.dtype)
         class Mul(KernelOperator):
 
             opstr = '*'
@@ -352,18 +334,14 @@ class KernelOperator(BaseKernel):
                     f1, J1 = self.k1.gen_expr(x, y, True, theta_prefix + 'k1.')
                     f2, J2 = self.k2.gen_expr(x, y, True, theta_prefix + 'k2.')
                     return (
-                        # f'({f1} * {f2})',
-                        # [f'({j1} * {f2})' for j1 in J1] +
-                        # [f'({f1} * {j2})' for j2 in J2]
-                        '({} * {})'.format(f1, f2),
-                        ['({} * {})'.format(j1, f2) for j1 in J1] +
-                        ['({} * {})'.format(f1, j2) for j2 in J2]
+                        f'({f1} * {f2})',
+                        [f'({j1} * {f2})' for j1 in J1] +
+                        [f'({f1} * {j2})' for j2 in J2]
                     )
                 else:
                     f1 = self.k1.gen_expr(x, y, False, theta_prefix + 'k1.')
                     f2 = self.k2.gen_expr(x, y, False, theta_prefix + 'k2.')
-                    # return f'({f1} * {f2})'
-                    return '({} * {})'.format(f1, f2)
+                    return f'({f1} * {f2})'
 
         return Mul(k1, k2)
 
@@ -385,8 +363,7 @@ class _Multiply(BaseKernel):
         return '_Multiply()'
 
     def gen_expr(self, x, y, jac=False, theta_prefix=''):
-        # f = f'({x} * {y})'
-        f = '({} * {})'.format(x, y)
+        f = f'({x} * {y})'
         if jac is True:
             return f, []
         else:
@@ -420,9 +397,7 @@ def Constant(c, c_bounds=(0, np.inf)):
         A kernel instance of corresponding behavior
     """
 
-    # only works with python >= 3.6
-    # @cpptype(constant=np.float32)
-    @cpptype([('c', np.float32)])
+    @cpptype(c=np.float32)
     class ConstantKernel(BaseKernel):
         def __init__(self, c, c_bounds):
             self.c = float(c)
@@ -435,12 +410,10 @@ def Constant(c, c_bounds=(0, np.inf)):
                 return self.c
 
         def __repr__(self):
-            # return f'Constant({self.c})'
-            return 'Constant({})'.format(self.c)
+            return f'Constant({self.c})'
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
-            # f = f'{theta_prefix}c'
-            f = '{}c'.format(theta_prefix)
+            f = f'{theta_prefix}c'
             if jac is True:
                 return f, ['1.0f']
             else:
@@ -480,9 +453,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         A kernel instance of corresponding behavior
     """
 
-    # only works with python >= 3.6
-    # @cpptype(lo=np.float32, hi=np.float32)
-    @cpptype([('h', np.float32)])
+    @cpptype(h=np.float32)
     class KroneckerDeltaKernel(BaseKernel):
 
         def __init__(self, h, h_bounds):
@@ -496,15 +467,12 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
                 return 1.0 if i == j else self.h
 
         def __repr__(self):
-            # return f'KroneckerDelta({self.h})'
-            return 'KroneckerDelta({})'.format(self.h)
+            return f'KroneckerDelta({self.h})'
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
-            # f = f'({x} == {y} ? 1.0f : {theta_prefix}h)'
-            f = '({} == {} ? 1.0f : {}h)'.format(x, y, theta_prefix)
+            f = f'({x} == {y} ? 1.0f : {theta_prefix}h)'
             if jac is True:
-                # return f, [f'({x} == {y} ? 0.0f : 1.0f)']
-                return f, ['({} == {} ? 0.0f : 1.0f)'.format(x, y)]
+                return f, [f'({x} == {y} ? 0.0f : 1.0f)']
             else:
                 return f
 
@@ -605,9 +573,7 @@ def TensorProduct(**kw_kernels):
 
         def __repr__(self):
             return Template('TensorProduct(${kwexpr, })').render(
-                # kwexpr=[f'{k}={repr(K)}' for k, K in self.kw_kernels.items()])
-                kwexpr=['{}={}'.format(k, repr(K))
-                        for k, K in self.kw_kernels.items()])
+                kwexpr=[f'{k}={repr(K)}' for k, K in self.kw_kernels.items()])
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             F, J = list(
@@ -645,20 +611,95 @@ def TensorProduct(**kw_kernels):
 
     return TensorProductKernel(**kw_kernels)
 
-# class Convolution(BaseKernel):
-#     def __init__(self, kernel):
-#         self.kernel = kernel
 
-#     def __call__(self, object1, object2):
-#         sum = 0.0
-#         for part1 in object1:
-#             for part2 in object2:
-#                 sum += self.kernel(part1, part2)
-#         return sum
+def Convolution(kernel):
+    r"""Creates a convolution kernel, which sums up evaluations of a base
+    kernel on pairs of elements from two sequences.
+    :math:`k_{CONV}(X, Y) = \sum_{x \in X} \sum_{y \in Y} k_{base}(x, y)`
 
-#     def __repr__(self):
-#         return 'ΣΣ{}'.format(repr(self.kernel))
+    Parameters
+    ----------
+    kernel: base kernel
+        The kernel can be any base kernel or a composition of base kernels in
+        this module, while the attribute to be convolved should be
+        fixed-length sequences.
+    """
 
-#     @property
-#     def theta(self):
-#         return self.kernel.theta
+    @cpptype(kernel=kernel.dtype)
+    class ConvolutionKernel(BaseKernel):
+        def __init__(self, kernel):
+            self.kernel = kernel
+
+        def __call__(self, seq1, seq2, jac=False):
+            if jac is True:
+                Fxx, Jxx = list(zip(*[
+                    self.kernel(x, y, jac=True) for x in seq1 for y in seq1
+                ]))
+                Fxy, Jxy = list(zip(*[
+                    self.kernel(x, y, jac=True) for x in seq1 for y in seq2
+                ]))
+                Fyy, Jyy = list(zip(*[
+                    self.kernel(x, y, jac=True) for x in seq2 for y in seq2
+                ]))
+                Fxx, Fxy, Fyy = np.sum(Fxx), np.sum(Fxy), np.sum(Fyy)
+                Jxx = np.sum(Jxx, axis=0)
+                Jxy = np.sum(Jxy, axis=0)
+                Jyy = np.sum(Jyy, axis=0)
+
+                if Fxx > 0 and Fyy > 0:
+                    return (
+                        Fxy * (Fxx * Fyy)**-0.5,
+                        (Jxy * (Fxx * Fyy)**-0.5
+                         - (0.5 * Fxy * (Fxx * Fyy)**-1.5
+                            * (Jxx * Fyy + Fxx * Jyy)))
+                    )
+                else:
+                    return (0.0, np.zeros_like(Jxy))
+            else:
+                Fxx = np.sum([self.kernel(x, y) for x in seq1 for y in seq1])
+                Fxy = np.sum([self.kernel(x, y) for x in seq1 for y in seq2])
+                Fyy = np.sum([self.kernel(x, y) for x in seq2 for y in seq2])
+                return Fxy * (Fxx * Fyy)**-0.5 if Fxx > 0 and Fyy > 0 else 0.0
+
+        def __repr__(self):
+            return f'Convolution({repr(self.kernel)})'
+
+        def gen_expr(self, x, y, jac=False, theta_prefix=''):
+            F, J = self.kernel.gen_expr(
+                '_1', '_2', True, theta_prefix + 'kernel.'
+            )
+            f = Template(
+                r'convolution([&](auto _1, auto _2){return ${f};}, ${x}, ${y})'
+            ).render(
+                x=x, y=y, f=F
+            )
+            if jac is True:
+                template = Template(
+                    r'''convolution_jacobian(
+                            [&](auto _1, auto _2){return ${f};},
+                            [&](auto _1, auto _2){return ${j};},
+                            ${x},
+                            ${y}
+                        )'''
+                )
+                jacobian = [template.render(x=x, y=y, f=F, j=j) for j in J]
+                return f, jacobian
+            else:
+                return f
+
+        @property
+        def theta(self):
+            return namedtuple(
+                'ConvolutionHyperparameters',
+                ['kernel']
+            )(self.kernel.theta)
+
+        @theta.setter
+        def theta(self, seq):
+            self.kernel.theta = seq[0]
+
+        @property
+        def bounds(self):
+            return (self.kernel.bounds,)
+
+    return ConvolutionKernel(kernel)

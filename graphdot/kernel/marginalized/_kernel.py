@@ -3,6 +3,7 @@
 import copy
 from collections import namedtuple
 import numpy as np
+from graphdot.graph import Graph
 from graphdot.util import Timer
 from ._backend_factory import backend_factory
 
@@ -127,6 +128,18 @@ class MarginalizedGraphKernel:
             eval_gradient=eval_gradient
         )
 
+        ''' assert graph attributes are compatible with each other '''
+        pred_or_tuple = Graph.is_type_consistent(X + Y if Y is not None else X)
+        if pred_or_tuple is not True:
+            group, first, second = pred_or_tuple
+            raise TypeError(
+                f'The two graphs have mismatching {group} attributes or '
+                'attribute types. If the attributes match in name but differ '
+                'in type, try `Graph.normalize_types` as an automatic fix.\n'
+                f'First graph: {first}\n'
+                f'Second graph: {second}\n'
+            )
+
         ''' generate jobs '''
         timer.tic('generating jobs')
         if traits.symmetric:
@@ -239,6 +252,19 @@ class MarginalizedGraphKernel:
         """
         timer = Timer()
         backend = self.backend
+
+        ''' assert graph attributes are compatible with each other '''
+        pred_or_tuple = Graph.is_type_consistent(X)
+        if pred_or_tuple is not True:
+            group, first, second = pred_or_tuple
+            raise TypeError(
+                f'The two graphs have mismatching {group} attributes or '
+                'attribute types.'
+                'If the attribute names do match, then try to normalize data '
+                'types automatically with `Graph.normalize_types`.\n'
+                f'First graph: {first}\n'
+                f'Second graph: {second}\n'
+            )
 
         ''' generate jobs '''
         timer.tic('generating jobs')

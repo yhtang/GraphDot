@@ -36,14 +36,18 @@ sys.stderr.write('Loading file %s\n' % file)
 try:
     pdb_json = json.loads(open(file).read())
 except FileNotFoundError:
-    pdb_json = json.loads(open(os.path.join(os.path.dirname(__file__), file)).read())
+    pdb_json = json.loads(
+        open(os.path.join(os.path.dirname(__file__), file)).read()
+    )
 graph_list = []
 
 for i in active:
 
     mol = pdb_json[i]
 
-    sys.stderr.write('%5d: %s, %d atoms\n' % (i, mol['pdb_id'], len(mol['sym'])))
+    sys.stderr.write(
+        '%5d: %s, %d atoms\n' % (i, mol['pdb_id'], len(mol['sym']))
+    )
 
     atoms = Atoms(mol['sym'], mol['xyz'])
 

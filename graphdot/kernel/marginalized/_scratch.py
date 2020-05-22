@@ -5,10 +5,8 @@ from pycuda import gpuarray
 from graphdot.codegen.typetool import cpptype
 
 
-# only works with python >= 3.6
-# @cpptype(ptr=np.uintp, capacity=np.int64)
-@cpptype([('p_buffer', np.uintp), ('capacity', np.int64)])
-class BlockScratch(object):
+@cpptype(p_buffer=np.uintp, capacity=np.int64)
+class BlockScratch:
     def __init__(self, capacity):
         self.capacity = ((capacity + 15) // 16) * 16
         if capacity <= 0:
