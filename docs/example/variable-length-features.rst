@@ -1,7 +1,7 @@
 Graphs with Variable-Length Node and Edge Features
 --------------------------------------------------------------------------------
 
-.. literalinclude:: ../../example/variable-length-attributes.py
+.. literalinclude:: ../../example/variable-length-features.py
    :language: python
    :linenos:
 

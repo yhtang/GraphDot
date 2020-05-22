@@ -1,3 +1,7 @@
+## 0.4.3
+- Ensure graph feature data layout cosnsistency involving a mixture of scalar
+  and variable-length features. Fixes #56.
+
 ## 0.4.2
 - Fixed an integer sign issue introduced with graph type unification.
 
