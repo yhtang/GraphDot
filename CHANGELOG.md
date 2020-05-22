@@ -1,3 +1,6 @@
+## 0.4.2
+- Fixed an integer sign issue introduced with graph type unification.
+
 ## 0.4.1
 - Renamed `Graph.normalize_types` to `Graph.unify_datatype`.
 
