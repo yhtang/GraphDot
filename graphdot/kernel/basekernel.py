@@ -646,7 +646,11 @@ def Convolution(kernel):
                 Jxy = np.sum(Jxy, axis=0)
                 Jyy = np.sum(Jyy, axis=0)
 
-                return Fxy * (Fxx * Fyy)**-0.5, Jxy * (Fxx * Fyy)**-0.5 - 0.5 * Fxy * (Fxx * Fyy)**-1.5 * (Jxx * Fyy + Fxx * Jyy)
+                return (
+                    Fxy * (Fxx * Fyy)**-0.5,
+                    (Jxy * (Fxx * Fyy)**-0.5
+                     - 0.5 * Fxy * (Fxx * Fyy)**-1.5 * (Jxx * Fyy + Fxx * Jyy))
+                )
             else:
                 Fxx = np.sum([self.kernel(x, y) for x in seq1 for y in seq1])
                 Fxy = np.sum([self.kernel(x, y) for x in seq1 for y in seq2])
@@ -666,10 +670,15 @@ def Convolution(kernel):
                 x=x, y=y, f=F
             )
             if jac is True:
-                jacobian = [
-                    Template(r'convolution_jacobian([&](auto _1, auto _2){return ${f};}, [&](auto _1, auto _2){return ${j};}, ${x}, ${y})').render(x=x, y=y, f=F, j=j)
-                    for j in J
-                ]
+                template = Template(
+                    r'''convolution_jacobian(
+                            [&](auto _1, auto _2){return ${f};},
+                            [&](auto _1, auto _2){return ${j};},
+                            ${x},
+                            ${y}
+                        )'''
+                )
+                jacobian = [template.render(x=x, y=y, f=F, j=j) for j in J]
                 return f, jacobian
             else:
                 return f
