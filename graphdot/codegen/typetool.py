@@ -30,7 +30,7 @@ def can_cast(src, dst):
 
 class common_min_type:
     @staticmethod
-    def of_values(iterable, coerce=True, min_float=np.float32):
+    def of_values(iterable, coerce=True, min_float=np.float32, signed=True):
         '''Find the common minimum elemet type that can safely hold all
         elements of an iterable sequence.
 
@@ -56,6 +56,8 @@ class common_min_type:
         t = None
         for i in iterable:
             r = np.min_scalar_type(i) if np.isscalar(i) else type(i)
+            if signed:
+                r = np.promote_types(r, np.int8)
             t = t or r
             if t != r:
                 if coerce:
@@ -69,7 +71,7 @@ class common_min_type:
         return t
 
     @staticmethod
-    def of_types(types, coerce=True, min_float=np.float32):
+    def of_types(types, coerce=True, min_float=np.float32, signed=True):
         '''Find the common minimum elemet type that can safely hold all types
         in the given list.
 
@@ -94,6 +96,8 @@ class common_min_type:
         '''
         t = next(iter(types))
         for r in types:
+            if signed:
+                r = np.promote_types(r, np.int8)
             if t != r:
                 if coerce:
                     t = np.promote_types(t, r)

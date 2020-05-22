@@ -53,7 +53,7 @@ class Graph:
 
     @staticmethod
     def has_unified_types(graphs):
-        '''Check if all graphs have the same set of nodal/edge attributes.'''
+        '''Check if all graphs have the same set of nodal/edge features.'''
         first = next(iter(graphs))
         node_t = first.nodes.rowtype()
         edge_t = first.edges.rowtype()
@@ -72,19 +72,21 @@ class Graph:
         ----------
         graphs: list
             A list of graphs that have the same set of node and edge
-            attributes. The types for each attribute will then be
+            features. The types for each attribute will then be
             chosen to be the smallest scalar type that can safely hold all the
             values as found across the graphs.
         inplace: bool
-            Whether or not to modify the graph attributes in-place.
+            Whether or not to modify the graph features in-place.
 
         Returns
         -------
         None or list
             If inplace is True, the graphs will be modified in-place and
             nothing will be returned. Otherwise, a new list of graphs with
-            type-unified attributes will be returned.
+            type-unified features will be returned.
         '''
+
+        '''copy graphs if not editing in-place'''
         if inplace is not True:
             def shallowcopy(g):
                 h = cls(
@@ -98,7 +100,8 @@ class Graph:
                 return h
             graphs = [shallowcopy(g) for g in graphs]
 
-        attributes = {}
+        '''ensure all graphs have the same node and edge features'''
+        features = {}
         for component in ['nodes', 'edges']:
             first = None
             for g in graphs:
@@ -106,13 +109,15 @@ class Graph:
                 first = first or second
                 if second != first:
                     raise TypeError(
-                        f'Graph {g} with node attributes {second} '
+                        f'Graph {g} with node features {second} '
                         'does not match with the other graphs.'
                     )
-            attributes[component] = first
+            features[component] = first
+
+        '''unify data type for each feature'''
         for component in ['nodes', 'edges']:
             group = [getattr(g, component) for g in graphs]
-            for key in attributes[component]:
+            for key in features[component]:
                 types = [g[key].get_type(concrete=True) for g in group]
                 t = common_min_type.of_types(types)
                 if t == np.object:
@@ -123,12 +128,9 @@ class Graph:
                         'object types'
                     )
 
-                # print(component, key, t)
-
                 if np.issctype(t):
                     for g in group:
                         g[key] = g[key].astype(t)
-                        # print(f'g[{key}].dtype', g[key].dtype)
                 elif t in [list, tuple, np.ndarray]:
                     t_sub = common_min_type.of_values(
                         it.chain.from_iterable(
@@ -142,6 +144,7 @@ class Graph:
                     for g in group:
                         g[key] = [np.array(seq, dtype=t_sub) for seq in g[key]]
 
+        '''only returns if not editing in-place'''
         if inplace is not True:
             return graphs
 
@@ -174,8 +177,8 @@ class Graph:
         Parameters
         ----------
         graph: a NetworkX ``Graph`` instance
-            an undirected graph with homogeneous node and edge attributes, i.e.
-            carrying same attributes.
+            an undirected graph with homogeneous node and edge features, i.e.
+            carrying same features.
         weight: str
             name of the attribute that encode edge weights
 
@@ -194,33 +197,28 @@ class Graph:
         ''' extrac title '''
         title = graph.graph['title'] if 'title' in graph.graph.keys() else ''
 
-        ''' convert node attributes '''
+        ''' convert node features '''
         node_attr = []
         for index, node in graph.nodes.items():
             if index == 0:
                 node_attr = sorted(node.keys())
             elif node_attr != sorted(node.keys()):
-                # raise TypeError(f'Node {index} '
-                #                 f'attributes {node.keys()} '
-                #                 f'inconsistent with {node_attr}')
-                raise TypeError('Node {} attributes {} '
-                                'inconsistent with {}'.format(
-                                    index,
-                                    node.keys(),
-                                    node_attr))
+                raise TypeError(f'Node {index} '
+                                f'features {node.keys()} '
+                                f'inconsistent with {node_attr}')
 
         node_df = DataFrame({'!i': range(len(graph.nodes))})
         for key in node_attr:
             node_df[key] = [node[key] for node in graph.nodes.values()]
 
-        ''' convert edge attributes '''
+        ''' convert edge features '''
         edge_attr = []
         for index, ((i, j), edge) in enumerate(graph.edges.items()):
             if index == 0:
                 edge_attr = sorted(edge.keys())
             elif edge_attr != sorted(edge.keys()):
                 raise TypeError(f'Edge {(i, j)} '
-                                f'attributes {edge.keys()} '
+                                f'features {edge.keys()} '
                                 f'inconsistent with {edge_attr}')
 
         edge_df = DataFrame()
@@ -331,7 +329,7 @@ class Graph:
         -------
         graphdot.Graph:
             A molecular graph where atoms becomes nodes with the 'aromatic',
-            'charge', 'element', 'hcount' attributes, and bonds become edges
+            'charge', 'element', 'hcount' features, and bonds become edges
             with the 'order' attribute.
         """
         import pysmiles.read_smiles

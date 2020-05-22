@@ -645,21 +645,18 @@ def Convolution(kernel):
                 Jxx = np.sum(Jxx, axis=0)
                 Jxy = np.sum(Jxy, axis=0)
                 Jyy = np.sum(Jyy, axis=0)
-
-                if Fxx > 0 and Fyy > 0:
-                    return (
-                        Fxy * (Fxx * Fyy)**-0.5,
-                        (Jxy * (Fxx * Fyy)**-0.5
-                         - (0.5 * Fxy * (Fxx * Fyy)**-1.5
-                            * (Jxx * Fyy + Fxx * Jyy)))
-                    )
-                else:
-                    return (0.0, np.zeros_like(Jxy))
+                assert(Fxx > 0 and Fyy > 0)
+                return (
+                    Fxy * (Fxx * Fyy)**-0.5,
+                    (Jxy * (Fxx * Fyy)**-0.5
+                     - 0.5 * Fxy * (Fxx * Fyy)**-1.5 * (Jxx * Fyy + Fxx * Jyy))
+                )
             else:
                 Fxx = np.sum([self.kernel(x, y) for x in seq1 for y in seq1])
                 Fxy = np.sum([self.kernel(x, y) for x in seq1 for y in seq2])
                 Fyy = np.sum([self.kernel(x, y) for x in seq2 for y in seq2])
-                return Fxy * (Fxx * Fyy)**-0.5 if Fxx > 0 and Fyy > 0 else 0.0
+                assert(Fxx > 0 and Fyy > 0)
+                return Fxy * (Fxx * Fyy)**-0.5
 
         def __repr__(self):
             return f'Convolution({repr(self.kernel)})'
