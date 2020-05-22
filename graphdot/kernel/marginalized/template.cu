@@ -1,3 +1,4 @@
+#include <basekernel/convolution.h>
 #include <graph.h>
 #include <marginalized_kernel.h>
 #include <fmath.h>
@@ -6,6 +7,7 @@
 #include <util_cuda.h>
 
 using namespace graphdot::numpy_type;
+using namespace graphdot::basekernel;
 
 ${node_kernel}
 ${edge_kernel}
