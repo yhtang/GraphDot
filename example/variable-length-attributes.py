@@ -29,7 +29,8 @@ g2.add_edge(0, 1, w=2.0, spectra=[0.1, 0.9, 1.5])
 g2.add_edge(0, 2, w=0.5, spectra=[0.4])
 g2.add_edge(1, 2, w=0.5, spectra=[0.3, 0.6])
 
-# define node and edge kernelets
+# Define node and edge base kernels using the R-convolution framework
+# Reference: Haussler, David. Convolution kernels on discrete structures. 1999.
 knode = TensorProduct(
     category=Convolution(
         KroneckerDelta(0.5)
