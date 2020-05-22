@@ -1,3 +1,9 @@
+## 0.4.0
+- Now allowing variable-length node and edge features thanks to a redesign of
+  the Python/C++ data interoperation mechanism.
+- Introduced a `Convolution` base kernel for composing kernels on
+  variable-length attributes using scalar base kernels.
+
 ## 0.3.5
 - Added a `dtype` option to the `MarginalizedGraphKernel` to specify the type of returned matrix elements.
 
