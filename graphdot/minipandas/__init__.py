@@ -107,11 +107,12 @@ class DataFrame:
         '''Iterate in (row_id, row_content) tuples.'''
         yield from enumerate(self.rows())
 
-    def iterstates(self):
+    def iterstates(self, pack=True):
         '''Iterate over rows, use the .state attribute if element is not
         scalar.'''
+        cols = np.array(list(self.rowtype(pack=pack, deep=True).fields.keys()))
 
-        for row in zip(*[self[key] for key in self.columns]):
+        for row in zip(*[self[key] for key in cols]):
             yield tuple(i if np.isscalar(i) else i.state for i in row)
 
     def to_pandas(self):
