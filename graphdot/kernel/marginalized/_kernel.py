@@ -129,13 +129,13 @@ class MarginalizedGraphKernel:
         )
 
         ''' assert graph attributes are compatible with each other '''
-        pred_or_tuple = Graph.is_type_consistent(X + Y if Y is not None else X)
+        pred_or_tuple = Graph.has_unified_types(X + Y if Y is not None else X)
         if pred_or_tuple is not True:
             group, first, second = pred_or_tuple
             raise TypeError(
                 f'The two graphs have mismatching {group} attributes or '
                 'attribute types. If the attributes match in name but differ '
-                'in type, try `Graph.normalize_types` as an automatic fix.\n'
+                'in type, try `Graph.unify_datatype` as an automatic fix.\n'
                 f'First graph: {first}\n'
                 f'Second graph: {second}\n'
             )
@@ -254,14 +254,14 @@ class MarginalizedGraphKernel:
         backend = self.backend
 
         ''' assert graph attributes are compatible with each other '''
-        pred_or_tuple = Graph.is_type_consistent(X)
+        pred_or_tuple = Graph.has_unified_types(X)
         if pred_or_tuple is not True:
             group, first, second = pred_or_tuple
             raise TypeError(
                 f'The two graphs have mismatching {group} attributes or '
                 'attribute types.'
-                'If the attribute names do match, then try to normalize data '
-                'types automatically with `Graph.normalize_types`.\n'
+                'If the attribute names do match, then try to unify data '
+                'types automatically with `Graph.unify_datatype`.\n'
                 f'First graph: {first}\n'
                 f'Second graph: {second}\n'
             )
