@@ -1,3 +1,6 @@
+## 0.4.1
+- Renamed `Graph.normalize_types` to `Graph.unify_datatype`.
+
 ## 0.4.0
 - Now allowing variable-length node and edge features thanks to a redesign of
   the Python/C++ data interoperation mechanism.

@@ -52,7 +52,7 @@ class Graph:
                    repr(self.title))
 
     @staticmethod
-    def is_type_consistent(graphs):
+    def has_unified_types(graphs):
         '''Check if all graphs have the same set of nodal/edge attributes.'''
         first = next(iter(graphs))
         node_t = first.nodes.rowtype()
@@ -65,7 +65,7 @@ class Graph:
         return True
 
     @classmethod
-    def normalize_types(cls, graphs, inplace=False):
+    def unify_datatype(cls, graphs, inplace=False):
         '''Ensure that each attribute has the same data type across graphs.
 
         Parameters
@@ -83,7 +83,7 @@ class Graph:
         None or list
             If inplace is True, the graphs will be modified in-place and
             nothing will be returned. Otherwise, a new list of graphs with
-            type-normalized attributes will be returned.
+            type-unified attributes will be returned.
         '''
         if inplace is not True:
             def shallowcopy(g):
@@ -119,7 +119,7 @@ class Graph:
                     t = common_min_type.of_types(types, coerce=False)
                 if t is None:
                     raise TypeError(
-                        f'Cannot normalize attribute {key} containing mixed '
+                        f'Cannot unify attribute {key} containing mixed '
                         'object types'
                     )
 
