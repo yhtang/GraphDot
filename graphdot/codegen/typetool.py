@@ -56,7 +56,7 @@ class common_min_type:
         t = None
         for i in iterable:
             r = np.min_scalar_type(i) if np.isscalar(i) else type(i)
-            if signed:
+            if signed and isinstance(r, np.dtype) and r.kind == 'u':
                 r = np.promote_types(r, np.int8)
             t = t or r
             if t != r:
@@ -96,7 +96,7 @@ class common_min_type:
         '''
         t = next(iter(types))
         for r in types:
-            if signed:
+            if signed and isinstance(r, np.dtype) and r.kind == 'u':
                 r = np.promote_types(r, np.int8)
             if t != r:
                 if coerce:
