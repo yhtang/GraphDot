@@ -64,9 +64,40 @@ class Graph:
                 return ('edges', first, second)
         return True
 
-    @staticmethod
-    def normalize_types(graphs):
-        '''Ensure that each attribute has the same data type across graphs'''
+    @classmethod
+    def normalize_types(cls, graphs, inplace=False):
+        '''Ensure that each attribute has the same data type across graphs.
+
+        Parameters
+        ----------
+        graphs: list
+            A list of graphs that have the same set of node and edge
+            attributes. The types for each attribute will then be
+            chosen to be the smallest scalar type that can safely hold all the
+            values as found across the graphs.
+        inplace: bool
+            Whether or not to modify the graph attributes in-place.
+
+        Returns
+        -------
+        None or list
+            If inplace is True, the graphs will be modified in-place and
+            nothing will be returned. Otherwise, a new list of graphs with
+            type-normalized attributes will be returned.
+        '''
+        if inplace is not True:
+            def shallowcopy(g):
+                h = cls(
+                    nodes=g.nodes.copy(deep=False),
+                    edges=g.edges.copy(deep=False),
+                    title=g.title
+                )
+                for key, val in g.__dict__.items():
+                    if key not in ['nodes', 'edges', 'title']:
+                        h.__dict__[key] = val
+                return h
+            graphs = [shallowcopy(g) for g in graphs]
+
         attributes = {}
         for component in ['nodes', 'edges']:
             first = None
@@ -110,7 +141,9 @@ class Graph:
                         )
                     for g in group:
                         g[key] = [np.array(seq, dtype=t_sub) for seq in g[key]]
-        return graphs
+
+        if inplace is not True:
+            return graphs
 
     # @classmethod
     # def from_auto(cls, graph):
