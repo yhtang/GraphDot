@@ -6,6 +6,12 @@ This module defines the class ``Graph`` that are used to store graphs across
 this library, and provides conversion and importing methods from popular
 graph formats.
 """
+import uuid
+import itertools as it
+import numpy as np
+from scipy.spatial import cKDTree
+from graphdot.codegen.typetool import common_min_type
+from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.minipandas import DataFrame
 from ._from_ase import _from_ase
 from ._from_networkx import _from_networkx
@@ -50,6 +56,125 @@ class Graph:
                    repr(self.edges),
                    repr(self.title))
 
+    @staticmethod
+    def has_unified_types(graphs):
+        '''Check if all graphs have the same set of nodal/edge features.'''
+        first = next(iter(graphs))
+        node_t = first.nodes.rowtype()
+        edge_t = first.edges.rowtype()
+        for second in graphs:
+            if second.nodes.rowtype() != node_t:
+                return ('nodes', first, second)
+            elif second.edges.rowtype() != edge_t:
+                return ('edges', first, second)
+        return True
+
+    @classmethod
+    def unify_datatype(cls, graphs, inplace=False):
+        '''Ensure that each attribute has the same data type across graphs.
+
+        Parameters
+        ----------
+        graphs: list
+            A list of graphs that have the same set of node and edge
+            features. The types for each attribute will then be
+            chosen to be the smallest scalar type that can safely hold all the
+            values as found across the graphs.
+        inplace: bool
+            Whether or not to modify the graph features in-place.
+
+        Returns
+        -------
+        None or list
+            If inplace is True, the graphs will be modified in-place and
+            nothing will be returned. Otherwise, a new list of graphs with
+            type-unified features will be returned.
+        '''
+
+        '''copy graphs if not editing in-place'''
+        if inplace is not True:
+            def shallowcopy(g):
+                h = cls(
+                    nodes=g.nodes.copy(deep=False),
+                    edges=g.edges.copy(deep=False),
+                    title=g.title
+                )
+                for key, val in g.__dict__.items():
+                    if key not in ['nodes', 'edges', 'title']:
+                        h.__dict__[key] = val
+                return h
+            graphs = [shallowcopy(g) for g in graphs]
+
+        '''ensure all graphs have the same node and edge features'''
+        features = {}
+        for component in ['nodes', 'edges']:
+            first = None
+            for g in graphs:
+                second = set(getattr(g, component).columns)
+                first = first or second
+                if second != first:
+                    raise TypeError(
+                        f'Graph {g} with node features {second} '
+                        'does not match with the other graphs.'
+                    )
+            features[component] = first
+
+        '''unify data type for each feature'''
+        for component in ['nodes', 'edges']:
+            group = [getattr(g, component) for g in graphs]
+            for key in features[component]:
+                types = [g[key].get_type(concrete=True) for g in group]
+                t = common_min_type.of_types(types)
+                if t == np.object:
+                    t = common_min_type.of_types(types, coerce=False)
+                if t is None:
+                    raise TypeError(
+                        f'Cannot unify attribute {key} containing mixed '
+                        'object types'
+                    )
+
+                if np.issctype(t):
+                    for g in group:
+                        g[key] = g[key].astype(t)
+                elif t in [list, tuple, np.ndarray]:
+                    t_sub = common_min_type.of_values(
+                        it.chain.from_iterable(
+                            it.chain.from_iterable([g[key] for g in group])
+                        )
+                    )
+                    if t_sub is None:
+                        raise TypeError(
+                            f'Cannot find a common type for elements in {key}.'
+                        )
+                    for g in group:
+                        g[key] = [np.array(seq, dtype=t_sub) for seq in g[key]]
+
+        '''only returns if not editing in-place'''
+        if inplace is not True:
+            return graphs
+
+    # @classmethod
+    # def from_auto(cls, graph):
+    #     # import importlib
+    #     # graph_translator = {}
+    #     #
+    #     # if importlib.util.find_spec('ase') is not None:
+    #     #     ase = importlib.import_module('ase')
+    #     #
+    #     #     def ase_translator(atoms):
+    #     #         pass
+    #     #
+    #     #     graph_translator[ase.atomsatoms.Atoms] = ase_translator
+    #     #
+    #     # if importlib.util.find_spec('networkx') is not None:
+    #     #     nx = importlib.import_module('networkx')
+    #     #
+    #     #     def networkx_graph_translator(atoms):
+    #     #         pass
+    #     #
+    #     #     graph_translator[nx.Graph] = networkx_graph_translator
+    #     pass
+
     @classmethod
     def from_networkx(cls, graph, weight=None):
         """Convert from NetworkX ``Graph``
@@ -57,8 +182,8 @@ class Graph:
         Parameters
         ----------
         graph: a NetworkX ``Graph`` instance
-            an undirected graph with homogeneous node and edge attributes, i.e.
-            carrying same attributes.
+            an undirected graph with homogeneous node and edge features, i.e.
+            carrying same features.
         weight: str
             name of the attribute that encode edge weights
 

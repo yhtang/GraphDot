@@ -213,7 +213,7 @@ class BaseKernel:
                 '    Lower and upper bounds of `${name}`.'
             ).render(
                 name=name,
-                type=str(hdef['dtype']),
+                type=hdef['dtype'],
                 desc=[s.strip() for s in hdef.get('doc', '').split('\n')]
             ) for name, hdef in hyperdefs.items()
         ]
@@ -611,20 +611,95 @@ def TensorProduct(**kw_kernels):
 
     return TensorProductKernel(**kw_kernels)
 
-# class Convolution(BaseKernel):
-#     def __init__(self, kernel):
-#         self.kernel = kernel
 
-#     def __call__(self, object1, object2):
-#         sum = 0.0
-#         for part1 in object1:
-#             for part2 in object2:
-#                 sum += self.kernel(part1, part2)
-#         return sum
+def Convolution(kernel):
+    r"""Creates a convolution kernel, which sums up evaluations of a base
+    kernel on pairs of elements from two sequences.
+    :math:`k_{CONV}(X, Y) = \sum_{x \in X} \sum_{y \in Y} k_{base}(x, y)`
 
-#     def __repr__(self):
-#         return 'ΣΣ{}'.format(repr(self.kernel))
+    Parameters
+    ----------
+    kernel: base kernel
+        The kernel can be any base kernel or a composition of base kernels in
+        this module, while the attribute to be convolved should be
+        fixed-length sequences.
+    """
 
-#     @property
-#     def theta(self):
-#         return self.kernel.theta
+    @cpptype(kernel=kernel.dtype)
+    class ConvolutionKernel(BaseKernel):
+        def __init__(self, kernel):
+            self.kernel = kernel
+
+        def __call__(self, seq1, seq2, jac=False):
+            if jac is True:
+                Fxx, Jxx = list(zip(*[
+                    self.kernel(x, y, jac=True) for x in seq1 for y in seq1
+                ]))
+                Fxy, Jxy = list(zip(*[
+                    self.kernel(x, y, jac=True) for x in seq1 for y in seq2
+                ]))
+                Fyy, Jyy = list(zip(*[
+                    self.kernel(x, y, jac=True) for x in seq2 for y in seq2
+                ]))
+                Fxx, Fxy, Fyy = np.sum(Fxx), np.sum(Fxy), np.sum(Fyy)
+                Jxx = np.sum(Jxx, axis=0)
+                Jxy = np.sum(Jxy, axis=0)
+                Jyy = np.sum(Jyy, axis=0)
+
+                if Fxx > 0 and Fyy > 0:
+                    return (
+                        Fxy * (Fxx * Fyy)**-0.5,
+                        (Jxy * (Fxx * Fyy)**-0.5
+                         - (0.5 * Fxy * (Fxx * Fyy)**-1.5
+                            * (Jxx * Fyy + Fxx * Jyy)))
+                    )
+                else:
+                    return (0.0, np.zeros_like(Jxy))
+            else:
+                Fxx = np.sum([self.kernel(x, y) for x in seq1 for y in seq1])
+                Fxy = np.sum([self.kernel(x, y) for x in seq1 for y in seq2])
+                Fyy = np.sum([self.kernel(x, y) for x in seq2 for y in seq2])
+                return Fxy * (Fxx * Fyy)**-0.5 if Fxx > 0 and Fyy > 0 else 0.0
+
+        def __repr__(self):
+            return f'Convolution({repr(self.kernel)})'
+
+        def gen_expr(self, x, y, jac=False, theta_prefix=''):
+            F, J = self.kernel.gen_expr(
+                '_1', '_2', True, theta_prefix + 'kernel.'
+            )
+            f = Template(
+                r'convolution([&](auto _1, auto _2){return ${f};}, ${x}, ${y})'
+            ).render(
+                x=x, y=y, f=F
+            )
+            if jac is True:
+                template = Template(
+                    r'''convolution_jacobian(
+                            [&](auto _1, auto _2){return ${f};},
+                            [&](auto _1, auto _2){return ${j};},
+                            ${x},
+                            ${y}
+                        )'''
+                )
+                jacobian = [template.render(x=x, y=y, f=F, j=j) for j in J]
+                return f, jacobian
+            else:
+                return f
+
+        @property
+        def theta(self):
+            return namedtuple(
+                'ConvolutionHyperparameters',
+                ['kernel']
+            )(self.kernel.theta)
+
+        @theta.setter
+        def theta(self, seq):
+            self.kernel.theta = seq[0]
+
+        @property
+        def bounds(self):
+            return (self.kernel.bounds,)
+
+    return ConvolutionKernel(kernel)

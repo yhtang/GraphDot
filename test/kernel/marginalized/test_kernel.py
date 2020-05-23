@@ -6,10 +6,13 @@ import pytest
 import networkx as nx
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.basekernel import Constant
-from graphdot.kernel.basekernel import KroneckerDelta
-from graphdot.kernel.basekernel import SquareExponential
-from graphdot.kernel.basekernel import TensorProduct
+from graphdot.kernel.basekernel import (
+    Constant,
+    KroneckerDelta,
+    SquareExponential,
+    TensorProduct,
+    Convolution
+)
 
 
 def MLGK(G, knode, kedge, q, q0, nodal=False):
@@ -89,7 +92,7 @@ labeled_graph1.add_edge('O1', 'H2', order=2, length=1.0)
 
 labeled_graph2 = nx.Graph(title='H2')
 labeled_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
-labeled_graph2.add_node('H2', hybridization=Hybrid.SP, charge=1)
+labeled_graph2.add_node('H2', hybridization=Hybrid.SP, charge=-1)
 labeled_graph2.add_edge('H1', 'H2', order=2, length=1.0)
 
 weighted_graph1 = nx.Graph(title='H2O')
@@ -104,17 +107,33 @@ weighted_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
 weighted_graph2.add_node('H2', hybridization=Hybrid.SP, charge=1)
 weighted_graph2.add_edge('H1', 'H2', order=2, length=1.0, w=3.0)
 
+vario_graph1 = nx.Graph(title='H2O')
+vario_graph1.add_node('O1', rings=(5, 6))
+vario_graph1.add_node('H1', rings=(3,))
+vario_graph1.add_node('H2', rings=(2, 3, 4))
+vario_graph1.add_edge('O1', 'H1', spectrum=(3, 4), w=1.0)
+vario_graph1.add_edge('O1', 'H2', spectrum=(3, 5), w=2.0)
+
+vario_graph2 = nx.Graph(title='H2')
+vario_graph2.add_node('H1', rings=(3, 4))
+vario_graph2.add_node('H2', rings=(3, ))
+vario_graph2.add_edge('H1', 'H2', spectrum=(2, 4), w=3.0)
+
 case_dict = {
     'unlabeled': {
-        'graphs': [Graph.from_networkx(unlabeled_graph1),
-                   Graph.from_networkx(unlabeled_graph2)],
+        'graphs': Graph.unify_datatype([
+            Graph.from_networkx(unlabeled_graph1),
+            Graph.from_networkx(unlabeled_graph2)
+        ]),
         'knode': Constant(1.0),
         'kedge': Constant(1.0),
         'q': [0.01, 0.05, 0.1, 0.5]
     },
     'labeled': {
-        'graphs': [Graph.from_networkx(labeled_graph1),
-                   Graph.from_networkx(labeled_graph2)],
+        'graphs': Graph.unify_datatype([
+            Graph.from_networkx(labeled_graph1),
+            Graph.from_networkx(labeled_graph2)
+        ]),
         'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
                                charge=SquareExponential(1.0)),
         'kedge': TensorProduct(order=KroneckerDelta(0.3),
@@ -122,12 +141,23 @@ case_dict = {
         'q': [0.01, 0.05, 0.1, 0.5]
     },
     'weighted': {
-        'graphs': [Graph.from_networkx(weighted_graph1, weight='w'),
-                   Graph.from_networkx(weighted_graph2, weight='w')],
+        'graphs': Graph.unify_datatype([
+            Graph.from_networkx(weighted_graph1, weight='w'),
+            Graph.from_networkx(weighted_graph2, weight='w')
+        ]),
         'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
                                charge=SquareExponential(1.0)),
         'kedge': TensorProduct(order=KroneckerDelta(0.3),
                                length=SquareExponential(0.05)),
+        'q': [0.01, 0.05, 0.1, 0.5]
+    },
+    'vario-features': {
+        'graphs': Graph.unify_datatype([
+            Graph.from_networkx(vario_graph1, weight='w'),
+            Graph.from_networkx(vario_graph2, weight='w')
+        ]),
+        'knode': TensorProduct(rings=Convolution(KroneckerDelta(0.3))),
+        'kedge': TensorProduct(spectrum=Convolution(SquareExponential(1.0))),
         'q': [0.01, 0.05, 0.1, 0.5]
     },
 }
@@ -210,8 +240,6 @@ def test_mlgk_derivative(caseitem):
 
     _, case = caseitem
 
-    print('Case', _)
-
     G = case['graphs']
     knode = case['knode']
     kedge = case['kedge']
@@ -226,27 +254,30 @@ def test_mlgk_derivative(caseitem):
         assert(R.shape[1] == dR.shape[1])
         assert(dR.shape[2] >= 1)
 
-        eps = 1e-4
         for i in range(len(mlgk.theta)):
 
             theta = mlgk.theta
 
-            t = np.exp(theta)
+            eps = 1e-3
+
+            t = np.copy(theta)
             t[i] += eps
-            mlgk.theta = np.log(t)
+            mlgk.theta = t
             Rr = mlgk(G)
 
-            t = np.exp(theta)
+            t = np.copy(theta)
             t[i] -= eps
-            mlgk.theta = np.log(t)
+            mlgk.theta = t
             Rl = mlgk(G)
 
             mlgk.theta = theta
 
-            dR_fdiff = (Rr - Rl) / (2 * eps)
+            dR_dLogt = (Rr - Rl) / (2 * eps)
+            dLogt_dt = 1 / np.exp(theta)[i]
+            dR_dt = dR_dLogt * dLogt_dt
 
-            for a, b in zip(dR[:, :, i].ravel(), dR_fdiff.ravel()):
-                assert(a == pytest.approx(b, 1e-2))
+            for a, b in zip(dR[:, :, i].ravel(), dR_dt.ravel()):
+                assert(a == pytest.approx(b, rel=0.05, abs=0.05))
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
@@ -319,7 +350,7 @@ def test_mlgk_lmin(caseitem):
         for i, n1 in g.nodes.iterrows():
             for j, n2 in g.nodes.iterrows():
                 assert(R0[i, j] == pytest.approx(R1[i, j] + knode(n1, n2),
-                                                 abs=1e-7))
+                                                 abs=1e-6))
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
