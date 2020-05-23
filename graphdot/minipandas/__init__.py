@@ -8,6 +8,21 @@ from graphdot.codegen.typetool import common_concrete_type, common_min_type
 
 class Series(np.ndarray):
     '''A thin wrapper to customize serialization behavior'''
+    def __new__(cls, input):
+        if isinstance(input, np.ndarray):
+            series = input.view(cls)
+            if np.issctype(series.dtype):
+                series.concrete_type = series.dtype
+            else:
+                series.concrete_type = common_concrete_type.of_values(input)
+        else:
+            t = common_min_type.of_values(input)
+            dtype = t if np.issctype(t) else np.object
+            series = np.empty(len(input), dtype=dtype).view(cls)
+            series[:] = input
+            series.concrete_type = t
+        return series
+
     def __repr__(self):
         return np.array2string(self, separator=',', max_line_width=1e20)
 
@@ -17,21 +32,14 @@ class Series(np.ndarray):
         else:
             return self.dtype
 
-    @staticmethod
-    def as_series(iterable):
-        if isinstance(iterable, np.ndarray):
-            series = iterable.view(Series)
-            if np.issctype(series.dtype):
-                series.concrete_type = series.dtype
-            else:
-                series.concrete_type = common_concrete_type.of_values(series)
-        else:
-            t = common_min_type.of_values(iterable)
-            dtype = t if np.issctype(t) else np.object
-            series = np.empty(len(iterable), dtype=dtype).view(Series)
-            series[:] = iterable
-            series.concrete_type = t
-        return series
+    def __reduce__(self):
+        recon, args, state = super(Series, self).__reduce__()
+        return (recon, args, (state, self.__dict__))
+
+    def __setstate__(self, states):
+        state, dict_ = states
+        self.__dict__.update(**dict_)
+        super(Series, self).__setstate__(state)
 
 
 class DataFrame:
@@ -51,7 +59,7 @@ class DataFrame:
             raise TypeError(f'Invalid column index {key}')
 
     def __setitem__(self, key, value):
-        self._data[key] = Series.as_series(value)
+        self._data[key] = Series(value)
 
     def __repr__(self):
         return repr(self._data)
