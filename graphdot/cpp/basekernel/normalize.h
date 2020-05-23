@@ -33,8 +33,8 @@ inline __host__ __device__ float normalize_jacobian(
     auto const kxy = f(x, y);
     auto const kyy = f(y, y);
     auto const jxx = j(x, x);
-    auto const jxy = j(x, x);
-    auto const jyy = j(x, x);
+    auto const jxy = j(x, y);
+    auto const jyy = j(y, y);
 
     if (kxx * kyy > 0) {
         auto const kxx_kyy_3 = ipow<3>(kxx * kyy);
