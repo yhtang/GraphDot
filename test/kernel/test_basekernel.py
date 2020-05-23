@@ -11,6 +11,7 @@ from graphdot.kernel.basekernel import (
     SquareExponential,
     RationalQuadratic,
     _Multiply,
+    Normalize,
     TensorProduct,
     Convolution,
 )
@@ -122,6 +123,36 @@ def test_multiply_quasikernel():
     assert(eval(repr(kernel)).theta == kernel.theta)
 
 
+@pytest.mark.parametrize('kernel', [
+    KroneckerDelta(0.5),
+    KroneckerDelta(0.5) + KroneckerDelta(1.0),
+    SquareExponential(1.0) + SquareExponential(3.0)
+])
+def test_normalization(kernel):
+    k = Normalize(kernel)
+    ''' check by definition '''
+    for i, j in np.random.randn(1000, 2) * 10:
+        kij = k(i, j)
+        assert(kij >= 0)
+        assert(kij <= 1)
+        _, dkii = k(i, i, jac=True)
+        _, dkjj = k(j, j, jac=True)
+        rii, drii = kernel(i, i, jac=True)
+        rjj, drjj = kernel(j, j, jac=True)
+        assert(dkii == pytest.approx(drii / rii, 1e-6))
+        assert(dkjj == pytest.approx(drjj / rjj, 1e-6))
+    ''' representation generation '''
+    assert(str(kernel) in str(k))
+    assert(repr(kernel) in repr(k))
+    ''' C++ counterpart and hyperparameter retrieval '''
+    assert(k.dtype.isalignedstruct)
+    assert(kernel.state in k.state)
+    assert(kernel.theta in k.theta)
+    another = copy.copy(k)
+    for t1, t2 in zip(k.theta, another.theta):
+        assert(t1 == t2)
+
+
 @pytest.mark.parametrize('k1', kernels)
 @pytest.mark.parametrize('k2', kernels)
 def test_tensor_product_2(k1, k2):
@@ -194,27 +225,25 @@ def test_tensor_product_3(k1, k2, k3):
 
 @pytest.mark.parametrize('kernel', kernels)
 def test_convolution(kernel):
-    k = Convolution(kernel)
+    k = Convolution(kernel, normalize=False)
     ''' length cases '''
     assert(k([], []) == 0)
     assert(k(tuple(), tuple()) == 0)
     ''' check by definition '''
     for i, j in ([0, 0], [0, inf], [0, 1]):
-        for length1 in range(10):
-            for length2 in range(10):
-                kxx = kernel(i, i) * length1 * length1
-                kxy = kernel(i, j) * length1 * length2
-                kyy = kernel(j, j) * length2 * length2
-                Kxy = kxy * (kxx * kyy)**-0.5 if kxx > 0 and kyy > 0 else 0.0
-                assert(k([i] * length1, [j] * length2) == pytest.approx(Kxy))
-    ''' hyperparameter retrieval '''
-    assert(kernel.theta in k.theta)
+        for n1 in range(10):
+            for n2 in range(10):
+                assert(
+                    k([i] * n1, [j] * n2) ==
+                    pytest.approx(kernel(i, j) * n1 * n2)
+                )
     ''' representation generation '''
     assert(str(kernel) in str(k))
     assert(repr(kernel) in repr(k))
-    ''' C++ counterpart type '''
+    ''' C++ counterpart and hyperparameter retrieval '''
     assert(k.dtype.isalignedstruct)
     assert(kernel.state in k.state)
+    assert(kernel.theta in k.theta)
     another = copy.copy(k)
     for t1, t2 in zip(k.theta, another.theta):
         assert(t1 == t2)
