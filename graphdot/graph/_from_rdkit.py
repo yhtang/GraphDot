@@ -55,7 +55,7 @@ class FunctionalGroup:
                     for atom in node.data.GetNeighbors():
                         tree_id = tree._identifier
                         if atom.GetIdx() != node.predecessor(tree_id=tree_id):
-                            bond_order = mol.GetBondBetweenAtoms(
+                            order = mol.GetBondBetweenAtoms(
                                 atom.GetIdx(),
                                 node.data.GetIdx()
                             ).GetBondTypeAsDouble()
@@ -63,7 +63,7 @@ class FunctionalGroup:
                             while tree.get_node(identifier) is not None:
                                 identifier += len(mol.GetAtoms())
                             tree.create_node(
-                                tag=[atom.GetAtomicNum(), bond_order],
+                                tag=[atom.GetAtomicNum(), order],
                                 identifier=identifier,
                                 data=atom,
                                 parent=node.identifier
@@ -204,72 +204,77 @@ def get_atom_ring_stereo(mol, atom, ring_idx, depth=5,
             return 0
 
 
-def get_ringlist(mol, atom):
-    ringlist = [0]
-    atomrings = mol.GetRingInfo().AtomRings()
-    for ring in atomrings:
-        if atom.GetIdx() in ring:
-            ringlist.append(len(ring))
-    return tuple(ringlist)
+def get_ringlist(mol):
+    ringlist = [[] for _ in range(mol.GetNumAtoms())]
+    for ring in mol.GetRingInfo().AtomRings():
+        for i in ring:
+            ringlist[i].append(len(ring))
+    return [sorted(rings) if len(rings) else [0] for rings in ringlist]
 
 
-def _from_rdkit(cls, mol):
+def _from_rdkit(cls, mol, bond_type='order', set_ring_list=True,
+                set_ring_stereo=True):
     g = nx.Graph()
 
     for i, atom in enumerate(mol.GetAtoms()):
         g.add_node(i)
-        g.nodes[i]['symbol'] = atom.GetAtomicNum()
+        g.nodes[i]['atomic_number'] = atom.GetAtomicNum()
         g.nodes[i]['charge'] = atom.GetFormalCharge()
         g.nodes[i]['hcount'] = atom.GetTotalNumHs()
         g.nodes[i]['hybridization'] = atom.GetHybridization()
         g.nodes[i]['aromatic'] = atom.GetIsAromatic()
-        g.nodes[i]['ring_list'] = get_ringlist(mol, atom)
-        if not atom.IsInRing():
-            g.nodes[i]['chiral'] = atom.GetChiralTag()
-        else:
-            g.nodes[i]['chiral'] = 0
+        g.nodes[i]['chiral'] = 0 if atom.IsInRing() else atom.GetChiralTag()
+
+    if set_ring_list:
+        for i, rings in enumerate(get_ringlist(mol)):
+            g.nodes[i]['ring_list'] = rings
 
     for bond in mol.GetBonds():
         ij = (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
         g.add_edge(*ij)
-        g.edges[ij]['bond_order'] = bond.GetBondTypeAsDouble()
+        if bond_type == 'order':
+            g.edges[ij]['order'] = bond.GetBondTypeAsDouble()
+        else:
+            g.edges[ij]['type'] = bond.GetBondTypeAsDouble()
         g.edges[ij]['aromatic'] = bond.GetIsAromatic()
         g.edges[ij]['conjugated'] = bond.GetIsConjugated()
         g.edges[ij]['stereo'] = bond.GetStereo()
-        g.edges[ij]['ring_stereo'] = 0
+        if set_ring_stereo is True:
+            g.edges[ij]['ring_stereo'] = 0
 
-    bond_orientation_dict = get_bond_orientation_dict(mol)
-    for ring_idx in mol.GetRingInfo().AtomRings():
-        atom_updown = []
-        for idx in ring_idx:
-            atom = mol.GetAtomWithIdx(idx)
-            atom_updown.append(
-                get_atom_ring_stereo(
-                    mol,
-                    atom,
-                    ring_idx,
-                    depth=5,
-                    bond_orientation_dict=bond_orientation_dict
+    if set_ring_stereo is True:
+        bond_orientation_dict = get_bond_orientation_dict(mol)
+        for ring_idx in mol.GetRingInfo().AtomRings():
+            atom_updown = []
+            for idx in ring_idx:
+                atom = mol.GetAtomWithIdx(idx)
+                atom_updown.append(
+                    get_atom_ring_stereo(
+                        mol,
+                        atom,
+                        ring_idx,
+                        depth=5,
+                        bond_orientation_dict=bond_orientation_dict
+                    )
                 )
-            )
-        atom_updown = np.array(atom_updown)
-        non_zero_index = np.where(atom_updown != 0)[0]
-        for j in range(len(non_zero_index)):
-            b = non_zero_index[j]
-            if j == len(non_zero_index) - 1:
-                e = non_zero_index[0]
-                length = len(atom_updown) + e - b
-            else:
-                e = non_zero_index[j + 1]
-                length = e - b
-            StereoOfRingBond = atom_updown[b] * atom_updown[e] / length
-            for k in range(length):
-                idx1 = b + k if b + k < len(ring_idx)\
-                    else b + k - len(ring_idx)
-                idx2 = b + k + 1 if b + k + 1 < len(ring_idx)\
-                    else b + k + 1 - len(ring_idx)
-                ij = (ring_idx[idx1], ring_idx[idx2])
-                ij = (min(ij), max(ij))
-                g.edges[ij]['ring_stereo'] = StereoOfRingBond
+            atom_updown = np.array(atom_updown)
+            non_zero_index = np.where(atom_updown != 0)[0]
+            for j in range(len(non_zero_index)):
+                b = non_zero_index[j]
+                if j == len(non_zero_index) - 1:
+                    e = non_zero_index[0]
+                    length = len(atom_updown) + e - b
+                else:
+                    e = non_zero_index[j + 1]
+                    length = e - b
+                StereoOfRingBond = atom_updown[b] * atom_updown[e] / length
+                for k in range(length):
+                    idx1 = b + k if b + k < len(ring_idx)\
+                        else b + k - len(ring_idx)
+                    idx2 = b + k + 1 if b + k + 1 < len(ring_idx)\
+                        else b + k + 1 - len(ring_idx)
+                    ij = (ring_idx[idx1], ring_idx[idx2])
+                    ij = (min(ij), max(ij))
+                    g.edges[ij]['ring_stereo'] = StereoOfRingBond
 
     return _from_networkx(cls, g)
