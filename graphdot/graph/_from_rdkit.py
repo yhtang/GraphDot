@@ -46,7 +46,7 @@ class FunctionalGroup:
         tree.create_node(
             tag=[atom1.GetAtomicNum(), bond_order],
             identifier=atom1.GetIdx(),
-            ata=atom1,
+            data=atom1,
             parent=atom0.GetIdx()
         )
         for i in range(depth):
