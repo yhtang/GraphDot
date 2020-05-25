@@ -7,5 +7,5 @@ networkx>=2.4
 pycuda>=2019
 ase>=3.17
 pymatgen>=2019
-pysmiles
 mendeleev
+treelib>=1.6.1

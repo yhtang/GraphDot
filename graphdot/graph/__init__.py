@@ -6,13 +6,15 @@ This module defines the class ``Graph`` that are used to store graphs across
 this library, and provides conversion and importing methods from popular
 graph formats.
 """
-import uuid
 import itertools as it
 import numpy as np
-from scipy.spatial import cKDTree
 from graphdot.codegen.typetool import common_min_type
-from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.minipandas import DataFrame
+from ._from_ase import _from_ase
+from ._from_networkx import _from_networkx
+from ._from_pymatgen import _from_pymatgen
+from ._from_rdkit import _from_rdkit
+
 
 __all__ = ['Graph']
 
@@ -187,49 +189,7 @@ class Graph:
         graphdot.graph.Graph
             the converted graph
         """
-        import networkx as nx
-        nodes = list(graph.nodes)
-
-        if not all(isinstance(x, int) for x in nodes) \
-                or max(nodes) + 1 != len(nodes) or min(nodes) < 0:
-            graph = nx.relabel.convert_node_labels_to_integers(graph)
-
-        ''' extrac title '''
-        title = graph.graph['title'] if 'title' in graph.graph.keys() else ''
-
-        ''' convert node features '''
-        node_attr = []
-        for index, node in graph.nodes.items():
-            if index == 0:
-                node_attr = sorted(node.keys())
-            elif node_attr != sorted(node.keys()):
-                raise TypeError(f'Node {index} '
-                                f'features {node.keys()} '
-                                f'inconsistent with {node_attr}')
-
-        node_df = DataFrame({'!i': range(len(graph.nodes))})
-        for key in node_attr:
-            node_df[key] = [node[key] for node in graph.nodes.values()]
-
-        ''' convert edge features '''
-        edge_attr = []
-        for index, ((i, j), edge) in enumerate(graph.edges.items()):
-            if index == 0:
-                edge_attr = sorted(edge.keys())
-            elif edge_attr != sorted(edge.keys()):
-                raise TypeError(f'Edge {(i, j)} '
-                                f'features {edge.keys()} '
-                                f'inconsistent with {edge_attr}')
-
-        edge_df = DataFrame()
-        edge_df['!i'], edge_df['!j'] = zip(*graph.edges.keys())
-        if weight is not None:
-            edge_df['!w'] = [edge[weight] for edge in graph.edges.values()]
-        for key in edge_attr:
-            if key != weight:
-                edge_df[key] = [edge[key] for edge in graph.edges.values()]
-
-        return cls(nodes=node_df, edges=edge_df, title=title)
+        return _from_networkx(cls, graph, weight)
 
     @classmethod
     def from_ase(cls, atoms, use_charge=False, use_pbc=True,
@@ -252,45 +212,7 @@ class Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
-        if adjacency == 'default':
-            adjacency = AtomicAdjacency()
-
-        nodes = DataFrame({'!i': range(len(atoms))})
-        nodes['element'] = atoms.get_atomic_numbers().astype(np.int8)
-        if use_charge:
-            nodes['charge'] = atoms.get_initial_charges().astype(np.float32)
-
-        pbc = np.logical_and(atoms.pbc, use_pbc)
-        images = [(atoms.cell.T * image).sum(axis=1) for image in it.product(
-            *tuple([-1, 0, 1] if p else [0] for p in pbc))]
-        x = atoms.get_positions()
-        x_images = np.vstack([x + i for i in images])
-        # prefer lookup over integer modulo
-        j_images = list(range(len(atoms))) * len(images)
-
-        cutoff = adjacency.cutoff(atoms.get_atomic_numbers())
-        nl = cKDTree(x).sparse_distance_matrix(cKDTree(x_images), cutoff)
-
-        edgedict = {}
-        for (i, j), r in nl.items():
-            j = j_images[j]
-            if j > i:
-                w = adjacency(atoms[i].number, atoms[j].number, r)
-                if w > 0 and ((i, j) not in edgedict or
-                              edgedict[(i, j)][1] > r):
-                    edgedict[(i, j)] = (w, r)
-        i, j, w, r = list(zip(*[(i, j, w, r)
-                                for (i, j), (w, r) in edgedict.items()]))
-
-        edges = DataFrame({
-            '!i': np.array(i, dtype=np.uint32),
-            '!j': np.array(j, dtype=np.uint32),
-            '!w': np.array(w, dtype=np.float32),
-            'length': np.array(r, dtype=np.float32),
-        })
-
-        return cls(nodes, edges, title='Molecule {formula} {id}'.format(
-                   formula=atoms.get_chemical_formula(), id=uuid.uuid4().hex))
+        return _from_ase(cls, atoms, use_charge, use_pbc, adjacency)
 
     @classmethod
     def from_pymatgen(cls, molecule, use_pbc=True, adjacency='default'):
@@ -309,40 +231,49 @@ class Graph:
         Returns
         -------
         graphdot.Graph:
-            a molecular graph where atoms become nodes while edges resemble
+            A molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
-        import pymatgen.io
-        atoms = pymatgen.io.ase.AseAtomsAdaptor.get_atoms(molecule)
-        return cls.from_ase(atoms, use_pbc, adjacency)
+        return _from_pymatgen(cls, molecule, use_pbc, adjacency)
 
     @classmethod
     def from_smiles(cls, smiles):
-        """ Convert from a SMILES string to molecular graph
+        """DEPRECATED and replaced by from_rdkit."""
+        raise RuntimeError(
+            'from_smiles has been removed, use from_rdkit instead.'
+        )
+
+    @classmethod
+    def from_rdkit(cls, mol, bond_type='order', set_ring_list=True,
+                   set_ring_stereo=True):
+        """Convert a RDKit molecule to a graph
 
         Parameters
         ----------
-        smiles: str
-            A string encoding a molecule using the OpenSMILES format
+        bond_type: 'order' or 'type'
+            If 'order', an edge attribute 'order' will be populated with
+            numeric values such as 1 for single bonds, 2 for double bonds, and
+            1.5 for aromatic bonds. If 'type', an attribute 'type' will be
+            populated with :py:class:`rdkit.Chem.BondType` values.
+        set_ring_list: bool
+            if True, a nodal attribute 'ring_list' will be used to store a list
+            of the size of the rings that the atom participates in.
+        set_ring_stereo: bool
+            If True, an edge attribute 'ring_stereo' will be used to store the
+            E-Z stereo configuration of substitutes at the end of each bond
+            along a ring.
 
         Returns
         -------
         graphdot.Graph:
-            A molecular graph where atoms becomes nodes with the 'aromatic',
-            'charge', 'element', 'hcount' features, and bonds become edges
-            with the 'order' attribute.
+            A graph where nodes represent atoms and edges represent bonds. Each
+            node and edge carries an array of features as inferred from the
+            chemical structure of the molecule.
         """
-        import pysmiles.read_smiles
-        from mendeleev import element
-        m = pysmiles.read_smiles(smiles)
-        for _, n in m.nodes.items():
-            n['element'] = element(n['element']).atomic_number
-        graph = cls.from_networkx(m)
-        for attr, dtype in zip(['aromatic', 'charge', 'element', 'hcount'],
-                               [np.bool_, np.float32, np.int8, np.int8]):
-            graph.nodes[attr] = graph.nodes[attr].astype(dtype)
-        graph.edges['order'] = graph.edges['order'].astype(np.float32)
-        return graph
+        return _from_rdkit(cls, mol,
+                           bond_type=bond_type,
+                           set_ring_list=set_ring_list,
+                           set_ring_stereo=set_ring_stereo)
 
     # @classmethod
     # def from_graphviz(cls, molecule):

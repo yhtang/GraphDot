@@ -61,6 +61,12 @@ class DataFrame:
     def __setitem__(self, key, value):
         self._data[key] = Series(value)
 
+    def __getattr__(self, name):
+        if name in self._data.keys():
+            return self._data[name]
+        else:
+            raise AttributeError(f'Dataframe has no column {name}.')
+
     def __repr__(self):
         return repr(self._data)
 
