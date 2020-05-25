@@ -5,6 +5,22 @@ from rdkit import Chem
 from graphdot.graph import Graph
 
 
+def test_from_rdkit_options():
+    m = Chem.MolFromSmiles('CCOCC')
+    g = Graph.from_rdkit(m, bond_type='order')
+    assert('order' in g.edges.columns)
+    g = Graph.from_rdkit(m, bond_type='type')
+    assert('type' in g.edges.columns)
+    g = Graph.from_rdkit(m, set_ring_list=True)
+    assert('ring_list' in g.nodes.columns)
+    g = Graph.from_rdkit(m, set_ring_list=False)
+    assert('ring_list' not in g.nodes.columns)
+    g = Graph.from_rdkit(m, set_ring_stereo=True)
+    assert('ring_stereo' in g.edges.columns)
+    g = Graph.from_rdkit(m, set_ring_stereo=False)
+    assert('ring_stereo' not in g.edges.columns)
+
+
 def test_from_rdkit_linear_hydrocarbon():
     for i in range(2, 10):
         smi = 'C' * i
@@ -80,6 +96,16 @@ def test_from_rdkit_feature_atom_aromatic(testset):
 
 
 @pytest.mark.parametrize('testset', [
+    ('[C@H](F)(Cl)Br', Chem.ChiralType.CHI_TETRAHEDRAL_CW),
+    ('[C@@H](F)(Cl)Br', Chem.ChiralType.CHI_TETRAHEDRAL_CCW),
+])
+def test_from_rdkit_feature_atom_chiral(testset):
+    smi, chiral = testset
+    g = Graph.from_rdkit(Chem.MolFromSmiles(smi))
+    assert(g.nodes.chiral[0] == chiral)
+
+
+@pytest.mark.parametrize('testset', [
     ('CC', [0]),
     ('CCNC', [0]),
     ('COC', [0]),
@@ -138,3 +164,15 @@ def test_from_rdkit_feature_bond_conjugated(testset):
     g = Graph.from_rdkit(Chem.MolFromSmiles(smi))
     for n in g.edges.rows():
         assert(n.conjugated == conjugated)
+
+
+@pytest.mark.parametrize('testset', [
+    (r'F/C=C/F', Chem.BondStereo.STEREOE),
+    (r'F\C=C/F', Chem.BondStereo.STEREOZ),
+    (r'F\C=C\F', Chem.BondStereo.STEREOE),
+    (r'F/C=C\F', Chem.BondStereo.STEREOZ),
+])
+def test_from_rdkit_feature_bond_stereo(testset):
+    smi, stereo = testset
+    g = Graph.from_rdkit(Chem.MolFromSmiles(smi))
+    assert(g.edges.stereo[1] == stereo)
