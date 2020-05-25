@@ -390,8 +390,8 @@ def Constant(c, c_bounds=(0, np.inf)):
 
     Parameters
     ----------
-    constant: float > 0
-        The value of the kernel
+    c: float > 0
+        The constant value.
 
     Returns
     -------
@@ -637,6 +637,92 @@ def TensorProduct(**kw_kernels):
     @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
     class TensorProductOf(BaseKernel):
         def __init__(self, **kw_kernels):
+            self.kw_kernels = kw_kernels
+            # for the .state property of cpptype
+            for key in kw_kernels:
+                setattr(TensorProductOf, key,
+                        property(lambda self, key=key: self.kw_kernels[key]))
+
+        def __call__(self, object1, object2, jac=False):
+            if jac is True:
+                F, J = list(
+                    zip(*[kernel(object1[key], object2[key], True)
+                          for key, kernel in self.kw_kernels.items()])
+                )
+                fun = np.prod(F)
+                jacobian = np.array(
+                    [fun / f * j for i, f in enumerate(F) for j in J[i]]
+                )
+                return fun, jacobian
+            else:
+                prod = 1.0
+                for key, kernel in self.kw_kernels.items():
+                    prod *= kernel(object1[key], object2[key], False)
+                return prod
+
+        def __repr__(self):
+            return Template('TensorProduct(${kwexpr, })').render(
+                kwexpr=[f'{k}={repr(K)}' for k, K in self.kw_kernels.items()])
+
+        def gen_expr(self, x, y, jac=False, theta_prefix=''):
+            F, J = list(
+                zip(*[kernel.gen_expr('%s.%s' % (x, key),
+                                      '%s.%s' % (y, key),
+                                      True,
+                                      '%s%s.' % (theta_prefix, key))
+                      for key, kernel in self.kw_kernels.items()])
+            )
+            f = Template('(${F * })').render(F=F)
+            if jac is True:
+                jacobian = [
+                    Template('(${X * })').render(X=F[:i] + (j,) + F[i + 1:])
+                    for i, _ in enumerate(F) for j in J[i]
+                ]
+                return f, jacobian
+            else:
+                return f
+
+        @property
+        def theta(self):
+            return namedtuple(
+                'TensorProductHyperparameters',
+                self.kw_kernels.keys()
+            )(*[k.theta for k in self.kw_kernels.values()])
+
+        @theta.setter
+        def theta(self, seq):
+            for kernel, value in zip(self.kw_kernels.values(), seq):
+                kernel.theta = value
+
+        @property
+        def bounds(self):
+            return tuple(k.bounds for k in self.kw_kernels.values())
+
+    return TensorProductOf(**kw_kernels)
+
+
+def Compose(op, **kw_kernels):
+    r"""Creates a composite base kernel via the usage of a reduction operator
+    to combine the outputs of multiple scalar kernels on individual features.
+    :math:`k_\mathrm{composite}(X, Y; \mathrm{op}) =
+    k_{a_1}(X_{a_1}, Y_{a_1}) \mathrm{op} k_{a_2}(X_{a_2}, Y_{a_2}) \mathrm{op}
+    \ldots`
+
+    Parameters
+    ----------
+    op: str
+        A reduction operator. Due to positive definiteness requirements, the
+        available options are likely limited to '+', '*', '&', '|'.
+    kw_kernels: dict of attribute=kernel pairs
+        The kernels can be any base kernels and their compositions as defined
+        in this module, while features should be strings that represent
+        valid Python/C++ identifiers.
+    """
+
+    @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
+    class Composite(BaseKernel):
+        def __init__(self, op, **kw_kernels):
+            self.op = op
             self.kw_kernels = kw_kernels
             # for the .state property of cpptype
             for key in kw_kernels:
