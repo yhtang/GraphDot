@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Adaptor for RDKit's Molecule objects"""
+import re
 import networkx as nx
 import numpy as np
 from treelib import Tree
@@ -98,12 +99,11 @@ class FunctionalGroup:
 
 def get_bond_orientation_dict(mol):
     bond_orientation_dict = {}
-    for line in Chem.MolToMolBlock(mol).split('\n'):
-        if len(line.split()) == 4:
-            a, b, _, d = line.split()
-            ij = (int(a) - 1, int(b) - 1)
-            ij = (min(ij), max(ij))
-            bond_orientation_dict[ij] = int(d)
+    mb = Chem.MolToMolBlock(mol, includeStereo=True, kekulize=False)
+    for i, j, _, d in re.findall(r'^[\s*(\d+)]{4}$', mb, re.MULTILINE):
+        i, j, d = int(i) - 1, int(j) - 1, int(d)
+        i, j = min(i, j), max(i, j)
+        bond_orientation_dict[(i, j)] = d
     return bond_orientation_dict
 
 
