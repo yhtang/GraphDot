@@ -231,22 +231,49 @@ class Graph:
         Returns
         -------
         graphdot.Graph:
-            a molecular graph where atoms become nodes while edges resemble
+            A molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
         return _from_pymatgen(cls, molecule, use_pbc, adjacency)
 
     @classmethod
     def from_smiles(cls, smiles):
-        """DEPRECATED and superceded by from_rdkit."""
+        """DEPRECATED and replaced by from_rdkit."""
         raise RuntimeError(
-            'from_smiles has been deprecated, use from_rdkit instead.'
+            'from_smiles has been removed, use from_rdkit instead.'
         )
 
     @classmethod
-    def from_rdkit(cls, mol):
-        """Convert a RDKit molecule to a graph"""
-        return _from_rdkit(cls, mol)
+    def from_rdkit(cls, mol, bond_type='order', set_ring_list=True,
+                   set_ring_stereo=True):
+        """Convert a RDKit molecule to a graph
+
+        Parameters
+        ----------
+        bond_type: 'order' or 'type'
+            If 'order', an edge attribute 'order' will be populated with
+            numeric values such as 1 for single bonds, 2 for double bonds, and
+            1.5 for aromatic bonds. If 'type', an attribute 'type' will be
+            populated with :py:class:`rdkit.Chem.BondType` values.
+        set_ring_list: bool
+            if True, a nodal attribute 'ring_list' will be used to store a list
+            of the size of the rings that the atom participates in.
+        set_ring_stereo: bool
+            If True, an edge attribute 'ring_stereo' will be used to store the
+            E-Z stereo configuration of substitutes at the end of each bond
+            along a ring.
+
+        Returns
+        -------
+        graphdot.Graph:
+            A graph where nodes represent atoms and edges represent bonds. Each
+            node and edge carries an array of features as inferred from the
+            chemical structure of the molecule.
+        """
+        return _from_rdkit(cls, mol,
+                           bond_type=bond_type,
+                           set_ring_list=set_ring_list,
+                           set_ring_stereo=set_ring_stereo)
 
     # @classmethod
     # def from_graphviz(cls, molecule):
