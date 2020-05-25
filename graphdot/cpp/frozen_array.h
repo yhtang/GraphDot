@@ -13,13 +13,13 @@ struct frozen_array {
     using element_type = T;
     using reference_type = std::add_lvalue_reference_t<element_type>;
     using const_reference_type = std::add_lvalue_reference_t<std::add_const_t<element_type>>;
-    using pointer_type = std::add_pointer_t<element_type>;
+    using pointer_type = std::add_pointer_t<std::add_const_t<element_type>>;
     using size_type = numpy_type::int32;
-    pointer_type _data = nullptr;
+    pointer_type __restrict _data = nullptr;
     size_type size = 0;
 
     struct const_iterator {
-        pointer_type _ptr;
+        pointer_type __restrict _ptr;
 
         __host__ __device__ void operator ++ () {++_ptr;}
 
