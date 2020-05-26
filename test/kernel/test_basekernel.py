@@ -12,7 +12,9 @@ from graphdot.kernel.basekernel import (
     RationalQuadratic,
     _Multiply,
     Normalize,
+    Compose,
     TensorProduct,
+    Additive,
     Convolution,
 )
 
@@ -205,6 +207,76 @@ def test_tensor_product_3(k1, k2, k3):
                    == pytest.approx(k1(x1, x2)
                                     * k2(y1, y2)
                                     * k3(z1, z2)))
+            assert(k(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2))
+                   == mirror(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2)))
+    ''' hyperparameter retrieval '''
+    assert(k1.theta in k.theta)
+    assert(k2.theta in k.theta)
+    assert(k3.theta in k.theta)
+    k.theta = k.theta
+    ''' representation generation '''
+    assert(str(k1) in str(k))
+    assert(str(k2) in str(k))
+    assert(str(k3) in str(k))
+    assert(repr(k1) in repr(k))
+    assert(repr(k2) in repr(k))
+    assert(repr(k3) in repr(k))
+    ''' C++ code generation '''
+    assert(k.dtype.isalignedstruct)
+
+
+@pytest.mark.parametrize('k1', kernels)
+@pytest.mark.parametrize('k2', kernels)
+def test_additive_2(k1, k2):
+    k = Additive(x=k1, y=k2)
+    mirror = eval(repr(k))  # representation meaningness test
+    assert(mirror.theta == k.theta)
+    for i1, j1 in [(0, 0), (0, 1.5), (-1, 1), (-1.0, 0)]:
+        for i2, j2 in [(0, 0), (0, 1.5), (-1, 1), (-1.0, 0)]:
+            ''' default and corner cases '''
+            assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
+                   == pytest.approx(k1(i1, j1) + k2(i2, j2)))
+            assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
+                   == pytest.approx(mirror(dict(x=i1, y=i2),
+                                           dict(x=j1, y=j2))))
+    for _ in range(1000):
+        i1 = random.paretovariate(0.1)
+        j1 = random.paretovariate(0.1)
+        i2 = random.paretovariate(0.1)
+        j2 = random.paretovariate(0.1)
+        ''' check by definition '''
+        assert(k(dict(x=i1, y=j1), dict(x=i2, y=j2))
+               == k1(i1, i2) + k2(j1, j2))
+        assert(k(dict(x=i1, y=i2), dict(x=j1, y=j2))
+               == mirror(dict(x=i1, y=i2), dict(x=j1, y=j2)))
+    ''' hyperparameter retrieval '''
+    assert(k1.theta in k.theta)
+    assert(k2.theta in k.theta)
+    k.theta = k.theta
+    ''' representation generation '''
+    assert(str(k1) in str(k))
+    assert(str(k2) in str(k))
+    assert(repr(k1) in repr(k))
+    assert(repr(k2) in repr(k))
+    ''' C++ code generation '''
+    assert(k.dtype.isalignedstruct)
+
+
+@pytest.mark.parametrize('k1', kernels)
+@pytest.mark.parametrize('k2', kernels)
+@pytest.mark.parametrize('k3', kernels)
+def test_additive_3(k1, k2, k3):
+    k = Additive(x=k1, y=k2, z=k3)
+    mirror = eval(repr(k))  # representation meaningness test
+    assert(mirror.theta == k.theta)
+    ''' default and corner cases only '''
+    for x1, y1, z1 in [(0, 0, 0), (0, 1, -1), (-1, 1, 0.5), (0, -42., 1)]:
+        for x2, y2, z2 in [(0, 0, 0), (0, 1, -1), (-1, 1, 0.5), (0, -42., 1)]:
+            ''' default and corner cases '''
+            assert(k(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2))
+                   == pytest.approx(k1(x1, x2)
+                                    + k2(y1, y2)
+                                    + k3(z1, z2)))
             assert(k(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2))
                    == mirror(dict(x=x1, y=y1, z=z1), dict(x=x2, y=y2, z=z2)))
     ''' hyperparameter retrieval '''
