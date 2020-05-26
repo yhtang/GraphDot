@@ -390,8 +390,8 @@ def Constant(c, c_bounds=(0, np.inf)):
 
     Parameters
     ----------
-    constant: float > 0
-        The value of the kernel
+    c: float > 0
+        The constant value.
 
     Returns
     -------
@@ -621,48 +621,70 @@ def Normalize(kernel):
     return Normalized(kernel)
 
 
-def TensorProduct(**kw_kernels):
-    r"""Creates a tensor product kernel, i.e. a product of multiple kernels
-    where each kernel is associated with a keyword-indexed 'attribute'.
-    :math:`k_\otimes(X, Y) = \prod_{a \in \mathrm{attributes}} k_a(X_a, Y_a)`
+def Compose(oper, **kw_kernels):
+    r"""Creates a composite base kernel via the usage of a reduction operator
+    to combine the outputs of multiple scalar kernels on individual features.
+    :math:`k_\mathrm{composite}(X, Y; \mathrm{op}) =
+    k_{a_1}(X_{a_1}, Y_{a_1}) \mathrm{op} k_{a_2}(X_{a_2}, Y_{a_2}) \mathrm{op}
+    \ldots`
 
     Parameters
     ----------
-    kwargs: dict of attribute=kernel pairs
+    oper: str
+        A reduction operator. Due to positive definiteness requirements, the
+        available options are currently limited to '+', '*'.
+    kw_kernels: dict of attribute=kernel pairs
         The kernels can be any base kernels and their compositions as defined
-        in this module, while attributes should be strings that represent
+        in this module, while features should be strings that represent
         valid Python/C++ identifiers.
     """
+    oplib = {
+        '+': dict(
+            ufunc=np.add,                           # associated numpy ufunc
+            jfunc=lambda F, f, j: j,                # Jacobian evaluator
+            jgen=lambda F_expr, j_expr, i: j_expr,  # Jacobian code generator
+        ),
+        '*': dict(
+            ufunc=np.multiply,
+            jfunc=lambda F, f, j: F / f * j,
+            jgen=lambda F_expr, j_expr, i: Template('(${X * })').render(
+                X=F_expr[:i] + (j_expr,) + F_expr[i + 1:]
+            )
+        ),
+    }
+
+    if oper not in oplib:
+        raise ValueError(f'Invalid reduction operator {repr(oper)}.')
 
     @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
-    class TensorProductOf(BaseKernel):
-        def __init__(self, **kw_kernels):
+    class Composite(BaseKernel):
+        def __init__(self, opstr, ufunc, jfunc, jgen, **kw_kernels):
+            self.opstr = opstr
+            self.ufunc = ufunc
+            self.jfunc = jfunc
+            self.jgen = jgen
             self.kw_kernels = kw_kernels
-            # for the .state property of cpptype
-            for key in kw_kernels:
-                setattr(TensorProductOf, key,
-                        property(lambda self, key=key: self.kw_kernels[key]))
-
-        def __call__(self, object1, object2, jac=False):
-            if jac is True:
-                F, J = list(
-                    zip(*[kernel(object1[key], object2[key], True)
-                          for key, kernel in self.kw_kernels.items()])
-                )
-                fun = np.prod(F)
-                jacobian = np.array(
-                    [fun / f * j for i, f in enumerate(F) for j in J[i]]
-                )
-                return fun, jacobian
-            else:
-                prod = 1.0
-                for key, kernel in self.kw_kernels.items():
-                    prod *= kernel(object1[key], object2[key], False)
-                return prod
 
         def __repr__(self):
-            return Template('TensorProduct(${kwexpr, })').render(
+            return Template('Compose(${opstr}, ${kwexpr, })').render(
+                opstr=repr(self.opstr),
                 kwexpr=[f'{k}={repr(K)}' for k, K in self.kw_kernels.items()])
+
+        def __call__(self, X, Y, jac=False):
+            if jac is True:
+                F, J = list(
+                    zip(*[kernel(X[key], Y[key], True)
+                          for key, kernel in self.kw_kernels.items()])
+                )
+                S = self.ufunc.reduce(F)
+                jacobian = np.array([
+                    self.jfunc(S, f, j) for i, f in enumerate(F) for j in J[i]
+                ])
+                return S, jacobian
+            else:
+                return self.ufunc.reduce([
+                    f(X[k], Y[k]) for k, f in self.kw_kernels.items()
+                ])
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             F, J = list(
@@ -672,11 +694,10 @@ def TensorProduct(**kw_kernels):
                                       '%s%s.' % (theta_prefix, key))
                       for key, kernel in self.kw_kernels.items()])
             )
-            f = Template('(${F * })').render(F=F)
+            f = Template('(${F ${opstr} })').render(opstr=self.opstr, F=F)
             if jac is True:
                 jacobian = [
-                    Template('(${X * })').render(X=F[:i] + (j,) + F[i + 1:])
-                    for i, _ in enumerate(F) for j in J[i]
+                    self.jgen(F, j, i) for i, _ in enumerate(F) for j in J[i]
                 ]
                 return f, jacobian
             else:
@@ -685,7 +706,7 @@ def TensorProduct(**kw_kernels):
         @property
         def theta(self):
             return namedtuple(
-                'TensorProductHyperparameters',
+                'CompositeHyperparameters',
                 self.kw_kernels.keys()
             )(*[k.theta for k in self.kw_kernels.values()])
 
@@ -698,7 +719,26 @@ def TensorProduct(**kw_kernels):
         def bounds(self):
             return tuple(k.bounds for k in self.kw_kernels.values())
 
-    return TensorProductOf(**kw_kernels)
+    # for the .state property of cpptype
+    for key in kw_kernels:
+        setattr(Composite, key,
+                property(lambda self, key=key: self.kw_kernels[key]))
+
+    return Composite(oper, **oplib[oper], **kw_kernels)
+
+
+def TensorProduct(**kw_kernels):
+    r"""Alias of `Compose('*', **kw_kernels)`.
+    :math:`k_\otimes(X, Y) = \prod_{a \in \mathrm{features}} k_a(X_a, Y_a)`
+    """
+    return Compose('*', **kw_kernels)
+
+
+def Additive(**kw_kernels):
+    r"""Alias of `Compose('+', **kw_kernels)`.
+    :math:`k_\oplus(X, Y) = \sum_{a \in \mathrm{features}} k_a(X_a, Y_a)`
+    """
+    return Compose('+', **kw_kernels)
 
 
 def Convolution(kernel, normalize=True):
