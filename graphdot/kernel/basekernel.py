@@ -150,7 +150,7 @@ class BaseKernel:
                 if jac is True:
                     return (
                         self._fun(x1, x2, *self.theta),
-                        [j(x1, x2, *self.theta) for j in self._jac]
+                        np.array([j(x1, x2, *self.theta) for j in self._jac])
                     )
                 else:
                     return self._fun(x1, x2, *self.theta)
@@ -324,7 +324,9 @@ class KernelOperator(BaseKernel):
                     f2, J2 = self.k2(i, j, True)
                     return (
                         f1 * f2,
-                        [j1 * f2 for j1 in J1] + [f1 * j2 for j2 in J2]
+                        np.array(
+                            [j1 * f2 for j1 in J1] + [f1 * j2 for j2 in J2]
+                        )
                     )
                 else:
                     return self.k1(i, j, False) * self.k2(i, j, False)
@@ -355,7 +357,7 @@ class _Multiply(BaseKernel):
 
     def __call__(self, x1, x2, jac=False):
         if jac is True:
-            return x1 * x2, []
+            return x1 * x2, np.array([])
         else:
             return x1 * x2
 
@@ -388,8 +390,8 @@ def Constant(c, c_bounds=(0, np.inf)):
 
     Parameters
     ----------
-    constant: float > 0
-        The value of the kernel
+    c: float > 0
+        The constant value.
 
     Returns
     -------
@@ -405,7 +407,7 @@ def Constant(c, c_bounds=(0, np.inf)):
 
         def __call__(self, i, j, jac=False):
             if jac is True:
-                return self.c, [1.0]
+                return self.c, np.ones(1)
             else:
                 return self.c
 
@@ -462,7 +464,10 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
 
         def __call__(self, i, j, jac=False):
             if jac is True:
-                return 1.0 if i == j else self.h, [0.0 if i == j else 1.0]
+                return (
+                    1.0 if i == j else self.h,
+                    np.array([0.0 if i == j else 1.0])
+                )
             else:
                 return 1.0 if i == j else self.h
 
@@ -534,46 +539,152 @@ RationalQuadratic = BaseKernel.create(
 )
 
 
-def TensorProduct(**kw_kernels):
-    r"""Creates a tensor product kernel, i.e. a product of multiple kernels
-    where each kernel is associated with a keyword-indexed 'attribute'.
-    :math:`k_\otimes(X, Y) = \prod_{a \in \mathrm{attributes}} k_a(X_a, Y_a)`
+def Normalize(kernel):
+    r"""Normalize a positive semidefinite kernel to produce the cosine of angle
+    between the input variables.
+    :math:`k_{N}(X, Y) = \frac{k_{base}(X, Y)}
+                              {\sqrt{k_{base}(X, X) k_{base}(Y, Y)}}`
 
     Parameters
     ----------
-    kwargs: dict of attribute=kernel pairs
-        The kernels can be any base kernels and their compositions as defined
-        in this module, while attributes should be strings that represent
-        valid Python/C++ identifiers.
+    kernel: base kernel
+        An elementary or composite base kernel.
     """
 
-    @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
-    class TensorProductKernel(BaseKernel):
-        def __init__(self, **kw_kernels):
-            self.kw_kernels = kw_kernels
-            # for the .state property of cpptype
-            for key in kw_kernels:
-                setattr(TensorProductKernel, key,
-                        property(lambda self, key=key: self.kw_kernels[key]))
+    @cpptype(kernel=kernel.dtype)
+    class Normalized(BaseKernel):
+        def __init__(self, kernel):
+            self.kernel = kernel
 
-        def __call__(self, object1, object2, jac=False):
+        def __call__(self, X, Y, jac=False):
             if jac is True:
-                F, J = list(
-                    zip(*[kernel(object1[key], object2[key], True)
-                          for key, kernel in self.kw_kernels.items()])
-                )
-                fun = np.prod(F)
-                jacobian = [fun / f * j for i, f in enumerate(F) for j in J[i]]
-                return fun, jacobian
+                Fxx, Jxx = self.kernel(X, X, jac=True)
+                Fxy, Jxy = self.kernel(X, Y, jac=True)
+                Fyy, Jyy = self.kernel(Y, Y, jac=True)
+
+                if Fxx > 0 and Fyy > 0:
+                    return (
+                        Fxy * (Fxx * Fyy)**-0.5,
+                        (Jxy * (Fxx * Fyy)**-0.5
+                         - (0.5 * Fxy * (Fxx * Fyy)**-1.5
+                            * (Jxx * Fyy + Fxx * Jyy)))
+                    )
+                else:
+                    return (0.0, np.zeros_like(Jxy))
             else:
-                prod = 1.0
-                for key, kernel in self.kw_kernels.items():
-                    prod *= kernel(object1[key], object2[key], False)
-                return prod
+                Fxx = self.kernel(X, X)
+                Fxy = self.kernel(X, Y)
+                Fyy = self.kernel(Y, Y)
+                return Fxy * (Fxx * Fyy)**-0.5 if Fxx > 0 and Fyy > 0 else 0.0
 
         def __repr__(self):
-            return Template('TensorProduct(${kwexpr, })').render(
+            return f'Normalize({repr(self.kernel)})'
+
+        def gen_expr(self, x, y, jac=False, theta_prefix=''):
+            F, J = self.kernel.gen_expr(
+                '_1', '_2', True, theta_prefix + 'kernel.'
+            )
+            f = Template(
+                r'normalize([&](auto _1, auto _2){return ${f};}, ${x}, ${y})'
+            ).render(
+                x=x, y=y, f=F
+            )
+            if jac is True:
+                template = Template(
+                    r'''normalize_jacobian(
+                            [&](auto _1, auto _2){return ${f};},
+                            [&](auto _1, auto _2){return ${j};},
+                            ${x},
+                            ${y}
+                        )'''
+                )
+                jacobian = [template.render(x=x, y=y, f=F, j=j) for j in J]
+                return f, jacobian
+            else:
+                return f
+
+        @property
+        def theta(self):
+            return namedtuple(
+                'NormalizeHyperparameters',
+                ['kernel']
+            )(self.kernel.theta)
+
+        @theta.setter
+        def theta(self, seq):
+            self.kernel.theta = seq[0]
+
+        @property
+        def bounds(self):
+            return (self.kernel.bounds,)
+
+    return Normalized(kernel)
+
+
+def Compose(oper, **kw_kernels):
+    r"""Creates a composite base kernel via the usage of a reduction operator
+    to combine the outputs of multiple scalar kernels on individual features.
+    :math:`k_\mathrm{composite}(X, Y; \mathrm{op}) =
+    k_{a_1}(X_{a_1}, Y_{a_1}) \mathrm{op} k_{a_2}(X_{a_2}, Y_{a_2}) \mathrm{op}
+    \ldots`
+
+    Parameters
+    ----------
+    oper: str
+        A reduction operator. Due to positive definiteness requirements, the
+        available options are currently limited to '+', '*'.
+    kw_kernels: dict of attribute=kernel pairs
+        The kernels can be any base kernels and their compositions as defined
+        in this module, while features should be strings that represent
+        valid Python/C++ identifiers.
+    """
+    oplib = {
+        '+': dict(
+            ufunc=np.add,                           # associated numpy ufunc
+            jfunc=lambda F, f, j: j,                # Jacobian evaluator
+            jgen=lambda F_expr, j_expr, i: j_expr,  # Jacobian code generator
+        ),
+        '*': dict(
+            ufunc=np.multiply,
+            jfunc=lambda F, f, j: F / f * j,
+            jgen=lambda F_expr, j_expr, i: Template('(${X * })').render(
+                X=F_expr[:i] + (j_expr,) + F_expr[i + 1:]
+            )
+        ),
+    }
+
+    if oper not in oplib:
+        raise ValueError(f'Invalid reduction operator {repr(oper)}.')
+
+    @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
+    class Composite(BaseKernel):
+        def __init__(self, opstr, ufunc, jfunc, jgen, **kw_kernels):
+            self.opstr = opstr
+            self.ufunc = ufunc
+            self.jfunc = jfunc
+            self.jgen = jgen
+            self.kw_kernels = kw_kernels
+
+        def __repr__(self):
+            return Template('Compose(${opstr}, ${kwexpr, })').render(
+                opstr=repr(self.opstr),
                 kwexpr=[f'{k}={repr(K)}' for k, K in self.kw_kernels.items()])
+
+        def __call__(self, X, Y, jac=False):
+            if jac is True:
+                F, J = list(
+                    zip(*[kernel(X[key], Y[key], True)
+                          for key, kernel in self.kw_kernels.items()])
+                )
+                S = self.ufunc.reduce(F)
+                jacobian = np.array([
+                    self.jfunc(S, f, j) for i, f in enumerate(F) for j in J[i]
+                ])
+                return S, jacobian
+            else:
+                return self.ufunc.reduce([
+                    f(X[k], Y[k]) for k, f in self.kw_kernels.items()
+                ])
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             F, J = list(
@@ -583,11 +694,10 @@ def TensorProduct(**kw_kernels):
                                       '%s%s.' % (theta_prefix, key))
                       for key, kernel in self.kw_kernels.items()])
             )
-            f = Template('(${F * })').render(F=F)
+            f = Template('(${F ${opstr} })').render(opstr=self.opstr, F=F)
             if jac is True:
                 jacobian = [
-                    Template('(${X * })').render(X=F[:i] + (j,) + F[i + 1:])
-                    for i, _ in enumerate(F) for j in J[i]
+                    self.jgen(F, j, i) for i, _ in enumerate(F) for j in J[i]
                 ]
                 return f, jacobian
             else:
@@ -596,7 +706,7 @@ def TensorProduct(**kw_kernels):
         @property
         def theta(self):
             return namedtuple(
-                'TensorProductHyperparameters',
+                'CompositeHyperparameters',
                 self.kw_kernels.keys()
             )(*[k.theta for k in self.kw_kernels.values()])
 
@@ -609,10 +719,29 @@ def TensorProduct(**kw_kernels):
         def bounds(self):
             return tuple(k.bounds for k in self.kw_kernels.values())
 
-    return TensorProductKernel(**kw_kernels)
+    # for the .state property of cpptype
+    for key in kw_kernels:
+        setattr(Composite, key,
+                property(lambda self, key=key: self.kw_kernels[key]))
+
+    return Composite(oper, **oplib[oper], **kw_kernels)
 
 
-def Convolution(kernel):
+def TensorProduct(**kw_kernels):
+    r"""Alias of `Compose('*', **kw_kernels)`.
+    :math:`k_\otimes(X, Y) = \prod_{a \in \mathrm{features}} k_a(X_a, Y_a)`
+    """
+    return Compose('*', **kw_kernels)
+
+
+def Additive(**kw_kernels):
+    r"""Alias of `Compose('+', **kw_kernels)`.
+    :math:`k_\oplus(X, Y) = \sum_{a \in \mathrm{features}} k_a(X_a, Y_a)`
+    """
+    return Compose('+', **kw_kernels)
+
+
+def Convolution(kernel, normalize=True):
     r"""Creates a convolution kernel, which sums up evaluations of a base
     kernel on pairs of elements from two sequences.
     :math:`k_{CONV}(X, Y) = \sum_{x \in X} \sum_{y \in Y} k_{base}(x, y)`
@@ -623,43 +752,24 @@ def Convolution(kernel):
         The kernel can be any base kernel or a composition of base kernels in
         this module, while the attribute to be convolved should be
         fixed-length sequences.
+    normalize: bool
+        Whether or not to normalize the convolution to ensure it is a valid
+        base kernel in range [0, 1].
     """
 
     @cpptype(kernel=kernel.dtype)
-    class ConvolutionKernel(BaseKernel):
+    class ConvolutionOf(BaseKernel):
         def __init__(self, kernel):
             self.kernel = kernel
 
-        def __call__(self, seq1, seq2, jac=False):
+        def __call__(self, X, Y, jac=False):
             if jac is True:
-                Fxx, Jxx = list(zip(*[
-                    self.kernel(x, y, jac=True) for x in seq1 for y in seq1
-                ]))
                 Fxy, Jxy = list(zip(*[
-                    self.kernel(x, y, jac=True) for x in seq1 for y in seq2
+                    self.kernel(x, y, jac=True) for x in X for y in Y
                 ]))
-                Fyy, Jyy = list(zip(*[
-                    self.kernel(x, y, jac=True) for x in seq2 for y in seq2
-                ]))
-                Fxx, Fxy, Fyy = np.sum(Fxx), np.sum(Fxy), np.sum(Fyy)
-                Jxx = np.sum(Jxx, axis=0)
-                Jxy = np.sum(Jxy, axis=0)
-                Jyy = np.sum(Jyy, axis=0)
-
-                if Fxx > 0 and Fyy > 0:
-                    return (
-                        Fxy * (Fxx * Fyy)**-0.5,
-                        (Jxy * (Fxx * Fyy)**-0.5
-                         - (0.5 * Fxy * (Fxx * Fyy)**-1.5
-                            * (Jxx * Fyy + Fxx * Jyy)))
-                    )
-                else:
-                    return (0.0, np.zeros_like(Jxy))
+                return np.sum(Fxy), np.sum(Jxy, axis=0)
             else:
-                Fxx = np.sum([self.kernel(x, y) for x in seq1 for y in seq1])
-                Fxy = np.sum([self.kernel(x, y) for x in seq1 for y in seq2])
-                Fyy = np.sum([self.kernel(x, y) for x in seq2 for y in seq2])
-                return Fxy * (Fxx * Fyy)**-0.5 if Fxx > 0 and Fyy > 0 else 0.0
+                return np.sum([self.kernel(x, y) for x in X for y in Y])
 
         def __repr__(self):
             return f'Convolution({repr(self.kernel)})'
@@ -676,13 +786,12 @@ def Convolution(kernel):
             if jac is True:
                 template = Template(
                     r'''convolution_jacobian(
-                            [&](auto _1, auto _2){return ${f};},
                             [&](auto _1, auto _2){return ${j};},
                             ${x},
                             ${y}
                         )'''
                 )
-                jacobian = [template.render(x=x, y=y, f=F, j=j) for j in J]
+                jacobian = [template.render(x=x, y=y, j=j) for j in J]
                 return f, jacobian
             else:
                 return f
@@ -702,4 +811,7 @@ def Convolution(kernel):
         def bounds(self):
             return (self.kernel.bounds,)
 
-    return ConvolutionKernel(kernel)
+    if normalize is True:
+        return Normalize(ConvolutionOf(kernel))
+    else:
+        return ConvolutionOf(kernel)

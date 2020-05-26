@@ -8,3 +8,4 @@ pysmiles
 mendeleev
 sphinx
 sphinx-rtd-theme
+treelib

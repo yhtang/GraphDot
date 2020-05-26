@@ -18,7 +18,7 @@ class Series(np.ndarray):
         else:
             t = common_min_type.of_values(input)
             dtype = t if np.issctype(t) else np.object
-            series = np.empty(len(input), dtype=dtype).view(cls)
+            series = np.empty(len(input), dtype=dtype).view(cls)  # ensures 1D
             series[:] = input
             series.concrete_type = t
         return series
@@ -60,6 +60,12 @@ class DataFrame:
 
     def __setitem__(self, key, value):
         self._data[key] = Series(value)
+
+    def __getattr__(self, name):
+        if name in self._data.keys():
+            return self._data[name]
+        else:
+            raise AttributeError(f'Dataframe has no column {name}.')
 
     def __repr__(self):
         return repr(self._data)

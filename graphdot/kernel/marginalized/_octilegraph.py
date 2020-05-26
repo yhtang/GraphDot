@@ -144,6 +144,9 @@ class OctileGraph:
         lf[:] = j - j % 8
 
         perm = np.lexsort(indices, axis=0)
+        # Do not delete this line even though it looks useless. It does change
+        # i, j, up, lf
+        indices[:, :] = indices[:, perm]
         self.edges_aos = umempty(nnz * 2, edge_t)
         self.edges_aos[:] = edges_aos[perm % nnz]  # mod nnz due to symmetry
 
