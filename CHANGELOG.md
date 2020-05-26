@@ -1,5 +1,14 @@
 # Change log of GraphDot
 
+## 0.4.5 (2020-05-26)
+
+- Replaced `from_smiles` with a more robust `from_rdkit` function with
+  additional ring stereochemistry features. Thanks to [Yan Xiang](mailto:hnxxxy123@sjtu.edu.cn) for the contribution.
+- Added a new `Compose` method for creating base kernels beyond tensor product
+  base kernels.
+- Fixed a performance degradation issue (#57).
+
+
 ## 0.4.4 (2020-05-23)
 
 - Ensure that graphs can be pickled.
