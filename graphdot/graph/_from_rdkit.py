@@ -235,7 +235,7 @@ def _from_rdkit(cls, mol, bond_type='order', set_ring_list=True,
         if bond_type == 'order':
             g.edges[ij]['order'] = bond.GetBondTypeAsDouble()
         else:
-            g.edges[ij]['type'] = bond.GetBondTypeAsDouble()
+            g.edges[ij]['type'] = bond.GetBondType()
         g.edges[ij]['aromatic'] = bond.GetIsAromatic()
         g.edges[ij]['conjugated'] = bond.GetIsConjugated()
         g.edges[ij]['stereo'] = bond.GetStereo()
