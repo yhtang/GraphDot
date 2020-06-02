@@ -68,7 +68,7 @@ def _from_networkx(cls, graph, weight=None):
 
     edge_df = DataFrame()
     if len(graph.edges.keys()) == 0:
-        raise RuntimeError('Graph without edges is not valid')
+        raise RuntimeError(f'Graph {graph} has no edges.')
     edge_df['!i'], edge_df['!j'] = zip(*graph.edges.keys())
     if weight is not None:
         edge_df['!w'] = [edge[weight] for edge in graph.edges.values()]
