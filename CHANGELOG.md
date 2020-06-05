@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.4.6 (2020-06-05)
+
+- Fixed a minor bug in `Graph.from_rdkit`.
+
 ## 0.4.5 (2020-05-26)
 
 - Replaced `from_smiles` with a more robust `from_rdkit` function with
