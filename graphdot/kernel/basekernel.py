@@ -17,7 +17,12 @@ __all__ = ['BaseKernel',
            'KroneckerDelta',
            'SquareExponential',
            'RationalQuadratic',
-           'TensorProduct']
+           'Normalize',
+           'Compose',
+           'TensorProduct',
+           'Additive',
+           'Convolution',
+           ]
 
 
 class BaseKernel:
