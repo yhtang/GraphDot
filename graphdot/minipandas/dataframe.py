@@ -48,14 +48,14 @@ class DataFrame:
     def columns(self):
         return list(self._data.keys())
 
-    def rowtype(self, deep=True, pack=True):
-        etypes = {key: np.dtype(self[key].get_type(concrete=deep))
-                  for key in self.columns}
+    def rowtype(self, pack=True):
         cols = np.array(list(self.columns))
         if pack is True:
-            perm = np.argsort([-etypes[key].itemsize for key in self.columns])
+            perm = np.argsort([
+                -self[key].dtype.itemsize for key in self.columns
+            ])
             cols = cols[perm]
-        packed_dtype = np.dtype([(key, etypes[key].newbyteorder('='))
+        packed_dtype = np.dtype([(key, self[key].dtype.newbyteorder('='))
                                 for key in cols], align=True)
         return packed_dtype
 
@@ -88,7 +88,7 @@ class DataFrame:
     def iterstates(self, pack=True):
         '''Iterate over rows, use the .state attribute if element is not
         scalar.'''
-        cols = np.array(list(self.rowtype(pack=pack, deep=True).fields.keys()))
+        cols = np.array(list(self.rowtype(pack=pack).fields.keys()))
 
         for row in zip(*[self[key] for key in cols]):
             yield tuple(i if np.isscalar(i) else i.state for i in row)

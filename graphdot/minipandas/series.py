@@ -10,25 +10,23 @@ class Series(np.ndarray):
         if isinstance(input, np.ndarray):
             series = input.view(cls)
             if np.issctype(series.dtype):
-                series.concrete_type = series.dtype
+                series._concrete_type = series.dtype
             else:
-                series.concrete_type = common_concrete_type.of_values(input)
+                series._concrete_type = common_concrete_type.of_values(input)
         else:
             t = common_min_type.of_values(input)
-            dtype = t if np.issctype(t) else np.object
+            dtype = np.dtype(t)
             series = np.empty(len(input), dtype=dtype).view(cls)  # ensures 1D
             series[:] = input
-            series.concrete_type = t
+            series._concrete_type = t
         return series
 
     def __repr__(self):
         return np.array2string(self, separator=',', max_line_width=1e20)
 
-    def get_type(self, concrete):
-        if concrete:
-            return self.concrete_type
-        else:
-            return self.dtype
+    @property
+    def concrete_type(self):
+        return self._concrete_type
 
     def __reduce__(self):
         recon, args, state = super(Series, self).__reduce__()
