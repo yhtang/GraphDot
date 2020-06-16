@@ -11,7 +11,7 @@ from pycuda.compiler import SourceModule
 import graphdot.cuda
 from graphdot import cpp
 from graphdot.codegen import Template
-from graphdot.codegen.typetool import decltype
+from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray, umlike
 from graphdot.cuda.resizable_array import ResizableArray
 from graphdot.kernel.basekernel import TensorProduct, _Multiply

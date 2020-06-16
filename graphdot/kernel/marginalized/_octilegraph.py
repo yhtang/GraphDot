@@ -3,7 +3,8 @@
 import ctypes
 import itertools as it
 import numpy as np
-from graphdot.codegen.typetool import cpptype, common_min_type
+from graphdot.codegen.cpptool import cpptype
+from graphdot.codegen.typetool import common_min_type
 from graphdot.cuda.array import umzeros, umempty, umlike
 
 @cpptype(n_node=np.int32, n_octile=np.int32, p_degree=np.uintp,

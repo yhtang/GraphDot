@@ -120,7 +120,7 @@ class Graph:
         for component in ['nodes', 'edges']:
             group = [getattr(g, component) for g in graphs]
             for key in features[component]:
-                types = [g[key].get_type(concrete=True) for g in group]
+                types = [g[key].concrete_type for g in group]
                 t = common_min_type.of_types(types)
                 if t == np.object:
                     t = common_min_type.of_types(types, coerce=False)
