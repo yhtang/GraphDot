@@ -42,8 +42,8 @@ def test_series_creation(array):
 def test_series_dtype(case):
     array, t_dtype, t_concrete = case
     s = Series(array)
-    assert(s.get_type(concrete=True) == t_concrete)
-    assert(s.get_type(concrete=False) == t_dtype)
+    assert(s.concrete_type == t_concrete)
+    assert(s.dtype == t_dtype)
 
 
 @pytest.mark.parametrize('array', [
@@ -58,6 +58,6 @@ def test_series_pickle(array):
     pck = pickle.dumps(s)
     mirror = pickle.loads(pck)
     assert(len(s) == len(mirror))
-    assert(s.get_type(concrete=True) == mirror.get_type(concrete=True))
+    assert(s.concrete_type == mirror.concrete_type)
     for _1, _2 in zip(s, mirror):
         assert(_1 == _2)
