@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-import itertools as it
 import numpy as np
-from graphdot.codegen import Template
 
 
 _convertible = {
@@ -151,20 +150,6 @@ def have_same_fields(t1, t2):
     return True
 
 
-class Mangler:
-    @staticmethod
-    def mangle(identifier, ):
-        pass
-        # tag = '${key}::frozen_array::{dtype}'.format(
-        #     key=key,
-        #     dtype=inner_type.str
-        # )
-
-    @staticmethod
-    def demangle():
-        pass
-
-
 class _dtype_util:
     @staticmethod
     def is_object(t):
@@ -173,46 +158,3 @@ class _dtype_util:
     @staticmethod
     def is_array(t):
         return t.subdtype is not None
-
-
-def _assert_is_identifier(name):
-    if name and not name.isidentifier():
-        raise ValueError(
-            f'Name {name} is not a valid Python/C++ identifier.'
-        )
-
-
-def decltype(t, name=''):
-    t = np.dtype(t, align=True)  # convert np.float32 etc. to dtype
-    if name.startswith('$'):
-        ''' template class types '''
-        n, t, *Ts = name[1:].split('::')
-        _assert_is_identifier(n)
-        return Template(r'${template}<${arguments,}>${name}').render(
-            template=t,
-            arguments=[decltype(T) for T in Ts],
-            name=n
-        )
-    else:
-        _assert_is_identifier(name)
-        if _dtype_util.is_object(t):
-            ''' structs '''
-            if len(t.names):
-                return Template(r'struct{${members;};}${name}').render(
-                    name=name,
-                    members=[decltype(t.fields[v][0], v) for v in t.names])
-            else:
-                return f'constexpr static _empty {name} {{}}'
-        elif _dtype_util.is_array(t):
-            ''' C-style arrays '''
-            return Template(r'${t} ${name}[${shape][}]').render(
-                t=decltype(t.base),
-                name=name,
-                shape=t.shape
-            )
-        else:
-            ''' scalar types and C-strings '''
-            if t.kind == 'S':
-                return f'char {name}[{t.itemsize}]'
-            else:
-                return f'{str(t.name)} {name}'.strip()

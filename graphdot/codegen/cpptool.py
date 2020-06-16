@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 import itertools as it
 import numpy as np
-from .typetool import can_cast, _dtype_util, decltype
+from graphdot.codegen import Template
+from .typetool import can_cast, _dtype_util
 
 
 def cpptype(decls=[], **kwdecls):
@@ -16,9 +17,8 @@ def cpptype(decls=[], **kwdecls):
         class CppType(type):
             @property
             def dtype(self):
-                """Enables numpy.dtype(cls) to return the layout of the C++
-                counterpart.
-                """
+                '''Enables numpy.dtype(cls) to return the layout of the C++
+                counterpart.'''
                 return ctype
 
             def __repr__(self):
@@ -28,6 +28,7 @@ def cpptype(decls=[], **kwdecls):
 
             @property
             def dtype(self):
+                '''Useful in base kernel composition.'''
                 return Class.dtype
 
             @property
@@ -60,7 +61,7 @@ def cpptype(decls=[], **kwdecls):
                               .reshape(field.shape).tolist())
                     else:
                         state.append(field.type(getattr(self, key)))
-                return state
+                return tuple(state)
 
             def __setattr__(self, name, value):
                 if name in Class.dtype.names:
@@ -98,3 +99,48 @@ def cpptype(decls=[], **kwdecls):
         return Class
 
     return decor
+
+
+def _assert_is_identifier(name):
+    if name and not name.isidentifier():
+        raise ValueError(
+            f'Name {name} is not a valid Python/C++ identifier.'
+        )
+
+
+def decltype(t, name=''):
+    '''Generate C++ source code for structures corresponding to a `cpptype`
+    class.'''
+    t = np.dtype(t, align=True)  # convert np.float32 etc. to dtype
+    if name.startswith('$'):
+        ''' template class types '''
+        n, t, *Ts = name[1:].split('::')
+        _assert_is_identifier(n)
+        return Template(r'${template}<${arguments,}>${name}').render(
+            template=t,
+            arguments=[decltype(T) for T in Ts],
+            name=n
+        )
+    else:
+        _assert_is_identifier(name)
+        if _dtype_util.is_object(t):
+            ''' structs '''
+            if len(t.names):
+                return Template(r'struct{${members;};}${name}').render(
+                    name=name,
+                    members=[decltype(t.fields[v][0], v) for v in t.names])
+            else:
+                return f'constexpr static _empty {name} {{}}'
+        elif _dtype_util.is_array(t):
+            ''' C-style arrays '''
+            return Template(r'${t} ${name}[${shape][}]').render(
+                t=decltype(t.base),
+                name=name,
+                shape=t.shape
+            )
+        else:
+            ''' scalar types and C-strings '''
+            if t.kind == 'S':
+                return f'char {name}[{t.itemsize}]'
+            else:
+                return f'{str(t.name)} {name}'.strip()
