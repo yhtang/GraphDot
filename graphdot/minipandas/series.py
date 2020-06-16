@@ -15,7 +15,7 @@ class Series(np.ndarray):
                 series._concrete_type = common_concrete_type.of_values(input)
         else:
             t = common_min_type.of_values(input)
-            dtype = np.dtype(t)
+            dtype = np.dtype(t) if np.issctype(t) else np.dtype(np.object)
             series = np.empty(len(input), dtype=dtype).view(cls)  # ensures 1D
             series[:] = input
             series._concrete_type = t

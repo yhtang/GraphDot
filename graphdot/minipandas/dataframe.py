@@ -50,12 +50,11 @@ class DataFrame:
 
     def rowtype(self, pack=True):
         cols = np.array(list(self.columns))
+        ctypes = {key: np.dtype(self[key].concrete_type) for key in cols}
         if pack is True:
-            perm = np.argsort([
-                -self[key].dtype.itemsize for key in self.columns
-            ])
+            perm = np.argsort([-ctypes[key].itemsize for key in self.columns])
             cols = cols[perm]
-        packed_dtype = np.dtype([(key, self[key].dtype.newbyteorder('='))
+        packed_dtype = np.dtype([(key, ctypes[key].newbyteorder('='))
                                 for key in cols], align=True)
         return packed_dtype
 
