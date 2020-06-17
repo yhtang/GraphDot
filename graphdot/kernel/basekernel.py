@@ -9,7 +9,7 @@ import numpy as np
 import sympy as sy
 from sympy.utilities.lambdify import lambdify
 from graphdot.codegen import Template
-from graphdot.codegen.typetool import cpptype
+from graphdot.codegen.cpptool import cpptype
 from graphdot.codegen.sympy_printer import cudacxxcode
 
 __all__ = ['BaseKernel',
@@ -17,7 +17,12 @@ __all__ = ['BaseKernel',
            'KroneckerDelta',
            'SquareExponential',
            'RationalQuadratic',
-           'TensorProduct']
+           'Normalize',
+           'Compose',
+           'TensorProduct',
+           'Additive',
+           'Convolution',
+           ]
 
 
 class BaseKernel:
