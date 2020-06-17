@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.5a1 (2020-06-17)
+
+- Added a built-in Gaussian process regression (GPR) module.
+- Fixed an issue that prevented the pickling of graphs.
+
 ## 0.4.6 (2020-06-05)
 
 - Fixed a minor bug in `Graph.from_rdkit`.
