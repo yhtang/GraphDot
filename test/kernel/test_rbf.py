@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import numpy as np
-from graphdot.kernel.euclidean import RBFKernel
+from graphdot.kernel.rbf import RBFKernel
 
 
 def test_simple():
