@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.5a3 (2020-06-20)
+
+- Added check for the shape of hyperparameter bounds specification to prevent
+  users from unknowingly provide invalid values.
+
 ## 0.5a2 (2020-06-20)
 
 - Fixed a bug related to Jacobian dimensionality.
