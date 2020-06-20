@@ -28,7 +28,47 @@ __all__ = ['BaseKernel',
 class BaseKernel:
 
     @staticmethod
-    def create(kernel, desc, expr, vars, *hyperparameter_specs):
+    def _assert_bounds(kernel, hyp, bounds):
+        if not isinstance(bounds, tuple) or len(bounds) != 2:
+            raise ValueError(
+                f'Bounds for hyperparameter {hyp} of kernel {kernel} must be '
+                f'a 2-tuple: {bounds} provided.'
+            )
+
+
+    @staticmethod
+    def create(name, desc, expr, vars, *hyperparameter_specs):
+        '''Create a pairwise kernel class from a SymPy expression.
+
+        Parameters
+        ----------
+        name: str
+            The name of the kernel. Must be a valid Python identifier.
+        desc: str
+            A human-readable description of the kernel. Will be used to build
+            the docstring of the returned kernel class.
+        expr: str or SymPy expression
+            Expression of the kernel in SymPy format.
+        vars: 2-tuple of str or SymPy symbols
+            The input variables of the kernel as shown up in the expression.
+            A kernel must have exactly 2 input variables. All other symbols
+            that show up in its expression should be regarded as
+            hyperparameters.
+        hyperparameter_specs: list of hyperparameter specifications in one of
+        the formats below:
+            | symbol,
+            | (symbol,),
+            | (symbol, dtype),
+            | (symbol, dtype, description),
+            | (symbol, dtype, lower_bound, upper_bound),
+            | (symbol, dtype, lower_bound, upper_bound, description),
+            | If a default set of lower and upper bounds are not defined here,
+            then it must be specified explicitly during kernel object
+            creation, using arguments as specified in the kernel class's
+            docstring.
+        '''
+
+        assert(isinstance(name, str) and name.isidentifier())
 
         '''parse expression'''
         if isinstance(expr, str):
@@ -82,7 +122,7 @@ class BaseKernel:
 
         class Kernel(BaseKernel, metaclass=CppType):
 
-            __name__ = kernel
+            __name__ = name
 
             _expr = expr
             _vars = vars
@@ -118,6 +158,7 @@ class BaseKernel:
                                 f'Bounds for hyperparameter {symbol} of '
                                 f'kernel {self.__name__} not set, and no '
                             )
+                    self._assert_bounds(self.__name__, symbol, bounds[symbol])
 
             # @cached_property
             @property
@@ -389,7 +430,7 @@ class _Multiply(BaseKernel):
         return tuple()
 
 
-def Constant(c, c_bounds=(0, np.inf)):
+def Constant(c, c_bounds=None):
     r"""Creates a no-op kernel that returns a constant value (often being 1),
     i.e. :math:`k_\mathrm{c}(\cdot, \cdot) \equiv constant`
 
@@ -403,12 +444,15 @@ def Constant(c, c_bounds=(0, np.inf)):
     BaseKernel
         A kernel instance of corresponding behavior
     """
+    if c_bounds is None:
+        c_bounds = (c, c)
 
     @cpptype(c=np.float32)
     class ConstantKernel(BaseKernel):
         def __init__(self, c, c_bounds):
             self.c = float(c)
             self.c_bounds = c_bounds
+            self._assert_bounds('Constant', 'c', c_bounds)
 
         def __call__(self, i, j, jac=False):
             if jac is True:
@@ -466,6 +510,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         def __init__(self, h, h_bounds):
             self.h = float(h)
             self.h_bounds = h_bounds
+            self._assert_bounds('KroneckerDelta', 'h', h_bounds)
 
         def __call__(self, i, j, jac=False):
             if jac is True:

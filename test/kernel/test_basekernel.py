@@ -20,7 +20,7 @@ from graphdot.kernel.basekernel import (
 
 inf = float('inf')
 nan = float('nan')
-kernels = [
+simple_kernels = [
     Constant(1.0),
     KroneckerDelta(0.5),
     SquareExponential(1.0),
@@ -28,7 +28,7 @@ kernels = [
 ]
 
 
-@pytest.mark.parametrize('kernel', kernels)
+@pytest.mark.parametrize('kernel', simple_kernels)
 def test_simple_kernel(kernel):
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
@@ -68,10 +68,15 @@ def test_constant_kernel():
     assert(kernel(1.0, 'a') == 1)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
+    ''' bounds shape check '''
+    for n in range(1, 10):
+        if n != 2:
+            with pytest.raises(ValueError):
+                Constant(1.0, c_bounds=tuple([1] * n))
 
 
 def test_kronecker_delta_kernel():
-    kernel = KroneckerDelta(0.5, 1.0)
+    kernel = KroneckerDelta(0.5)
     ''' default behavior '''
     assert(kernel(0, 0) == 1)
     assert(kernel('a', 'a') == 1.0)
@@ -89,6 +94,11 @@ def test_kronecker_delta_kernel():
     assert(kernel(1.0, 'a') == 0.5)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
+    ''' bounds shape check '''
+    for n in range(1, 10):
+        if n != 2:
+            with pytest.raises(ValueError):
+                KroneckerDelta(1.0, h_bounds=tuple([1] * n))
 
 
 def test_square_exponential_kernel():
@@ -103,6 +113,11 @@ def test_square_exponential_kernel():
     assert(kernel(inf, -inf) == 0)
     ''' C++ code generation '''
     assert(kernel.dtype.isalignedstruct)
+    ''' bounds shape check '''
+    for n in range(1, 10):
+        if n != 2:
+            with pytest.raises(ValueError):
+                SquareExponential(1.0, length_scale_bounds=tuple([1] * n))
 
 
 def test_multiply_quasikernel():
@@ -155,8 +170,8 @@ def test_normalization(kernel):
         assert(t1 == t2)
 
 
-@pytest.mark.parametrize('k1', kernels)
-@pytest.mark.parametrize('k2', kernels)
+@pytest.mark.parametrize('k1', simple_kernels)
+@pytest.mark.parametrize('k2', simple_kernels)
 def test_tensor_product_2(k1, k2):
     k = TensorProduct(x=k1, y=k2)
     mirror = eval(repr(k))  # representation meaningness test
@@ -192,9 +207,9 @@ def test_tensor_product_2(k1, k2):
     assert(k.dtype.isalignedstruct)
 
 
-@pytest.mark.parametrize('k1', kernels)
-@pytest.mark.parametrize('k2', kernels)
-@pytest.mark.parametrize('k3', kernels)
+@pytest.mark.parametrize('k1', simple_kernels)
+@pytest.mark.parametrize('k2', simple_kernels)
+@pytest.mark.parametrize('k3', simple_kernels)
 def test_tensor_product_3(k1, k2, k3):
     k = TensorProduct(x=k1, y=k2, z=k3)
     mirror = eval(repr(k))  # representation meaningness test
@@ -225,8 +240,8 @@ def test_tensor_product_3(k1, k2, k3):
     assert(k.dtype.isalignedstruct)
 
 
-@pytest.mark.parametrize('k1', kernels)
-@pytest.mark.parametrize('k2', kernels)
+@pytest.mark.parametrize('k1', simple_kernels)
+@pytest.mark.parametrize('k2', simple_kernels)
 def test_additive_2(k1, k2):
     k = Additive(x=k1, y=k2)
     mirror = eval(repr(k))  # representation meaningness test
@@ -262,9 +277,9 @@ def test_additive_2(k1, k2):
     assert(k.dtype.isalignedstruct)
 
 
-@pytest.mark.parametrize('k1', kernels)
-@pytest.mark.parametrize('k2', kernels)
-@pytest.mark.parametrize('k3', kernels)
+@pytest.mark.parametrize('k1', simple_kernels)
+@pytest.mark.parametrize('k2', simple_kernels)
+@pytest.mark.parametrize('k3', simple_kernels)
 def test_additive_3(k1, k2, k3):
     k = Additive(x=k1, y=k2, z=k3)
     mirror = eval(repr(k))  # representation meaningness test
@@ -295,7 +310,7 @@ def test_additive_3(k1, k2, k3):
     assert(k.dtype.isalignedstruct)
 
 
-@pytest.mark.parametrize('kernel', kernels)
+@pytest.mark.parametrize('kernel', simple_kernels)
 def test_convolution(kernel):
     k = Convolution(kernel, normalize=False)
     ''' length cases '''
@@ -321,7 +336,7 @@ def test_convolution(kernel):
         assert(t1 == t2)
 
 
-@pytest.mark.parametrize('kernel', kernels)
+@pytest.mark.parametrize('kernel', simple_kernels)
 def test_kernel_add_constant(kernel):
     ''' check by definition '''
     for kadd in [kernel + 1, 1 + kernel]:
@@ -347,8 +362,8 @@ def test_kernel_add_constant(kernel):
         assert(kadd.dtype.isalignedstruct)
 
 
-@pytest.mark.parametrize('k1', kernels)
-@pytest.mark.parametrize('k2', kernels)
+@pytest.mark.parametrize('k1', simple_kernels)
+@pytest.mark.parametrize('k2', simple_kernels)
 def test_kernel_add_kernel(k1, k2):
     ''' check by definition '''
     kadd = k1 + k2
@@ -377,7 +392,7 @@ def test_kernel_add_kernel(k1, k2):
     assert(kadd.dtype.isalignedstruct)
 
 
-@pytest.mark.parametrize('kernel', kernels)
+@pytest.mark.parametrize('kernel', simple_kernels)
 def test_kernel_mul_constant(kernel):
     ''' check by definition '''
     for kmul in [kernel * 2, 2 * kernel]:
@@ -403,8 +418,8 @@ def test_kernel_mul_constant(kernel):
         assert(kmul.dtype.isalignedstruct)
 
 
-@pytest.mark.parametrize('k1', kernels)
-@pytest.mark.parametrize('k2', kernels)
+@pytest.mark.parametrize('k1', simple_kernels)
+@pytest.mark.parametrize('k2', simple_kernels)
 def test_kernel_mul_kernel(k1, k2):
     ''' check by definition '''
     kmul = k1 * k2
