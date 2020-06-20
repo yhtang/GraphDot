@@ -166,10 +166,10 @@ class GaussianProcessRegressor:
             )
 
         if eval_gradient is True:
-            D_theta = np.zeros(dK.shape[0])
-            for i in range(dK.shape[0]):
-                dk = dK[i, :, :]
-                D_theta[i] = (L(dk).trace() - Ky @ dk @ Ky) * np.exp(theta[i])
+            D_theta = np.zeros_like(theta)
+            for i, t in enumerate(theta):
+                dk = dK[:, :, i]
+                D_theta[i] = (L(dk).trace() - Ky @ dk @ Ky) * np.exp(t)
             return yKy + logdet, D_theta
         else:
             return yKy + logdet
