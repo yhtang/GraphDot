@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.5a2 (2020-06-20)
+
+- Fixed a bug related to Jacobian dimensionality.
+
 ## 0.5a1 (2020-06-17)
 
 - Added a built-in Gaussian process regression (GPR) module.
