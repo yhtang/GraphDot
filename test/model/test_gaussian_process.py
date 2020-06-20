@@ -84,7 +84,7 @@ def test_gpr_hyperparameter_optimization():
                 c = np.cos(d * np.pi / self.p)
                 j1 = 2.0 * np.pi * d * 2 * s * c * f / self.p**2 / self.L**2
                 j2 = 4.0 * s**2 * f / self.L**3
-                return f, np.array([j1, j2])
+                return f, np.stack((j1, j2), axis=2)
 
         def diag(self, X):
             return np.ones_like(X)
