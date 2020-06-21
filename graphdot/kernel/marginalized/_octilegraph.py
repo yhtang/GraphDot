@@ -7,6 +7,7 @@ from graphdot.codegen.cpptool import cpptype
 from graphdot.codegen.typetool import common_min_type
 from graphdot.cuda.array import umzeros, umempty, umlike
 
+
 @cpptype(n_node=np.int32, n_octile=np.int32, p_degree=np.uintp,
          p_node=np.uintp, p_octile=np.uintp)
 class OctileGraph:

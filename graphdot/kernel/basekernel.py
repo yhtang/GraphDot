@@ -35,7 +35,6 @@ class BaseKernel:
                 f'a 2-tuple: {bounds} provided.'
             )
 
-
     @staticmethod
     def create(name, desc, expr, vars, *hyperparameter_specs):
         '''Create a pairwise kernel class from a SymPy expression.
