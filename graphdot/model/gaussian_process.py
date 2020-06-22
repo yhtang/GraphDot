@@ -27,17 +27,22 @@ class GaussianProcessRegressor:
     normalize_y: boolean
         Whether to normalize the target values y so that the mean and variance
         become 0 and 1, respectively. Recommended for cases where zero-mean,
-        unit-variance kernels are used. Normalisation will be reversed before
-        the GP predictions are returned.
+        unit-variance kernels are used. The normalization will be
+        reversed when the GP predictions are returned.
+    kernel_options: dict, optional
+        A dictionary of additional options to be passed along when applying the
+        kernel to data.
     """
 
-    def __init__(self, kernel, alpha=1e-10, optimizer=None, normalize_y=False):
+    def __init__(self, kernel, alpha=1e-10, optimizer=None, normalize_y=False,
+                 kernel_options={}):
         self.kernel = kernel
         self.alpha = alpha
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
         self.normalize_y = normalize_y
+        self.kernel_options = kernel_options
 
     def fit(self, X, y):
         """Train a GPR model with the given data.
@@ -65,7 +70,7 @@ class GaussianProcessRegressor:
         # train model
         if self.optimizer:
             self._optimize_hyperparameters(X, y)
-        self.K = K = self.kernel(X)
+        self.K = K = self.kernel(X, **self.kernel_options)
         K.flat[::len(K) + 1] += self.alpha
         self.L = CholSolver(K)
         self.Ky = self.L(y)
@@ -96,15 +101,15 @@ class GaussianProcessRegressor:
         """
         if not hasattr(self, 'K'):
             raise RuntimeError('Model not trained.')
-        Ks = self.kernel(Z, self.X)
+        Ks = self.kernel(Z, self.X, **self.kernel_options)
         ymean = (Ks @ self.Ky) * self.y_std + self.y_mean
         if return_std is True:
-            Kss = self.kernel.diag(Z)
-            std = np.sqrt(np.maximum(Kss - (Ks @ self.L(Kss.T)).diagonal(), 0))
+            Kss = self.kernel.diag(Z, **self.kernel_options)
+            std = np.sqrt(np.maximum(Kss - (Ks @ self.L(Ks.T)).diagonal(), 0))
             return (ymean, std * self.y_std)
         elif return_cov is True:
-            Kss = self.kernel(Z)
-            cov = np.maximum(Kss - Ks @ self.L(Kss.T), 0)
+            Kss = self.kernel(Z, **self.kernel_options)
+            cov = np.maximum(Kss - Ks @ self.L(Ks.T), 0)
             return (ymean, cov * self.y_std**2)
         else:
             return ymean
@@ -150,9 +155,9 @@ class GaussianProcessRegressor:
             kernel.theta = theta
 
         if eval_gradient is True:
-            K, dK = kernel(self.X, eval_gradient=True)
+            K, dK = kernel(self.X, eval_gradient=True, **self.kernel_options)
         else:
-            K = kernel(self.X)
+            K = kernel(self.X, **self.kernel_options)
         K.flat[::len(K) + 1] += self.alpha
 
         L = CholSolver(K)
