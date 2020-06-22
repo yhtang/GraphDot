@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.5a4 (2020-06-22)
+
+- Fixed an automatic documentation issue.
+
 ## 0.5a3 (2020-06-20)
 
 - Added check for the shape of hyperparameter bounds specification to prevent
