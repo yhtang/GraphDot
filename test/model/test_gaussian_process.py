@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import unittest.mock
 import pytest
 import numpy as np
 from graphdot.model.gaussian_process import GaussianProcessRegressor
@@ -38,7 +39,14 @@ def test_gpr_fit_self_consistency(X, y):
     kernel = Kernel()
     gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
     gpr.fit(X, y)
-    assert(gpr.predict(X) == pytest.approx(y, 1e-3, 1e-3))
+    z = gpr.predict(X)
+    assert(z == pytest.approx(y, 1e-3, 1e-3))
+    z, std = gpr.predict(X, return_std=True)
+    assert(z == pytest.approx(y, 1e-3, 1e-3))
+    assert(std == pytest.approx(np.zeros_like(y), 1e-3, 1e-3))
+    z, cov = gpr.predict(X, return_cov=True)
+    assert(z == pytest.approx(y, 1e-3, 1e-3))
+    assert(cov == pytest.approx(np.zeros((len(X), len(X))), 1e-3, 1e-3))
 
 
 def test_gpr_periodic_regression():
@@ -107,3 +115,29 @@ def test_gpr_hyperparameter_optimization():
     gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10, optimizer=True)
     gpr.fit(X, y)
     assert(kernel.p == pytest.approx(0.5, 1e-2))
+
+
+def test_kernel_options():
+    n = 3
+    kernel = unittest.mock.MagicMock()
+    kernel.return_value = np.eye(n)
+    kernel.diag.return_value = np.ones(n)
+
+    options = {
+        'a': 1,
+        'b': False
+    }
+    gpr = GaussianProcessRegressor(kernel=kernel, kernel_options=options)
+    X = np.ones(n)
+    Y = np.zeros(n)
+    y = np.ones(n)
+
+    gpr.fit(X, y)
+    kernel.assert_called_with(X, **options)
+
+    gpr.predict(Y, return_std=True)
+    kernel.assert_called_with(Y, X, **options)
+    kernel.diag.assert_called_with(Y, **options)
+
+    gpr.predict(Y, return_cov=True)
+    kernel.assert_called_with(Y, **options)
