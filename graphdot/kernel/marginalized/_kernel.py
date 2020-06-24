@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import copy
+import itertools as it
 from collections import namedtuple
 import numpy as np
 from graphdot.graph import Graph
@@ -129,7 +130,8 @@ class MarginalizedGraphKernel:
         )
 
         ''' assert graph attributes are compatible with each other '''
-        pred_or_tuple = Graph.has_unified_types(X + Y if Y is not None else X)
+        all_graphs = list(it.chain(X, Y)) if Y is not None else X
+        pred_or_tuple = Graph.has_unified_types(all_graphs)
         if pred_or_tuple is not True:
             group, first, second = pred_or_tuple
             raise TypeError(
