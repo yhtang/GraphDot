@@ -102,6 +102,8 @@ def test_gpr_fit_self_consistency(X, y):
 
     kernel = Kernel()
     gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
+    with pytest.raises(RuntimeError):
+        gpr.predict(X)
     gpr.fit(X, y)
     z = gpr.predict(X)
     assert(z == pytest.approx(y, 1e-3, 1e-3))
@@ -151,6 +153,7 @@ def test_gpr_predict_loocv():
     X = np.linspace(-1, 1, 6)
     y = np.cos(X * np.pi)
     y_loocv, std_loocv = gpr.predict_loocv(X, y, return_std=True)
+    assert(y_loocv == pytest.approx(gpr.predict_loocv(X, y, return_std=False)))
     for i, _ in enumerate(X):
         Xi = np.concatenate((X[:i], X[i+1:]))
         yi = np.concatenate((y[:i], y[i+1:]))
@@ -205,9 +208,59 @@ def test_gpr_fit_mle():
     assert(kernel.p == pytest.approx(0.5, 1e-2))
 
 
+def test_gpr_log_marginal_likelihood():
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                return f, np.stack((j, ), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.L = np.exp(t[0])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0)
+            k.theta = theta
+            return k
+
+    X = np.linspace(-1, 1, 6, endpoint=False)
+    y = np.sin(X * np.pi)
+    eps = 1e-4
+    for L in np.logspace(-1, 0.5, 10):
+        kernel = Kernel(L)
+        gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10)
+        _, dL = gpr.log_marginal_likelihood(X=X, y=y, eval_gradient=True)
+        theta0 = np.copy(kernel.theta)
+
+        L_pos = gpr.log_marginal_likelihood(
+            theta=theta0 + eps, X=X, y=y, eval_gradient=False
+        ).item()
+        L_neg = gpr.log_marginal_likelihood(
+            theta=theta0 - eps, X=X, y=y, eval_gradient=False
+        ).item()
+
+        dL_diff = (L_pos - L_neg) / (2 * eps)
+        assert(dL.item() == pytest.approx(dL_diff, 1e-3, 1e-3))
+
+
 def test_gpr_squared_loocv_error():
-    '''test with a function with exactly two periods, and see if the GPR
-    can identify the frequency via hyperparameter optimization.'''
 
     class Kernel:
         def __init__(self, L):
