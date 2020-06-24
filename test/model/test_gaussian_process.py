@@ -234,10 +234,6 @@ def test_gpr_squared_loocv_error():
         def theta(self, t):
             self.L = np.exp(t[0])
 
-        @property
-        def bounds(self):
-            return np.log([[1e-2, 10], [1e-2, 10]])
-
         def clone_with_theta(self, theta):
             k = Kernel(1.0)
             k.theta = theta
@@ -261,6 +257,77 @@ def test_gpr_squared_loocv_error():
 
         de_diff = (e_pos - e_neg) / (2 * eps)
         assert(de.item() == pytest.approx(de_diff, 1e-3, 1e-3))
+
+
+def test_gpr_fit_loocv_no_opt():
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            return np.exp(-0.5 * d**2 / L**2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    X = np.linspace(-1, 1, 6, endpoint=False)
+    y = np.sin(X * np.pi)
+    kernel = Kernel(0.1)
+    gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10, optimizer=False)
+    _, m1, s1 = gpr.fit_loocv(X, y, return_mean=True, return_std=True)
+    m2, s2 = gpr.predict_loocv(X, y, return_std=True)
+    assert(m1 == pytest.approx(m2))
+    assert(s1 == pytest.approx(s2))
+
+
+def test_gpr_fit_loocv_opt():
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                return f, np.stack((j, ), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.L = np.exp(t[0])
+
+        @property
+        def bounds(self):
+            return np.log([[1e-2, 10]])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0)
+            k.theta = theta
+            return k
+
+    X = np.linspace(-1, 1, 6, endpoint=False)
+    y = np.sin(X * np.pi)
+    kernel = Kernel(0.1)
+    gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10, optimizer=True)
+    e1 = gpr.squared_loocv_error(X=X, y=y)
+    gpr.fit_loocv(X, y)
+    e2 = gpr.squared_loocv_error(X=X, y=y)
+    assert(e1 > e2)
+    assert(kernel.L == pytest.approx(0.86, 0.01))
 
 
 def test_kernel_options():
