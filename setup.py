@@ -47,6 +47,7 @@ setup(
         'pandas>=0.24',
         'networkx>=2.4',
         'pycuda>=2019',
+        'treelib>=1.6.1',
     ] + [
         'ase>=3.17',
         'pymatgen>=2019',
