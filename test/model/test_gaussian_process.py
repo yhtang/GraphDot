@@ -161,7 +161,7 @@ def test_gpr_predict_loocv():
         assert(std_loocv_i.item() == pytest.approx(std_loocv[i], 1e-7))
 
 
-def test_gpr_hyperparameter_optimization():
+def test_gpr_fit_mle():
     '''test with a function with exactly two periods, and see if the GPR
     can identify the frequency via hyperparameter optimization.'''
 
@@ -203,6 +203,64 @@ def test_gpr_hyperparameter_optimization():
     gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10, optimizer=True)
     gpr.fit(X, y)
     assert(kernel.p == pytest.approx(0.5, 1e-2))
+
+
+def test_gpr_squared_loocv_error():
+    '''test with a function with exactly two periods, and see if the GPR
+    can identify the frequency via hyperparameter optimization.'''
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                return f, np.stack((j, ), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.L = np.exp(t[0])
+
+        @property
+        def bounds(self):
+            return np.log([[1e-2, 10], [1e-2, 10]])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0)
+            k.theta = theta
+            return k
+
+    X = np.linspace(-1, 1, 6, endpoint=False)
+    y = np.sin(X * np.pi)
+    eps = 1e-4
+    for L in np.logspace(-2, 1, 20):
+        kernel = Kernel(L)
+        gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10)
+        _, de = gpr.squared_loocv_error(X=X, y=y, eval_gradient=True)
+        theta0 = np.copy(kernel.theta)
+
+        e_pos = gpr.squared_loocv_error(
+            theta=theta0 + eps, X=X, y=y, eval_gradient=False
+        ).item()
+        e_neg = gpr.squared_loocv_error(
+            theta=theta0 - eps, X=X, y=y, eval_gradient=False
+        ).item()
+
+        de_diff = (e_pos - e_neg) / (2 * eps)
+        assert(de.item() == pytest.approx(de_diff, 1e-3, 1e-3))
 
 
 def test_kernel_options():
