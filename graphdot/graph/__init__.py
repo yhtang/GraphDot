@@ -7,7 +7,9 @@ this library, and provides conversion and importing methods from popular
 graph formats.
 """
 import itertools as it
+import copy as cp
 import numpy as np
+import scipy.sparse
 from graphdot.codegen.typetool import common_min_type
 from graphdot.minipandas import DataFrame
 from ._from_ase import _from_ase
@@ -45,6 +47,8 @@ class Graph:
         self.title = str(title)
         self.nodes = _from_dict(nodes)
         self.edges = _from_dict(edges)
+        assert('!i' in self.nodes)
+        assert('!i' in self.edges and '!j' in self.edges)
 
     def __repr__(self):
         return '<{}(nodes={}, edges={}, title={})>'.\
@@ -55,6 +59,76 @@ class Graph:
 
     def _remove_cache_tag(self):
         self.__dict__.pop('cache_tag', None)
+
+    def copy(self, deep=False):
+        '''Make a copy of an existing graph.
+
+        Parameters
+        ----------
+        deep: boolean
+            If deep=True, then real copies will be made for the node and edge
+            dataframes as well as other user-specified attributes. Otherwise,
+            only references to the dataframe columns and user-specified
+            attributes will be inserted into the new graph.
+
+        Returns
+        -------
+        g: Graph
+            A new graph.
+        '''
+        g = self.__class__(
+            nodes=self.nodes.copy(deep=deep),
+            edges=self.edges.copy(deep=deep),
+            title=self.title
+        )
+        for key, val in self.__dict__.items():
+            if key not in ['nodes', 'edges', 'title']:
+                g.__dict__[key] = cp.deepcopy(val) if deep else val
+        return g
+
+    def permute(self, perm, inplace=False):
+        '''Rearrange the node indices of a graph by a permutation array.
+
+        Parameters
+        ----------
+        perm: sequence
+            Array of permuted node indices
+        inplace: boolean
+            Whether to reorder the nodes in-place or to create a new graph.
+
+        Returns
+        -------
+        permuted_graph: Graph
+            The original graph object (inplace=True) or a new one
+            (inplace=False) with the nodes permuted.
+        '''
+        if inplace:
+            g = self
+        else:
+            g = self.copy(deep=True)
+
+        iperm = np.argsort(perm)
+        g.nodes['!i'][:] = iperm[g.nodes['!i']]
+        g.edges['!i'][:] = iperm[g.edges['!i']]
+        g.edges['!j'][:] = iperm[g.edges['!j']]
+
+        return g
+
+    def laplacian(self):
+        '''Get the Laplacian matrix of the graph as a sparse matrix.
+
+        Returns
+        -------
+        L: sparse matrix
+            The laplacian matrix, either weighted or unweighted depending on
+            the original graph.
+        '''
+        N = len(self.nodes)
+        i = self.edges['!i']
+        j = self.edges['!j']
+        w = self.edges['!w'] if '!w' in self.edges else np.ones_like(i)
+        L = scipy.sparse.coo_matrix((w, (i, j)), shape=(N, N))
+        return L + L.T
 
     @staticmethod
     def has_unified_types(graphs):
@@ -95,17 +169,7 @@ class Graph:
         for g in graphs:
             g._remove_cache_tag()
         if inplace is not True:
-            def shallowcopy(g):
-                h = cls(
-                    nodes=g.nodes.copy(deep=False),
-                    edges=g.edges.copy(deep=False),
-                    title=g.title
-                )
-                for key, val in g.__dict__.items():
-                    if key not in ['nodes', 'edges', 'title']:
-                        h.__dict__[key] = val
-                return h
-            graphs = [shallowcopy(g) for g in graphs]
+            graphs = [g.copy(deep=False) for g in graphs]
 
         '''ensure all graphs have the same node and edge features'''
         features = {}
@@ -155,27 +219,6 @@ class Graph:
         if inplace is not True:
             return graphs
 
-    # @classmethod
-    # def from_auto(cls, graph):
-    #     # import importlib
-    #     # graph_translator = {}
-    #     #
-    #     # if importlib.util.find_spec('ase') is not None:
-    #     #     ase = importlib.import_module('ase')
-    #     #
-    #     #     def ase_translator(atoms):
-    #     #         pass
-    #     #
-    #     #     graph_translator[ase.atomsatoms.Atoms] = ase_translator
-    #     #
-    #     # if importlib.util.find_spec('networkx') is not None:
-    #     #     nx = importlib.import_module('networkx')
-    #     #
-    #     #     def networkx_graph_translator(atoms):
-    #     #         pass
-    #     #
-    #     #     graph_translator[nx.Graph] = networkx_graph_translator
-    #     pass
 
     @classmethod
     def from_networkx(cls, graph, weight=None):
