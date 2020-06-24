@@ -8,6 +8,70 @@ from graphdot.model.gaussian_process import GaussianProcessRegressor
 np.random.seed(0)
 
 
+@pytest.mark.parametrize('normalize_y', [False, True])
+def test_gpr_store_X_y(normalize_y):
+    gpr = GaussianProcessRegressor(kernel=None, normalize_y=normalize_y)
+    with pytest.raises(AttributeError):
+        gpr.X
+    with pytest.raises(AttributeError):
+        gpr.y
+    X = [1, 2, 3]
+    y = [4, 5, 6]
+    gpr.X = X
+    gpr.y = y
+    assert(isinstance(gpr.X, np.ndarray))
+    assert(isinstance(gpr.y, np.ndarray))
+    assert(gpr.X == pytest.approx(np.array(X)))
+    if normalize_y:
+        assert(np.mean(gpr.y) == pytest.approx(0))
+        assert(np.std(gpr.y) == pytest.approx(1))
+        assert(gpr.y_mean == pytest.approx(np.mean(y)))
+        assert(gpr.y_std == pytest.approx(np.std(y)))
+    else:
+        assert(gpr.y == pytest.approx(np.array(y)))
+        assert(gpr.y_mean == 0)
+        assert(gpr.y_std == 1)
+
+
+def test_gpr_gramian():
+    class Kernel:
+        def __call__(self, X, Y=None, eval_gradient=False):
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-2 * np.sin(np.pi * d)**2)
+            if eval_gradient is False:
+                return f
+            else:
+                s = np.sin(d * np.pi)
+                c = np.cos(d * np.pi)
+                j1 = 2.0 * np.pi * d * 2 * s * c * f
+                j2 = 4.0 * s**2 * f
+                return f, np.stack((j1, j2), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    gpr = GaussianProcessRegressor(kernel=Kernel())
+
+    n = 5
+    m = 3
+    X = np.ones(n)
+    Y = np.ones(m)
+
+    assert(gpr._gramian(X) == pytest.approx(np.ones((n, n))))
+    assert(gpr._gramian(Y) == pytest.approx(np.ones((m, m))))
+    assert(gpr._gramian(X, Y) == pytest.approx(np.ones((n, m))))
+    assert(gpr._gramian(Y, X) == pytest.approx(np.ones((m, n))))
+    assert(len(gpr._gramian(X, jac=True)) == 2)
+    assert(gpr._gramian(X, jac=True)[1].shape == (n, n, 2))
+    assert(gpr._gramian(Y, jac=True)[1].shape == (m, m, 2))
+    assert(len(gpr._gramian(X, Y, jac=True)) == 2)
+    assert(gpr._gramian(X, Y, jac=True)[1].shape == (n, m, 2))
+    assert(gpr._gramian(X, diag=True) == pytest.approx(np.ones(n)))
+    assert(gpr._gramian(Y, diag=True) == pytest.approx(np.ones(m)))
+    with pytest.raises(ValueError):
+        gpr._gramian(X, Y, diag=True)
+
+
 @pytest.mark.parametrize('X', [
     np.arange(5),
     np.linspace(0, 1, 5),
@@ -49,7 +113,7 @@ def test_gpr_fit_self_consistency(X, y):
     assert(cov == pytest.approx(np.zeros((len(X), len(X))), 1e-3, 1e-3))
 
 
-def test_gpr_periodic_regression():
+def test_gpr_predict_periodic():
     '''test with a function with exactly two periods, and see if the GPR
     can use information across the periods to fill in the missing points.'''
 
@@ -71,6 +135,30 @@ def test_gpr_periodic_regression():
     gpr.fit(X[mask], y[mask])
     z = gpr.predict(X[~mask])
     assert(z == pytest.approx(y[~mask], 1e-6))
+
+
+def test_gpr_predict_loocv():
+
+    class Kernel:
+        def __call__(self, X, Y=None):
+            return np.exp(-np.subtract.outer(X, Y if Y is not None else X)**2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    kernel = Kernel()
+    gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
+    X = np.linspace(-1, 1, 6)
+    y = np.cos(X * np.pi)
+    y_loocv, std_loocv = gpr.predict_loocv(X, y, return_std=True)
+    for i, _ in enumerate(X):
+        Xi = np.concatenate((X[:i], X[i+1:]))
+        yi = np.concatenate((y[:i], y[i+1:]))
+        gpr_loocv = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
+        gpr_loocv.fit(Xi, yi)
+        y_loocv_i, std_loocv_i = gpr_loocv.predict(X[[i]], return_std=True)
+        assert(y_loocv_i.item() == pytest.approx(y_loocv[i], 1e-7))
+        assert(std_loocv_i.item() == pytest.approx(std_loocv[i], 1e-7))
 
 
 def test_gpr_hyperparameter_optimization():

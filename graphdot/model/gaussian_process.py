@@ -90,12 +90,16 @@ class GaussianProcessRegressor:
                     K.flat[::len(K) + 1] += self.alpha
                     return K
         else:
-            if jac is True:
-                return kernel(X, Y, **self.kernel_options)
+            if diag is True:
+                raise ValueError(
+                    'Diagonal Gramian does not exist between two sets.'
+                )
             else:
-                return kernel(X, Y, **self.kernel_options)
-        # fallback if no conditions matched
-        raise ValueError('Invalid combination of arguments.')
+                if jac is True:
+                    return kernel(X, Y, eval_gradient=True,
+                                  **self.kernel_options)
+                else:
+                    return kernel(X, Y, **self.kernel_options)
 
     def fit(self, X, y):
         """Train a GPR model. If the `optimizer` argument was set while
