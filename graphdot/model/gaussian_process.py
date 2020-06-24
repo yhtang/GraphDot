@@ -215,7 +215,7 @@ class GaussianProcessRegressor:
                 retvals.append(y - self.L(self.y) / Kinv_diag)
             if return_std is True:
                 retvals.append(np.sqrt(1 / np.maximum(Kinv_diag, 1e-14)))
-            return self, *retvals
+            return (self, *retvals)
 
     def predict(self, Z, return_std=False, return_cov=False):
         """Predict using the trained GPR model.
