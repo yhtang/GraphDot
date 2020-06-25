@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import numpy as np
+import itertools as it
 import networkx as nx
 from graphdot.graph import Graph
 
@@ -50,20 +51,54 @@ def test_copy(deep):
     assert(g1.title == g2.title)
     assert(len(g1.nodes) == len(g2.nodes))
     assert(len(g1.edges) == len(g2.edges))
-    for n1, n2 in zip(g1.nodes.iterrows(), g2.nodes.iterrows()):
+    for n1, n2 in zip(g1.nodes.rows(), g2.nodes.rows()):
         assert(n1 == n2)
-    for e1, e2 in zip(g1.edges.iterrows(), g2.edges.iterrows()):
+    for e1, e2 in zip(g1.edges.rows(), g2.edges.rows()):
         assert(e1 == e2)
 
     # Changes in one graph should reflect in its shallow copy, but should not
     # affect its deep copy.
     for i in range(len(g1.nodes)):
         g1.nodes.f[i] += 10.0
-    for n1, n2 in zip(g1.nodes.iterrows(), g2.nodes.iterrows()):
+    for n1, n2 in zip(g1.nodes.rows(), g2.nodes.rows()):
         if deep:
             assert(n1 != n2)
         else:
             assert(n1 == n2)
+
+
+@pytest.mark.parametrize('inplace', [True, False])
+def test_permute(inplace):
+    nxg = nx.Graph(title='Simple')
+    f = [np.pi, np.e, np.sqrt(2), -1.0, 2.0]
+    nxg.add_node(0, f=f[0])
+    nxg.add_node(1, f=f[1])
+    nxg.add_node(2, f=f[2])
+    nxg.add_node(3, f=f[3])
+    nxg.add_node(4, f=f[4])
+    nxg.add_edge(0, 1, h=f[0] * f[1])
+    nxg.add_edge(0, 2, h=f[0] * f[2])
+    nxg.add_edge(0, 4, h=f[0] * f[4])
+    nxg.add_edge(1, 2, h=f[1] * f[2])
+    nxg.add_edge(1, 3, h=f[1] * f[3])
+    nxg.add_edge(2, 3, h=f[2] * f[3])
+    nxg.add_edge(3, 4, h=f[3] * f[4])
+
+    g = Graph.from_networkx(nxg)
+
+    for perm in it.permutations(range(len(g.nodes))):
+        g1 = g.copy(deep=True)
+        g2 = g1.permute(perm, inplace=inplace)
+
+        if inplace:
+            assert(g1 is g2)
+
+        m = {idx: i for i, idx in enumerate(g2.nodes['!i'])}
+        for i in range(len(g2.edges)):
+            i1 = m[g2.edges['!i'][i]]
+            i2 = m[g2.edges['!j'][i]]
+            assert(g2.edges.h[i] ==
+                   pytest.approx(g2.nodes.f[i1] * g2.nodes.f[i2]))
 
 
 def test_simple_from_networkx():
