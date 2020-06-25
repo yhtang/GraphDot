@@ -7,17 +7,6 @@ import networkx as nx
 from graphdot.graph import Graph
 
 
-def test_empty_init():
-    G = Graph(nodes={}, edges={})
-
-    for g in [G, eval(repr(G).strip('><'))]:
-        assert(g.title == '')
-        assert(len(g.nodes) == 0)
-        assert(len(g.nodes.columns) == 0)
-        assert(len(g.edges) == 0)
-        assert(len(g.edges.columns) == 0)
-
-
 def test_dict_init():
     G = Graph(nodes={'!i': [0, 1], 'order': [1, -2],
                      'conjugate': [True, False]},
