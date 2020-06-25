@@ -32,6 +32,40 @@ def test_dict_init():
         assert(len(g.edges.columns) == 4)  # +2 for the hidden !i, !j index
 
 
+@pytest.mark.parametrize('deep', [True, False])
+def test_copy(deep):
+    nxg = nx.Graph(title='Simple')
+    nxg.add_node(0, f=0, g='a')
+    nxg.add_node(1, f=1, g='b')
+    nxg.add_node(2, f=2, g='c')
+    nxg.add_edge(0, 1, h=1.0)
+    nxg.add_edge(0, 2, h=2.0)
+
+    g1 = Graph.from_networkx(nxg)
+    g1.custom_attributes = (1.5, 'hello', False)
+    g2 = g1.copy(deep=deep)
+    assert(hasattr(g2, 'custom_attributes'))
+    assert(g1.custom_attributes == g2.custom_attributes)
+
+    assert(g1.title == g2.title)
+    assert(len(g1.nodes) == len(g2.nodes))
+    assert(len(g1.edges) == len(g2.edges))
+    for n1, n2 in zip(g1.nodes.iterrows(), g2.nodes.iterrows()):
+        assert(n1 == n2)
+    for e1, e2 in zip(g1.edges.iterrows(), g2.edges.iterrows()):
+        assert(e1 == e2)
+
+    # Changes in one graph should reflect in its shallow copy, but should not
+    # affect its deep copy.
+    for i in range(len(g1.nodes)):
+        g1.nodes.f[i] += 10.0
+    for n1, n2 in zip(g1.nodes.iterrows(), g2.nodes.iterrows()):
+        if deep:
+            assert(n1 != n2)
+        else:
+            assert(n1 == n2)
+
+
 def test_simple_from_networkx():
     nxg = nx.Graph(title='Simple')
     nxg.add_node(0)
