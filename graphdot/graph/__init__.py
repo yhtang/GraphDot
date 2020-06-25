@@ -114,21 +114,36 @@ class Graph:
 
         return g
 
-    def laplacian(self):
-        '''Get the Laplacian matrix of the graph as a sparse matrix.
+    @property
+    def adjacency_matrix(self):
+        '''Get the adjacency matrix of the graph as a sparse matrix.
 
         Returns
         -------
-        L: sparse matrix
-            The laplacian matrix, either weighted or unweighted depending on
+        adjacency_matrix: sparse matrix
+            The adjacency matrix, either weighted or unweighted depending on
             the original graph.
         '''
         N = len(self.nodes)
         i = self.edges['!i']
         j = self.edges['!j']
         w = self.edges['!w'] if '!w' in self.edges else np.ones_like(i)
-        L = scipy.sparse.coo_matrix((w, (i, j)), shape=(N, N))
-        return L + L.T
+        A = scipy.sparse.coo_matrix((w, (i, j)), shape=(N, N))
+        return A + A.T
+
+    @property
+    def laplacian(self):
+        '''Get the graph Laplacian as a sparse matrix.
+
+        Returns
+        -------
+        laplacian: sparse matrix
+            The laplacian matrix, either weighted or unweighted depending on
+            the original graph.
+        '''
+        A = self.adjacency_matrix
+        D = np.array(A.sum(axis=0).flat)
+        return scipy.sparse.diags(D, 0) - A
 
     @staticmethod
     def has_unified_types(graphs):
