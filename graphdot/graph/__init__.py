@@ -139,7 +139,7 @@ class Graph:
             the original graph.
         '''
         A = self.adjacency_matrix
-        D = np.array(A.sum(axis=0).flat)
+        D = A.sum(axis=0).flat
         return scipy.sparse.diags(D, 0) - A
 
     @staticmethod
