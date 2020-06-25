@@ -101,6 +101,67 @@ def test_permute(inplace):
                    pytest.approx(g2.nodes.f[i1] * g2.nodes.f[i2]))
 
 
+def test_adjacency_matrix_full():
+    for n in [2, 3, 5, 7, 8, 11, 13, 16, 17, 23, 25]:
+        g = Graph.from_networkx(nx.complete_graph(n))
+        A = g.adjacency_matrix.todense()
+        assert(A.shape[0] == n)
+        assert(A.shape[1] == n)
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    assert(A[i, j] == 0)
+                else:
+                    assert(A[i, j] == 1)
+
+
+def test_adjacency_matrix_cycle():
+    for n in [2, 3, 5, 7, 8, 11, 13, 16, 17, 23, 25]:
+        g = Graph.from_networkx(nx.cycle_graph(n))
+        A = g.adjacency_matrix.todense()
+        assert(A.shape[0] == n)
+        assert(A.shape[1] == n)
+        for i in range(n):
+            for j in range(n):
+                d = i - j
+                if d > n / 2:
+                    d -= n
+                elif d < -n / 2:
+                    d += n
+                if abs(d) == 1:
+                    assert(A[i, j] == 1)
+                else:
+                    assert(A[i, j] == 0)
+
+
+def test_adjacency_matrix_regular():
+    for d in [2, 3, 4]:
+        for n in [8, 12, 16]:
+            g = Graph.from_networkx(nx.random_regular_graph(d, n))
+            A = g.adjacency_matrix.todense()
+            assert(A.shape[0] == n)
+            assert(A.shape[1] == n)
+            D = A.sum(axis=0)
+            for deg in D.flat:
+                assert(deg == d)
+            for i in range(n):
+                for j in range(n):
+                    assert(A[i, j] == A[j, i])
+
+
+@pytest.mark.parametrize('g', [
+    nx.complete_graph(7),
+    nx.cycle_graph(5),
+    nx.random_regular_graph(2, 6)
+])
+def test_laplacian(g):
+    L = Graph.from_networkx(g).laplacian.todense()
+    for s in L.sum(axis=0):
+        assert(s == pytest.approx(0))
+    w = np.linalg.eigvalsh(L)
+    assert(w.min() == pytest.approx(0))
+
+
 def test_simple_from_networkx():
     nxg = nx.Graph(title='Simple')
     nxg.add_node(0)
