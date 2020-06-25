@@ -234,7 +234,6 @@ class Graph:
         if inplace is not True:
             return graphs
 
-
     @classmethod
     def from_networkx(cls, graph, weight=None):
         """Convert from NetworkX ``Graph``
