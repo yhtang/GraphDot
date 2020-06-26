@@ -359,7 +359,7 @@ class KernelOperator(BaseKernel):
     @staticmethod
     def mul(k1, k2):
         @cpptype(k1=k1.dtype, k2=k2.dtype)
-        class Mul(KernelOperator):
+        class Multiply(KernelOperator):
 
             opstr = '*'
 
@@ -390,7 +390,7 @@ class KernelOperator(BaseKernel):
                     f2 = self.k2.gen_expr(x, y, False, theta_prefix + 'k2.')
                     return f'({f1} * {f2})'
 
-        return Mul(k1, k2)
+        return Multiply(k1, k2)
 
 
 @cpptype([])
@@ -674,8 +674,8 @@ def Compose(oper, **kw_kernels):
     r"""Creates a composite base kernel via the usage of a reduction operator
     to combine the outputs of multiple scalar kernels on individual features.
     :math:`k_\mathrm{composite}(X, Y; \mathrm{op}) =
-    k_{a_1}(X_{a_1}, Y_{a_1}) \mathrm{op} k_{a_2}(X_{a_2}, Y_{a_2}) \mathrm{op}
-    \ldots`
+    k_{a_1}(X_{a_1}, Y_{a_1})\,\mathrm{op}\,k_{a_2}(X_{a_2}, Y_{a_2})\,
+    \mathrm{op}\,\ldots`
 
     Parameters
     ----------
