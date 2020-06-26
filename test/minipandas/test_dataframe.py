@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import pickle
 import numpy as np
 import pytest
 from graphdot.codegen.cpptool import cpptype
@@ -179,3 +180,25 @@ def test_rowtype(case):
     df = DataFrame(data)
     assert(df.rowtype(pack=False) == dtype)
     assert(df.rowtype(pack=False).itemsize >= df.rowtype(pack=True).itemsize)
+
+
+def test_pickle_empty():
+    df1 = DataFrame()
+    pck = pickle.dumps(df1)
+    df2 = pickle.loads(pck)
+    assert(len(df1) == len(df2))
+
+
+def test_pickle():
+    df1 = DataFrame()
+    df1['x'] = np.ones(10)
+    df1['y'] = np.arange(10)
+    pck = pickle.dumps(df1)
+    df2 = pickle.loads(pck)
+    assert('x' in df2)
+    assert('y' in df2)
+    assert(len(df2) == len(df1))
+    for x in df2.x:
+        assert(x == 1)
+    for i, y in enumerate(df2.y):
+        assert(y == i)
