@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.5a6 (2020-06-22)
+
+- Fixed a regression that causes data frame unpickling errors.
+
 ## 0.5a5 (2020-06-22)
 
 - Added the leave-one-out cross-validation prediction and training to GPR.
