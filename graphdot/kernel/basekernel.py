@@ -327,7 +327,7 @@ class KernelOperator(BaseKernel):
 
     @property
     def bounds(self):
-        return tuple(self.k1.bounds, self.k2.bounds)
+        return (self.k1.bounds, self.k2.bounds)
 
     @staticmethod
     def add(k1, k2):
