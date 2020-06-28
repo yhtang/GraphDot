@@ -446,3 +446,63 @@ def test_kernel_mul_kernel(k1, k2):
     kmul.theta = kmul.theta
     ''' C++ code generation '''
     assert(kmul.dtype.isalignedstruct)
+
+
+@pytest.mark.parametrize('kernel', simple_kernels)
+def test_kernel_exp_constant(kernel):
+    ''' check by definition '''
+    kexp = kernel**2
+    random.seed(0)
+    mirror = eval(repr(kexp))  # representation meaningness test
+    assert(mirror.theta == kexp.theta)
+    for _ in range(1000):
+        i = random.paretovariate(0.1)
+        j = random.paretovariate(0.1)
+        assert(kexp(i, j) == kernel(i, j)**2)
+        assert(kexp(i, j) == kexp(j, i))
+        assert(kexp(i, j) == mirror(i, j))
+        assert(kexp(i, j) == mirror(j, i))
+    ''' representation generation '''
+    assert(len(str(kexp).split('**')) == 2)
+    assert(str(kernel) in str(kexp))
+    assert(len(repr(kexp).split('**')) == 2)
+    assert(repr(kernel) in repr(kexp))
+    ''' hyperparameter retrieval '''
+    assert(kernel.theta in kexp.theta)
+    kexp.theta = kexp.theta
+    ''' C++ code generation '''
+    assert(kexp.dtype.isalignedstruct)
+
+
+@pytest.mark.parametrize('k1', simple_kernels)
+@pytest.mark.parametrize('k2', simple_kernels)
+def test_kernel_exp_kernel(k1, k2):
+    if k2.name == 'Constant':
+        ''' check by definition '''
+        kexp = k1**k2
+        random.seed(0)
+        mirror = eval(repr(kexp))  # representation meaningness test
+        assert(mirror.theta == kexp.theta)
+        for _ in range(1000):
+            i = random.paretovariate(0.1)
+            j = random.paretovariate(0.1)
+            assert(kexp(i, j) == k1(i, j) * k2(i, j))
+            assert(kexp(i, j) == kexp(j, i))
+            assert(kexp(i, j) == mirror(i, j))
+            assert(kexp(i, j) == mirror(j, i))
+        ''' representation generation '''
+        assert(len(str(kexp).split('**')) == 2)
+        assert(str(k1) in str(kexp))
+        assert(str(k2) in str(kexp))
+        assert(len(repr(kexp).split('**')) == 2)
+        assert(repr(k1) in repr(kexp))
+        assert(repr(k2) in repr(kexp))
+        ''' hyperparameter retrieval '''
+        assert(k1.theta in kexp.theta)
+        assert(k2.theta in kexp.theta)
+        kexp.theta = kexp.theta
+        ''' C++ code generation '''
+        assert(kexp.dtype.isalignedstruct)
+    else:
+        with pytest.raises(ValueError):
+            kexp = k1**k2
