@@ -54,13 +54,15 @@ class BaseKernel:
             hyperparameters.
         hyperparameter_specs: list of hyperparameter specifications in one of
         the formats below:
+
             | symbol,
             | (symbol,),
             | (symbol, dtype),
             | (symbol, dtype, description),
             | (symbol, dtype, lower_bound, upper_bound),
             | (symbol, dtype, lower_bound, upper_bound, description),
-            | If a default set of lower and upper bounds are not defined here,
+
+            If a default set of lower and upper bounds are not defined here,
             then it must be specified explicitly during kernel object
             creation, using arguments as specified in the kernel class's
             docstring.
@@ -678,7 +680,7 @@ def Normalize(kernel):
     r"""Normalize a positive semidefinite kernel to produce the cosine of angle
     between the input variables.
     :math:`k_{N}(X, Y) = \frac{k_{base}(X, Y)}
-                              {\sqrt{k_{base}(X, X) k_{base}(Y, Y)}}`
+    {\sqrt{k_{base}(X, X) k_{base}(Y, Y)}}`
 
     Parameters
     ----------
