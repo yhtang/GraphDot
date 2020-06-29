@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.5a7 (2020-06-22)
+
+- Implemented the base kernel exponentiation, i.e. `k**a`, semantics.
+- Minor docstring fixes.
+
 ## 0.5a6 (2020-06-22)
 
 - Fixed a regression that causes data frame unpickling errors.
