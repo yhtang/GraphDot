@@ -27,12 +27,11 @@ __all__ = ['BaseKernel',
 
 class BaseKernel:
 
-    @staticmethod
-    def _assert_bounds(kernel, hyp, bounds):
+    def _assert_bounds(self, hyp, bounds):
         if not isinstance(bounds, tuple) or len(bounds) != 2:
             raise ValueError(
-                f'Bounds for hyperparameter {hyp} of kernel {kernel} must be '
-                f'a 2-tuple: {bounds} provided.'
+                f'Bounds for hyperparameter {hyp} of kernel {self.name} must '
+                f'be a 2-tuple: {bounds} provided.'
             )
 
     @staticmethod
@@ -55,13 +54,15 @@ class BaseKernel:
             hyperparameters.
         hyperparameter_specs: list of hyperparameter specifications in one of
         the formats below:
+
             | symbol,
             | (symbol,),
             | (symbol, dtype),
             | (symbol, dtype, description),
             | (symbol, dtype, lower_bound, upper_bound),
             | (symbol, dtype, lower_bound, upper_bound, description),
-            | If a default set of lower and upper bounds are not defined here,
+
+            If a default set of lower and upper bounds are not defined here,
             then it must be specified explicitly during kernel object
             creation, using arguments as specified in the kernel class's
             docstring.
@@ -121,13 +122,15 @@ class BaseKernel:
 
         class Kernel(BaseKernel, metaclass=CppType):
 
-            __name__ = name
-
             _expr = expr
             _vars = vars
             _hyperdefs = hyperdefs
             _dtype = np.dtype([(k, v['dtype']) for k, v in hyperdefs.items()],
                               align=True)
+
+            @property
+            def name(self):
+                return name
 
             def __init__(self, *args, **kwargs):
 
@@ -144,7 +147,7 @@ class BaseKernel:
                         if symbol not in values:
                             raise KeyError(
                                 f'Hyperparameter {symbol} not provided '
-                                f'for {self.__name__}'
+                                f'for {self.name}'
                             )
 
                     try:
@@ -155,9 +158,10 @@ class BaseKernel:
                         except KeyError:
                             raise KeyError(
                                 f'Bounds for hyperparameter {symbol} of '
-                                f'kernel {self.__name__} not set, and no '
+                                f'kernel {self.name} not set, and '
+                                f'no defaults were given.'
                             )
-                    self._assert_bounds(self.__name__, symbol, bounds[symbol])
+                    self._assert_bounds(symbol, bounds[symbol])
 
             # @cached_property
             @property
@@ -202,7 +206,7 @@ class BaseKernel:
 
             def __repr__(self):
                 return Template('${cls}(${theta, }, ${bounds, })').render(
-                    cls=self.__name__,
+                    cls=self.name,
                     theta=[f'{n}={v}' for n, v in self._theta_values.items()],
                     bounds=[f'{n}_bounds={v}'
                             for n, v in self._theta_bounds.items()]
@@ -235,7 +239,7 @@ class BaseKernel:
             @property
             def theta(self):
                 return namedtuple(
-                    self.__name__ + 'Hyperparameters',
+                    f'{self.name}Hyperparameters',
                     self._theta_values.keys()
                 )(**self._theta_values)
 
@@ -307,6 +311,19 @@ class BaseKernel:
             self,
         )
 
+    def __pow__(self, c):
+        r"""Implements the exponentiation semantics, i.e.
+        expression ``k1**c`` creates
+        :math:`k_{exp}(a, b) = k_1(a, b) ** k_2(a, b)`"""
+        if isinstance(c, (int, float)):
+            return KernelOperator.pow(self, Constant(c))
+        elif isinstance(c, BaseKernel) and c.name == 'Constant':
+            return KernelOperator.pow(self, c)
+        else:
+            raise ValueError(
+                f'Exponent must be a constant or constant kernel, got {c}.'
+            )
+
 
 class KernelOperator(BaseKernel):
     def __init__(self, k1, k2):
@@ -334,7 +351,13 @@ class KernelOperator(BaseKernel):
         @cpptype(k1=k1.dtype, k2=k2.dtype)
         class Add(KernelOperator):
 
-            opstr = '+'
+            @property
+            def opstr(self):
+                return '+'
+
+            @property
+            def name(self):
+                return 'Add'
 
             def __call__(self, i, j, jac=False):
                 if jac is True:
@@ -361,7 +384,13 @@ class KernelOperator(BaseKernel):
         @cpptype(k1=k1.dtype, k2=k2.dtype)
         class Multiply(KernelOperator):
 
-            opstr = '*'
+            @property
+            def opstr(self):
+                return '*'
+
+            @property
+            def name(self):
+                return 'Multiply'
 
             def __call__(self, i, j, jac=False):
                 if jac is True:
@@ -392,6 +421,53 @@ class KernelOperator(BaseKernel):
 
         return Multiply(k1, k2)
 
+    @staticmethod
+    def pow(k1, k2):
+        @cpptype(k1=k1.dtype, k2=k2.dtype)
+        class Exponentiation(KernelOperator):
+
+            @property
+            def opstr(self):
+                return '**'
+
+            @property
+            def name(self):
+                return 'Exponentiation'
+
+            def __call__(self, i, j, jac=False):
+                if jac is True:
+                    # d(x^y) / dx = y * x^(y - 1)
+                    # d(x^y) / dy = x^y * log(x)
+                    f1, J1 = self.k1(i, j, True)
+                    f2, J2 = self.k2(i, j, True)
+                    return (
+                        f1**f2,
+                        np.array(
+                            [f2 * f1**(f2 - 1) * j1 for j1 in J1] +
+                            [f1**f2 * np.log(f1) * j2 for j2 in J2]
+                        )
+                    )
+                else:
+                    return self.k1(i, j, False)**self.k2(i, j, False)
+
+            def gen_expr(self, x, y, jac=False, theta_prefix=''):
+                if jac is True:
+                    f1, J1 = self.k1.gen_expr(x, y, True, theta_prefix + 'k1.')
+                    f2, J2 = self.k2.gen_expr(x, y, True, theta_prefix + 'k2.')
+                    return (
+                        f'__powf({f1}, {f2})',
+                        [f'({f2} * __powf({f1}, {f2} - 1) * {j})'
+                         for j in J1] +
+                        [f'(__powf({f1}, {f2}) * __logf({f1}) * {j})'
+                         for j in J2]
+                    )
+                else:
+                    f1 = self.k1.gen_expr(x, y, False, theta_prefix + 'k1.')
+                    f2 = self.k2.gen_expr(x, y, False, theta_prefix + 'k2.')
+                    return f'__powf({f1}, {f2})'
+
+        return Exponentiation(k1, k2)
+
 
 @cpptype([])
 class _Multiply(BaseKernel):
@@ -400,6 +476,10 @@ class _Multiply(BaseKernel):
     Only used internally for treating weighted edges
     """
 
+    @property
+    def name(self):
+        return '_Multiply'
+
     def __call__(self, x1, x2, jac=False):
         if jac is True:
             return x1 * x2, np.array([])
@@ -407,7 +487,7 @@ class _Multiply(BaseKernel):
             return x1 * x2
 
     def __repr__(self):
-        return '_Multiply()'
+        return f'{self.name}()'
 
     def gen_expr(self, x, y, jac=False, theta_prefix=''):
         f = f'({x} * {y})'
@@ -448,10 +528,14 @@ def Constant(c, c_bounds=None):
 
     @cpptype(c=np.float32)
     class ConstantKernel(BaseKernel):
+        @property
+        def name(self):
+            return 'Constant'
+
         def __init__(self, c, c_bounds):
             self.c = float(c)
             self.c_bounds = c_bounds
-            self._assert_bounds('Constant', 'c', c_bounds)
+            self._assert_bounds('c', c_bounds)
 
         def __call__(self, i, j, jac=False):
             if jac is True:
@@ -460,7 +544,7 @@ def Constant(c, c_bounds=None):
                 return self.c
 
         def __repr__(self):
-            return f'Constant({self.c})'
+            return f'{self.name}({self.c})'
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             f = f'{theta_prefix}c'
@@ -472,7 +556,7 @@ def Constant(c, c_bounds=None):
         @property
         def theta(self):
             return namedtuple(
-                'ConstantHyperparameters',
+                f'{self.name}Hyperparameters',
                 ['c']
             )(self.c)
 
@@ -506,10 +590,14 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
     @cpptype(h=np.float32)
     class KroneckerDeltaKernel(BaseKernel):
 
+        @property
+        def name(self):
+            return 'KroneckerDelta'
+
         def __init__(self, h, h_bounds):
             self.h = float(h)
             self.h_bounds = h_bounds
-            self._assert_bounds('KroneckerDelta', 'h', h_bounds)
+            self._assert_bounds('h', h_bounds)
 
         def __call__(self, i, j, jac=False):
             if jac is True:
@@ -521,7 +609,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
                 return 1.0 if i == j else self.h
 
         def __repr__(self):
-            return f'KroneckerDelta({self.h})'
+            return f'{self.name}({self.h})'
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             f = f'({x} == {y} ? 1.0f : {theta_prefix}h)'
@@ -533,7 +621,7 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         @property
         def theta(self):
             return namedtuple(
-                'KroneckerDeltaHyperparameters',
+                f'{self.name}Hyperparameters',
                 ['h']
             )(self.h)
 
@@ -592,7 +680,7 @@ def Normalize(kernel):
     r"""Normalize a positive semidefinite kernel to produce the cosine of angle
     between the input variables.
     :math:`k_{N}(X, Y) = \frac{k_{base}(X, Y)}
-                              {\sqrt{k_{base}(X, X) k_{base}(Y, Y)}}`
+    {\sqrt{k_{base}(X, X) k_{base}(Y, Y)}}`
 
     Parameters
     ----------
@@ -602,6 +690,10 @@ def Normalize(kernel):
 
     @cpptype(kernel=kernel.dtype)
     class Normalized(BaseKernel):
+        @property
+        def name(self):
+            return 'Normalize'
+
         def __init__(self, kernel):
             self.kernel = kernel
 
@@ -627,7 +719,7 @@ def Normalize(kernel):
                 return Fxy * (Fxx * Fyy)**-0.5 if Fxx > 0 and Fyy > 0 else 0.0
 
         def __repr__(self):
-            return f'Normalize({repr(self.kernel)})'
+            return f'{self.name}({repr(self.kernel)})'
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             F, J = self.kernel.gen_expr(
@@ -655,7 +747,7 @@ def Normalize(kernel):
         @property
         def theta(self):
             return namedtuple(
-                'NormalizeHyperparameters',
+                f'{self.name}Hyperparameters',
                 ['kernel']
             )(self.kernel.theta)
 
@@ -707,6 +799,10 @@ def Compose(oper, **kw_kernels):
 
     @cpptype([(key, ker.dtype) for key, ker in kw_kernels.items()])
     class Composite(BaseKernel):
+        @property
+        def name(self):
+            return 'Compose'
+
         def __init__(self, opstr, ufunc, jfunc, jgen, **kw_kernels):
             self.opstr = opstr
             self.ufunc = ufunc
@@ -715,7 +811,8 @@ def Compose(oper, **kw_kernels):
             self.kw_kernels = kw_kernels
 
         def __repr__(self):
-            return Template('Compose(${opstr}, ${kwexpr, })').render(
+            return Template('${cls}(${opstr}, ${kwexpr, })').render(
+                cls=self.name,
                 opstr=repr(self.opstr),
                 kwexpr=[f'{k}={repr(K)}' for k, K in self.kw_kernels.items()])
 
@@ -755,7 +852,7 @@ def Compose(oper, **kw_kernels):
         @property
         def theta(self):
             return namedtuple(
-                'CompositeHyperparameters',
+                f'{self.name}Hyperparameters',
                 self.kw_kernels.keys()
             )(*[k.theta for k in self.kw_kernels.values()])
 
@@ -808,6 +905,10 @@ def Convolution(kernel, normalize=True):
 
     @cpptype(kernel=kernel.dtype)
     class ConvolutionOf(BaseKernel):
+        @property
+        def name(self):
+            return 'Convolution'
+
         def __init__(self, kernel):
             self.kernel = kernel
 
@@ -821,7 +922,7 @@ def Convolution(kernel, normalize=True):
                 return np.sum([self.kernel(x, y) for x in X for y in Y])
 
         def __repr__(self):
-            return f'Convolution({repr(self.kernel)})'
+            return f'{self.name}({repr(self.kernel)})'
 
         def gen_expr(self, x, y, jac=False, theta_prefix=''):
             F, J = self.kernel.gen_expr(
@@ -848,7 +949,7 @@ def Convolution(kernel, normalize=True):
         @property
         def theta(self):
             return namedtuple(
-                'ConvolutionHyperparameters',
+                f'{self.name}Hyperparameters',
                 ['kernel']
             )(self.kernel.theta)
 
