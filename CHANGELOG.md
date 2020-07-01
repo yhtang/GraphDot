@@ -1,15 +1,19 @@
 # Change log of GraphDot
 
-## 0.5a7 (2020-06-22)
+## 0.5 (2020-06-30)
+
+- Initial formal release of the Gaussian Process regresion module.
+
+## 0.5a7 (2020-06-28)
 
 - Implemented the base kernel exponentiation, i.e. `k**a`, semantics.
 - Minor docstring fixes.
 
-## 0.5a6 (2020-06-22)
+## 0.5a6 (2020-06-26)
 
 - Fixed a regression that causes data frame unpickling errors.
 
-## 0.5a5 (2020-06-22)
+## 0.5a5 (2020-06-24)
 
 - Added the leave-one-out cross-validation prediction and training to GPR.
 
