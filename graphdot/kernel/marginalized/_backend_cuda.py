@@ -47,6 +47,7 @@ class CUDABackend(Backend):
         return umempty(size, dtype)
 
     def __init__(self, **kwargs):
+        self.uuid = uuid.uuid4()
         self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
         self.device = self.ctx.get_device()
         self.scratch = None
@@ -87,18 +88,19 @@ class CUDABackend(Backend):
             self.ctx.synchronize()
 
     def _register_graph(self, graph, p):
-        if not hasattr(graph, 'uuid'):
-            graph.uuid = uuid.uuid4()
-        if graph.uuid not in self.graph_cache:
+        if not hasattr(graph, 'cache_tag'):
+            graph.cache_tag = uuid.uuid4()
+        key = uuid.uuid5(self.uuid, graph.cache_tag.hex)
+        if key not in self.graph_cache:
             # convert to GPU format
             og = OctileGraph(graph)
             # assign starting probabilities
             ps = umarray(np.array([p(*r) for r in graph.nodes.iterrows()],
                                   dtype=np.float32))
             i = len(self.graph_cpp)
-            self.graph_cache[graph.uuid] = (i, ps, og)
             self.graph_cpp.append(og.state)
-        return self.graph_cache[graph.uuid]
+            self.graph_cache[key] = (i, ps, og)
+        return self.graph_cache[key]
 
     def _compile(self, src):
         with warnings.catch_warnings(record=True) as w:
