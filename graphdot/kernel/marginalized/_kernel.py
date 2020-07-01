@@ -108,10 +108,10 @@ class MarginalizedGraphKernel:
         lmin: 0 or 1
             Number of steps to skip in each random walk path before similarity
             is computed.
-            lmin + 1 corresponds to the starting value of l in the summation
+            (lmin + 1) corresponds to the starting value of l in the summation
             of Eq. 1 in Tang & de Jong, 2019 https://doi.org/10.1063/1.5078640
-            (or the first unnumbered equation as in Kashima, Tsuda, and
-            Inokuchi, 2003).
+            (or the first unnumbered equation in Section 3.3 of Kashima, Tsuda,
+            and Inokuchi, 2003).
 
         Returns
         -------
@@ -239,10 +239,10 @@ class MarginalizedGraphKernel:
         lmin: 0 or 1
             Number of steps to skip in each random walk path before similarity
             is computed.
-            lmin + 1 corresponds to the starting value of l in the summation
+            (lmin + 1) corresponds to the starting value of l in the summation
             of Eq. 1 in Tang & de Jong, 2019 https://doi.org/10.1063/1.5078640
-            (or the first unnumbered equation as in Kashima, Tsuda, and
-            Inokuchi, 2003).
+            (or the first unnumbered equation in Section 3.3 of Kashima, Tsuda,
+            and Inokuchi, 2003).
 
         Returns
         -------
