@@ -16,4 +16,3 @@ def backend_factory(backend, *args, **kwargs):
             raise RuntimeError(f'Cannot auto-select backend: {e}')
     else:
         raise ValueError(f'Unknown backend {backend}')
-        raise ValueError('Unknown backend {}'.format(backend))
