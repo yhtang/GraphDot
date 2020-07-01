@@ -53,6 +53,9 @@ class Graph:
                    repr(self.edges),
                    repr(self.title))
 
+    def _remove_cache_tag(self):
+        self.__dict__.pop('cache_tag', None)
+
     @staticmethod
     def has_unified_types(graphs):
         '''Check if all graphs have the same set of nodal/edge features.'''
@@ -89,6 +92,8 @@ class Graph:
         '''
 
         '''copy graphs if not editing in-place'''
+        for g in graphs:
+            g._remove_cache_tag()
         if inplace is not True:
             def shallowcopy(g):
                 h = cls(
