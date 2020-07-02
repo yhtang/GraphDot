@@ -315,7 +315,7 @@ class MarginalizedGraphKernel:
         if traits.eval_gradient is True:
             output_shape = (output_length, 1 + self.n_dims)
         else:
-            output_shape = (output_shape, 1)
+            output_shape = (output_length, 1)
         output = backend.empty(int(np.prod(output_shape)), np.float32)
         timer.toc('creating output buffer')
 
