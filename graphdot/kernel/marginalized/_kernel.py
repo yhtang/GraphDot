@@ -102,6 +102,9 @@ class MarginalizedGraphKernel:
             The graphs must all have same node and edge attributes.
         Y: None or list of M graphs
             The graphs must all have same node and edge attributes.
+        eval_gradient: Boolean
+            If True, computes the gradient of the kernel matrix with respect
+            to hyperparameters and return it alongside the kernel matrix.
         nodal: bool
             If True, return node-wise similarities; otherwise, return graphwise
             similarities.
@@ -115,10 +118,13 @@ class MarginalizedGraphKernel:
 
         Returns
         -------
-        numpy.array
+        kernel_matrix: ndarray
             if Y is None, return a square matrix containing pairwise
             similarities between the graphs in X; otherwise, returns a matrix
             containing similarities across graphs in X and Y.
+        gradient: ndarray
+            The gradient of the kernel matrix with respect to kernel
+            hyperparameters. Only returned if eval_gradient is True.
         """
         timer = Timer()
         backend = self.backend
