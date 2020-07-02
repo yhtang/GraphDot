@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import time
 import numpy as np
 from scipy.optimize import minimize
+from graphdot.util.printer import markdown as mprint
 from ._chol_solver import CholSolver
 
 
@@ -101,7 +103,7 @@ class GaussianProcessRegressor:
                 else:
                     return kernel(X, Y, **self.kernel_options)
 
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
         optimized using maximum likelihood estimation.
@@ -124,9 +126,12 @@ class GaussianProcessRegressor:
         '''hyperparameter optimization'''
         if self.optimizer:
             '''maximum likelihood estimation'''
+            if verbose:
+                mprint.table_start()
             opt = minimize(
                 fun=lambda theta, self=self: self.log_marginal_likelihood(
-                    theta, eval_gradient=True, clone_kernel=False
+                    theta, eval_gradient=True, clone_kernel=False,
+                    verbose=verbose
                 ),
                 method=self.optimizer,
                 x0=self.kernel.theta,
@@ -134,6 +139,8 @@ class GaussianProcessRegressor:
                 jac=True,
                 tol=1e-3,
             )
+            if verbose:
+                print(f'Optimization result:\n{opt}')
 
             if opt.success:
                 self.kernel.theta = opt.x
@@ -149,7 +156,8 @@ class GaussianProcessRegressor:
         self.Ky = self.L(self.y)
         return self
 
-    def fit_loocv(self, X, y, return_mean=False, return_std=False):
+    def fit_loocv(self, X, y, return_mean=False, return_std=False,
+                  verbose=False):
         """Train a GPR model and return the leave-one-out cross validation
         results on the dataset. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
@@ -182,10 +190,13 @@ class GaussianProcessRegressor:
 
         '''hyperparameter optimization'''
         if self.optimizer:
-            '''maximum likelihood estimation'''
+            '''try to minimize LOOCV error'''
+            if verbose:
+                mprint.table_start()
             opt = minimize(
                 fun=lambda theta, self=self: self.squared_loocv_error(
-                    theta, eval_gradient=True, clone_kernel=False
+                    theta, eval_gradient=True, clone_kernel=False,
+                    verbose=verbose
                 ),
                 method=self.optimizer,
                 x0=self.kernel.theta,
@@ -193,12 +204,14 @@ class GaussianProcessRegressor:
                 jac=True,
                 tol=1e-3,
             )
+            if verbose:
+                print(f'Optimization result:\n{opt}')
 
             if opt.success:
                 self.kernel.theta = opt.x
             else:
                 raise RuntimeError(
-                    f'Maximum likelihood estimation did not converge, got:\n'
+                    f'Minimum LOOCV optimization did not converge, got:\n'
                     f'{opt}'
                 )
 
@@ -341,26 +354,41 @@ class GaussianProcessRegressor:
             kernel = self.kernel
             kernel.theta = theta
 
+        t_kernel = time.perf_counter()
         if eval_gradient is True:
             K, dK = self._gramian(X, kernel=kernel, jac=True)
         else:
             K = self._gramian(X, kernel=kernel)
+        t_kernel = time.perf_counter() - t_kernel
 
-        L = CholSolver(K)
+        t_linalg = time.perf_counter()
+        try:
+            L = CholSolver(K)
+        except np.linalg.LinAlgError as e:
+            raise np.linalg.LinAlgError(
+                'Kernel matrix is singular, try a larger `alpha` value.\n'
+                f'NumPy error information: {e}'
+            )
         Ky = L(y)
         yKy = y @ Ky
         logdet = np.prod(np.linalg.slogdet(K))
-        if verbose:
-            print(
-                'L %.5f = %.5f + %.5f' % (yKy + logdet, yKy, logdet),
-                np.exp(theta)
-            )
+        t_linalg = time.perf_counter() - t_linalg
 
         if eval_gradient is True:
             D_theta = np.zeros_like(theta)
             for i, t in enumerate(theta):
                 dk = dK[:, :, i]
                 D_theta[i] = (L(dk).trace() - Ky @ dk @ Ky) * np.exp(t)
+            if verbose:
+                mprint.table(
+                    ('log(L)', '%12.5g', yKy + logdet),
+                    ('yKy', '%12.5g', yKy),
+                    ('logdet(K)', '%12.5g', logdet),
+                    ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
+                    ('Cond(K)', '%12.5g', np.linalg.cond(K)),
+                    ('t_GPU (s)', '%10.2g', t_kernel),
+                    ('t_CPU (s)', '%10.2g', t_linalg),
+                )
             return yKy + logdet, D_theta
         else:
             return yKy + logdet
@@ -413,17 +441,21 @@ class GaussianProcessRegressor:
             kernel = self.kernel
             kernel.theta = theta
 
+        t_kernel = time.perf_counter()
         if eval_gradient is True:
             K, dK = self._gramian(X, kernel=kernel, jac=True)
         else:
             K = self._gramian(X, kernel=kernel)
+        t_kernel = time.perf_counter() - t_kernel
 
+        t_linalg = time.perf_counter()
         L = CholSolver(K)
         Kinv = L(np.eye(len(X)))
         Kinv_diag = Kinv.diagonal()
         Ky = Kinv @ y
         e = Ky / Kinv_diag
         squared_error = 0.5 * np.sum(e**2)
+        t_linalg = time.perf_counter() - t_linalg
 
         if eval_gradient is True:
             D_theta = np.zeros_like(theta)
@@ -434,6 +466,15 @@ class GaussianProcessRegressor:
                     - (e / Kinv_diag) @ (KdK @ Ky)
                     + (e**2 / Kinv_diag) @ (KdK @ Kinv).diagonal()
                 ) * np.exp(t)
+            if verbose:
+                mprint.table(
+                    ('Sq.Err.', '%12.5g', squared_error),
+                    ('logdet(K)', '%12.5g', np.prod(np.linalg.slogdet(K))),
+                    ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
+                    ('Cond(K)', '%12.5g', np.linalg.cond(K)),
+                    ('t_GPU (s)', '%10.2g', t_kernel),
+                    ('t_CPU (s)', '%10.2g', t_linalg),
+                )
             return squared_error, D_theta
         else:
             return squared_error
