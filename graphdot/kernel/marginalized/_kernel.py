@@ -229,13 +229,16 @@ class MarginalizedGraphKernel:
         else:
             return output.astype(self.element_dtype)
 
-    def diag(self, X, nodal=False, lmin=0, timing=False):
+    def diag(self, X, eval_gradient=False, nodal=False, lmin=0, timing=False):
         """Compute the self-similarities for a list of graphs
 
         Parameters
         ----------
         X: list of N graphs
             The graphs must all have same node attributes and edge attributes.
+        eval_gradient: Boolean
+            If True, computes the gradient of the kernel matrix with respect
+            to hyperparameters and return it alongside the kernel matrix.
         nodal: bool
             If True, returns a vector containing nodal self similarties; if
             False, returns a vector containing graphs' overall self
@@ -257,9 +260,18 @@ class MarginalizedGraphKernel:
             if nodal=False, returns a vector containing graphs' overall self
             similarities; if nodal = 'block', return a list of square matrices,
             each being a pairwise nodal similarity matrix within a graph.
+        gradient
+            The gradient of the kernel matrix with respect to kernel
+            hyperparameters. Only returned if eval_gradient is True.
         """
         timer = Timer()
         backend = self.backend
+        traits = self.traits(
+            diagonal=True,
+            nodal=nodal,
+            lmin=lmin,
+            eval_gradient=eval_gradient
+        )
 
         ''' assert graph attributes are compatible with each other '''
         pred_or_tuple = Graph.has_unified_types(X)
@@ -300,7 +312,11 @@ class MarginalizedGraphKernel:
             output_length = int(starts[-1])
         else:
             raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
-        output = backend.empty(output_length, np.float32)
+        if traits.eval_gradient is True:
+            output_shape = (output_length, 1 + self.n_dims)
+        else:
+            output_shape = (output_shape, 1)
+        output = backend.empty(int(np.prod(output_shape)), np.float32)
         timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
@@ -314,8 +330,8 @@ class MarginalizedGraphKernel:
             jobs,
             starts,
             output,
-            (output_length, 1),
-            self.traits(diagonal=True, nodal=nodal, lmin=lmin),
+            output_shape,
+            traits,
             timer,
         )
         timer.toc('calling GPU kernel (overall)')
@@ -331,7 +347,13 @@ class MarginalizedGraphKernel:
             timer.report(unit='ms')
         timer.reset()
 
-        return output.astype(self.element_dtype)
+        if traits.eval_gradient is True:
+            return (
+                output[:, 0].astype(self.element_dtype),
+                output[:, 1:].astype(self.element_dtype)
+            )
+        else:
+            return output.astype(self.element_dtype)
 
     """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
 
