@@ -1,12 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-def center(s, width):
-    nspace = width - len(s)
-    lspace = nspace // 2
-    rspace = nspace - lspace
-    return ' ' * lspace + s + ' ' * rspace
-
-
 class markdown:
 
     _print_table_header = False
@@ -17,10 +10,14 @@ class markdown:
 
     @classmethod
     def table_header(cls, *fields):
+        # format content
         strs = [fmt % value for _, fmt, value in fields]
+        # copy alignment specifier to column titles
         align = ['-' if fmt.startswith('%-') else '' for _, fmt, _ in fields]
+        # format column titles
         fmts = [f'%{a}{len(s)}s' for a, s in zip(align, strs)]
         header = '|'.join([fmt % f[0] for f, fmt in zip(fields, fmts)])
+        # join titles to form a line
         sep = '|'.join(['-' * len(s) for s in strs])
         print(f'|{header}|\n|{sep}|')
 
