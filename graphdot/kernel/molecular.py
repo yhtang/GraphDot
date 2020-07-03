@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import copy
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
 from graphdot.kernel.basekernel import KroneckerDelta
 from graphdot.kernel.basekernel import SquareExponential
@@ -61,3 +62,28 @@ class Tang2019MolecularKernel:
         :py:meth:`graphdot.kernel.marginalized.MarginalizedGraphKernel.diag`
         """
         return self.kernel.diag(X, **kwargs)
+
+    @property
+    def hyperparameters(self):
+        return self.kernel.hyperparameters
+
+    @property
+    def theta(self):
+        return self.kernel.theta
+
+    @theta.setter
+    def theta(self, value):
+        self.kernel.theta = value
+
+    @property
+    def hyperparameter_bounds(self):
+        return self.kernel.hyperparameter_bounds
+
+    @property
+    def bounds(self):
+        return self.kernel.bounds
+
+    def clone_with_theta(self, theta):
+        clone = copy.deepcopy(self)
+        clone.theta = theta
+        return clone
