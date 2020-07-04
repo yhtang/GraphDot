@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 import copy
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.basekernel import KroneckerDelta
-from graphdot.kernel.basekernel import SquareExponential
-from graphdot.kernel.basekernel import TensorProduct
+from graphdot.microkernel import (
+    KroneckerDelta,
+    SquareExponential,
+    TensorProduct
+)
 
 
 class Tang2019MolecularKernel:

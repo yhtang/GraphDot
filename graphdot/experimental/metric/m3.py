@@ -5,9 +5,11 @@ import scipy.sparse
 import scipy.sparse.linalg
 from graphdot.graph import Graph
 from graphdot.graph.adjacency.atomic import AtomicAdjacency
-from graphdot.kernel.basekernel import TensorProduct
-from graphdot.kernel.basekernel import KroneckerDelta
-from graphdot.kernel.basekernel import SquareExponential
+from graphdot.microkernel import (
+    TensorProduct,
+    KroneckerDelta,
+    SquareExponential
+)
 
 
 class M3:
