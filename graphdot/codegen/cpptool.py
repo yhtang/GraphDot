@@ -28,7 +28,7 @@ def cpptype(decls=[], **kwdecls):
 
             @property
             def dtype(self):
-                '''Useful in base kernel composition.'''
+                '''Useful in microkernel composition.'''
                 return Class.dtype
 
             @property

@@ -20,7 +20,7 @@ def Composite(oper, **kw_kernels):
         A reduction operator. Due to positive definiteness requirements, the
         available options are currently limited to '+', '*'.
     kw_kernels: dict of attribute=kernel pairs
-        The kernels can be any base kernels and their compositions as defined
+        The kernels can be any microkernels and their compositions as defined
         in this module, while features should be strings that represent
         valid Python/C++ identifiers.
     """

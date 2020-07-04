@@ -18,9 +18,9 @@ class MarginalizedGraphKernel:
 
     Parameters
     ----------
-    node_kernel: base kernel or composition of base kernels
+    node_kernel: microkernel
         A kernelet that computes the similarity between individual nodes
-    edge_kernel: base kernel or composition of base kernels
+    edge_kernel: microkernel
         A kernelet that computes the similarity between individual edge
     kwargs: optional arguments
         p: functor or 'uniform' or 'default'
