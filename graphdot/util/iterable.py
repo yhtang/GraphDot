@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+
 def flatten(iterable):
     '''Iterate through a tree of iterables in depth-first order. E.g.
     :py:`flatten(((1, 2), 3))` yields the sequence of :py:`1, 2, 3`.'''
