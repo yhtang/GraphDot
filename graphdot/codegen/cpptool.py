@@ -14,7 +14,7 @@ def cpptype(decls=[], **kwdecls):
     ctype = np.dtype(decls + list(kwdecls.items()), align=True)
 
     def decor(cls):
-        class CppType(type):
+        class CppType(type(cls)):
             @property
             def dtype(self):
                 '''Enables numpy.dtype(cls) to return the layout of the C++
