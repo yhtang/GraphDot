@@ -6,7 +6,7 @@ import pytest
 import networkx as nx
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.basekernel import (
+from graphdot.microkernel import (
     Constant,
     KroneckerDelta,
     SquareExponential,

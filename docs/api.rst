@@ -5,4 +5,5 @@ API Reference
 
    apidoc/graphdot.graph
    apidoc/graphdot.kernel
+   apidoc/graphdot.microkernel
    apidoc/graphdot.model

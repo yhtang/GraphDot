@@ -5,14 +5,14 @@ import copy
 import numpy as np
 import pytest
 
-from graphdot.kernel.basekernel import (
+from graphdot.microkernel import (
     Constant,
     KroneckerDelta,
     SquareExponential,
     RationalQuadratic,
-    _Multiply,
+    Product,
     Normalize,
-    Compose,
+    Composite,
     TensorProduct,
     Additive,
     Convolution,
@@ -120,8 +120,8 @@ def test_square_exponential_kernel():
                 SquareExponential(1.0, length_scale_bounds=tuple([1] * n))
 
 
-def test_multiply_quasikernel():
-    kernel = _Multiply()
+def test_product_quasikernel():
+    kernel = Product()
     ''' default behavior '''
     assert(kernel(0, 0) == 0)
     assert(kernel(0, 1) == 0)
