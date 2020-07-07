@@ -10,7 +10,7 @@ import numpy as np
 import networkx as nx
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.basekernel import Constant
+from graphdot.microkernel import Constant
 
 # 0 -- 1
 g1 = nx.Graph()

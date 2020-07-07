@@ -7,7 +7,7 @@ import numpy as np
 import networkx as nx
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.kernel.basekernel import (
+from graphdot.microkernel import (
     TensorProduct,
     Convolution,
     SquareExponential,

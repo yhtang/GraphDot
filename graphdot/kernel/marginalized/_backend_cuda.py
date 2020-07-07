@@ -14,7 +14,7 @@ from graphdot.codegen import Template
 from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray, umlike
 from graphdot.cuda.resizable_array import ResizableArray
-from graphdot.kernel.basekernel import TensorProduct, _Multiply
+from graphdot.microkernel import TensorProduct, Product
 from ._backend import Backend
 from ._scratch import BlockScratch
 from ._octilegraph import OctileGraph
@@ -205,7 +205,7 @@ class CUDABackend(Backend):
         ''' code generation '''
         timer.tic('code generation')
         if weighted:
-            edge_kernel = TensorProduct(weight=_Multiply(),
+            edge_kernel = TensorProduct(weight=Product(),
                                         label=edge_kernel)
 
         node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')

@@ -1,5 +1,11 @@
 # Change log of GraphDot
 
+## 0.5.1 (2020-06-30)
+
+- Added a verbose training progress option to the GPR module. 
+- The `graphdot.kernel.basekernel` package has been redesigned and renamed to
+  `graphdot.microkernel`.
+
 ## 0.5 (2020-06-30)
 
 - Initial formal release of the Gaussian Process regresion module.
