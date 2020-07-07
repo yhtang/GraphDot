@@ -7,7 +7,7 @@ default: setup
 
 setup:
 	pip3 install --user virtualenv
-	virtualenv $(VENV)
+	virtualenv -p python3 $(VENV)
 	eval ". $(VENV)/bin/activate && pip install -r requirements/common.txt"
 	eval ". $(VENV)/bin/activate && pip install -r requirements/docs.txt"
 	eval ". $(VENV)/bin/activate && pip install -r requirements/tests.txt"

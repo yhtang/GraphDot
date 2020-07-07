@@ -1,8 +1,10 @@
 import io
 import sys
 import re
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
 from setuptools.command.test import test as TestCommand
+import subprocess
+
 
 with open('graphdot/__init__.py') as fd:
     __version__ = re.search("__version__ = '(.*)'", fd.read()).group(1)
@@ -32,6 +34,18 @@ class Tox(TestCommand):
         sys.exit(errcode)
 
 
+# PBR as extension
+pybind_inc = subprocess.run(["python3","-m", "pybind11", "--includes"],
+                            stdout=subprocess.PIPE, universal_newlines=True)
+modulepbr = Extension('pbr',
+                      include_dirs = ['graphdot/graph/pbr',
+                                      pybind_inc.stdout.split()[1][2:]],
+                      libraries = ['kahypar', 'm', 'boost_program_options'],
+                      sources = ['graphdot/graph/pbr/mm.cpp',
+                                 'graphdot/graph/pbr/pth.cpp',
+                                 'graphdot/graph/pbr/minnumofmsgs.cpp'],
+                      extra_compile_args = ['-w'])
+
 setup(
     name='graphdot',
     version=__version__,
@@ -48,6 +62,7 @@ setup(
         'networkx>=2.4',
         'pycuda>=2019',
         'treelib>=1.6.1',
+        'pybind11>=2.5.0'
     ] + [
         'ase>=3.17',
         'pymatgen>=2019',
@@ -86,5 +101,6 @@ setup(
         'Topic :: Scientific/Engineering :: Physics',
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
-    ]
+    ],
+    ext_modules=[modulepbr]
 )
