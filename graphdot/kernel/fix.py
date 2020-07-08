@@ -6,7 +6,8 @@ import copy
 
 class Normalization:
     r"""Normalizes a kernel using the cosine of angle formula:
-    :math:`k_\mathrm{normalized}(x, y) = \frac{k(x, y){\sqrt{k(x, x)k(y, y)}}`.
+    :math:`k_\mathrm{normalized}(x, y) =
+    \frac{k(x, y)}{\sqrt{k(x, x)k(y, y)}}`.
 
     Parameters
     ----------
