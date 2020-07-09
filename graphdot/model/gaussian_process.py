@@ -103,7 +103,7 @@ class GaussianProcessRegressor:
                 else:
                     return kernel(X, Y, **self.kernel_options)
 
-    def fit(self, X, y, verbose=False):
+    def fit(self, X, y, tol=1e-4, repeat=1, theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
         optimized using maximum likelihood estimation.
@@ -114,6 +114,16 @@ class GaussianProcessRegressor:
             Input values of the training data.
         y: 1D array
             Output/target values of the training data.
+        tol: float
+            Tolerance for termination.
+        repeat: int
+            Repeat the hyperparameter optimization by the specified number of
+            times and return the best result.
+        theta_jitter: float
+            Standard deviation of the random noise added to the initial
+            logscale hyperparameters across repeated optimization runs.
+        verbose: bool
+            Whether or not to print out the optimization progress and outcome.
 
         Returns
         -------
@@ -125,19 +135,13 @@ class GaussianProcessRegressor:
 
         '''hyperparameter optimization'''
         if self.optimizer:
-            '''maximum likelihood estimation'''
-            if verbose:
-                mprint.table_start()
-            opt = minimize(
-                fun=lambda theta, self=self: self.log_marginal_likelihood(
+            opt = self._hyper_opt(
+                lambda theta, self=self: self.log_marginal_likelihood(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                method=self.optimizer,
-                x0=self.kernel.theta,
-                bounds=self.kernel.bounds,
-                jac=True,
-                tol=1e-3,
+                self.kernel.theta.copy(),
+                tol, repeat, theta_jitter, verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -157,7 +161,7 @@ class GaussianProcessRegressor:
         return self
 
     def fit_loocv(self, X, y, return_mean=False, return_std=False,
-                  verbose=False):
+                  tol=1e-4, repeat=1, theta_jitter=1.0, verbose=False):
         """Train a GPR model and return the leave-one-out cross validation
         results on the dataset. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
@@ -175,6 +179,16 @@ class GaussianProcessRegressor:
         return_std: boolean
             If True, the leave-one-out predictive standard deviations of the
             model on the training data are returned along with the model.
+        tol: float
+            Tolerance for termination.
+        repeat: int
+            Repeat the hyperparameter optimization by the specified number of
+            times and return the best result.
+        theta_jitter: float
+            Standard deviation of the random noise added to the initial
+            logscale hyperparameters across repeated optimization runs.
+        verbose: bool
+            Whether or not to print out the optimization progress and outcome.
 
         Returns
         -------
@@ -190,19 +204,13 @@ class GaussianProcessRegressor:
 
         '''hyperparameter optimization'''
         if self.optimizer:
-            '''try to minimize LOOCV error'''
-            if verbose:
-                mprint.table_start()
-            opt = minimize(
-                fun=lambda theta, self=self: self.squared_loocv_error(
+            opt = self._hyper_opt(
+                lambda theta, self=self: self.squared_loocv_error(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                method=self.optimizer,
-                x0=self.kernel.theta,
-                bounds=self.kernel.bounds,
-                jac=True,
-                tol=1e-3,
+                self.kernel.theta.copy(),
+                tol, repeat, theta_jitter, verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -480,3 +488,30 @@ class GaussianProcessRegressor:
             return squared_error, D_theta
         else:
             return squared_error
+
+    def _hyper_opt(self, fun, x0, tol, repeat, theta_jitter, verbose):
+        X0 = np.copy(self.kernel.theta)
+        opt = None
+
+        for r in range(repeat):
+            if r > 0:
+                x0 = X0 + theta_jitter * np.random.randn(len(X0))
+            else:
+                x0 = X0
+
+            if verbose:
+                mprint.table_start()
+
+            opt_local = minimize(
+                fun=fun,
+                method=self.optimizer,
+                x0=x0,
+                bounds=self.kernel.bounds,
+                jac=True,
+                tol=tol,
+            )
+
+            if not opt or (opt_local.success and opt_local.fun < opt.fun):
+                opt = opt_local
+
+        return opt
