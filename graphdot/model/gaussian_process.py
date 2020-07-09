@@ -225,9 +225,11 @@ class GaussianProcessRegressor:
             retvals = []
             Kinv_diag = self.L(np.eye(len(self.X))).diagonal()
             if return_mean is True:
-                retvals.append(y - self.L(self.y) / Kinv_diag)
+                ymean = self.y - self.L(self.y) / Kinv_diag
+                retvals.append(ymean * self.y_std + self.y_mean)
             if return_std is True:
-                retvals.append(np.sqrt(1 / np.maximum(Kinv_diag, 1e-14)))
+                ystd = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
+                retvals.append(ystd * self.y_std)
             return (self, *retvals)
 
     def predict(self, Z, return_std=False, return_cov=False):
