@@ -758,6 +758,51 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         #endif
     }
 
+    template<int p_jac_dims>
+    __inline__ __device__ static void derivative_p(
+        Graph const    g1,
+        Graph const    g2,
+        float const  * P1,
+        float const  * P2,
+        scratch_t      scratch,
+        char * const   cache,
+        float * const  dK) {
+
+        using namespace graphdot::cuda;
+
+        const int lane = laneid();
+        const int n1   = g1.n_node;
+        const int n2   = g2.n_node;
+        const int N    = n1 * n2;
+
+        float dKdp_local[p_jac_dims];
+        #pragma unroll (p_jac_dims)
+        for(int i = 0; i < p_jac_dims; ++i) {
+            dKdp_local[i] = 0;
+        }
+
+        for (int i = threadIdx.x; i < N; i += blockDim.x) {
+            const int i1 = i / n2;
+            const int i2 = i % n2;
+            const float p1 = P1[i1];
+            const float p2 = P2[i2];
+            const float r = scratch.x(i);
+
+            #pragma unroll (p_jac_dims)
+            for(int j = 0; j < p_jac_dims; ++j) {
+                const float dp1 = P1[i1 + n1 * j];
+                const float dp2 = P2[i2 + n2 * j];
+                dKdp_local[j] += (dp1 * p2 + p1 * dp2) * r;
+            }
+        }
+
+        #pragma unroll (p_jac_dims)
+        for(int j = 0; j < p_jac_dims; ++j) {
+            dKdp_local[j] = warp_sum(dKdp_local[j]);
+            if (lane == 0) atomicAdd(dK + j, dKdp_local[j]);
+        }
+    }
+
     template<class NodeKernel>
     __inline__ __device__ static void derivative_q(
         NodeKernel const node_kernel,

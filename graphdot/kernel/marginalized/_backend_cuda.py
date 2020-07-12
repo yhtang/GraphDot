@@ -87,19 +87,21 @@ class CUDABackend(Backend):
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
-    def _register_graph(self, graph, p):
+    def _register_graph(self, graph, pfunc):
         if not hasattr(graph, 'cache_tag'):
             graph.cache_tag = uuid.uuid4()
         key = uuid.uuid5(self.uuid, graph.cache_tag.hex)
         if key not in self.graph_cache:
             # convert to GPU format
             og = OctileGraph(graph)
-            # assign starting probabilities
-            ps = umarray(np.array([p(*r) for r in graph.nodes.iterrows()],
-                                  dtype=np.float32))
             i = len(self.graph_cpp)
             self.graph_cpp.append(og.state)
-            self.graph_cache[key] = (i, ps, og)
+            self.graph_cache[key] = (i, og, None)
+        # assign starting probabilities
+        p, d_p = pfunc(graph.nodes)
+        p = umarray(np.concatenate((p, d_p.flat)).astype(np.float32))
+        i, og, _ = self.graph_cache[key]
+        self.graph_cache[key] = (i, og, p)
         return self.graph_cache[key]
 
     def _compile(self, src):
@@ -182,7 +184,7 @@ class CUDABackend(Backend):
         starting_p = umempty(len(graphs), np.uintp)
 
         for i, g in enumerate(graphs):
-            idx, ps, og = self._register_graph(g, p)
+            idx, og, ps = self._register_graph(g, p)
             if i > 0:
                 self._assert_homogeneous(og_last, og)
             og_last = og
@@ -216,7 +218,8 @@ class CUDABackend(Backend):
                 node_kernel=node_kernel_src,
                 edge_kernel=edge_kernel_src,
                 node_t=decltype(node_t),
-                edge_t=decltype(edge_t)
+                edge_t=decltype(edge_t),
+                p_jac_dims=len(p.theta)
             )
         timer.toc('code generation')
 

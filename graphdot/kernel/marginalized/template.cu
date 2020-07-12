@@ -19,6 +19,8 @@ using graph_t   = graphdot::graph_t<node_t, edge_t>;
 using scratch_t = graphdot::marginalized::pcg_scratch_t;
 using solver_t  = graphdot::marginalized::labeled_compact_block_dynsched_pcg<graph_t>;
 
+constexpr static int p_jac_dims = ${p_jac_dims};
+
 __constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
 
 extern "C" {
@@ -153,17 +155,25 @@ extern "C" {
 
                     constexpr static int jac_starts[] {
                         0,
-                        1,
-                        1 + node_kernel.jac_dims,
-                        1 + node_kernel.jac_dims + edge_kernel.jac_dims
+                        p_jac_dims,
+                        p_jac_dims + 1,
+                        p_jac_dims + 1 + node_kernel.jac_dims,
+                        p_jac_dims + 1 + node_kernel.jac_dims + edge_kernel.jac_dims
                     };
 
-                    __shared__ float jac[jac_starts[3]];
+                    __shared__ float jac[jac_starts[4]];
 
-                    for (int i = threadIdx.x; i < jac_starts[3]; i += blockDim.x) {
+                    for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
                         jac[i] = 0;
                     }
                     __syncthreads();
+
+                    solver_t::derivative_p<p_jac_dims>(
+                        g1, g2,
+                        p1, p2,
+                        scratch,
+                        shmem,
+                        jac + jac_starts[0]);
 
                     solver_t::derivative_q(
                         node_kernel,
@@ -171,7 +181,7 @@ extern "C" {
                         p1, p2,
                         scratch,
                         shmem,
-                        jac + jac_starts[0],
+                        jac + jac_starts[1],
                         q);
 
                     solver_t::derivative_node(
@@ -179,7 +189,7 @@ extern "C" {
                         g1, g2,
                         scratch,
                         shmem,
-                        jac + jac_starts[1],
+                        jac + jac_starts[2],
                         q);
 
                     solver_t::derivative_edge(
@@ -187,9 +197,9 @@ extern "C" {
                         g1, g2,
                         scratch,
                         shmem,
-                        jac + jac_starts[2]);
+                        jac + jac_starts[3]);
 
-                    for (int i = threadIdx.x; i < jac_starts[3]; i += blockDim.x) {
+                    for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
                         out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = jac[i];
                         if (?{traits.symmetric is True}) {
                             if (job.x != job.y) {

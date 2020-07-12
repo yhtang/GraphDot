@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import copy
+import numbers
 import itertools as it
 from collections import namedtuple
 import numpy as np
@@ -8,6 +9,7 @@ from graphdot.graph import Graph
 from graphdot.util import Timer
 from graphdot.util.iterable import fold_like, flatten
 from ._backend_factory import backend_factory
+from .starting_probability import StartingProbability, Uniform
 
 
 class MarginalizedGraphKernel:
@@ -23,12 +25,10 @@ class MarginalizedGraphKernel:
     edge_kernel: microkernel
         A kernelet that computes the similarity between individual edge
     kwargs: optional arguments
-        p: functor or 'uniform' or 'default'
+        p: positive number (default=1.0) or :py:class:`StartingProbability`
             The starting probability of the random walk on each node. Must be
-            either a functor that takes in a node (a dataframe row) and returns
-            a number, or the name of a built-in distribution. Currently, only
-            'uniform' and 'default' are implemented.
-            Note that a custom probability does not have to be normalized.
+            either a positive number or a concrete subclass instance of
+            :py:class:`StartingProbability`.
         q: float in (0, 1)
             The probability for the random walk to stop during each step.
     """
@@ -49,7 +49,7 @@ class MarginalizedGraphKernel:
                 )
         return traits
 
-    def __init__(self, node_kernel, edge_kernel, p='default', q=0.01,
+    def __init__(self, node_kernel, edge_kernel, p=1.0, q=0.01,
                  q_bounds=(1e-4, 1 - 1e-4), dtype=np.float, backend='auto'):
         self.node_kernel = node_kernel
         self.edge_kernel = edge_kernel
@@ -61,14 +61,15 @@ class MarginalizedGraphKernel:
         self.backend = backend_factory(backend)
 
     def _get_starting_probability(self, p):
-        if isinstance(p, str):
-            if p == 'uniform' or p == 'default':
-                return lambda i, n: 1.0
+        if isinstance(p, numbers.Number):
+            if p > 0:
+                return Uniform(p)
             else:
-                raise ValueError('Unknown starting probability distribution %s'
-                                 % self.p)
-        else:
+                raise ValueError(f'Starting probability {p} < 0.')
+        elif isinstance(p, StartingProbability):
             return p
+        else:
+            raise ValueError(f'Unknown starting probability specs: {p}')
 
     def __call__(self, X, Y=None, eval_gradient=False, nodal=False, lmin=0,
                  timing=False):
@@ -233,7 +234,7 @@ class MarginalizedGraphKernel:
 
         Returns
         -------
-        numpy.array or list of np.array(s)
+        diagonal: numpy.array or list of np.array(s)
             If nodal=True, returns a vector containing nodal self similarties;
             if nodal=False, returns a vector containing graphs' overall self
             similarities; if nodal = 'block', return a list of square matrices,
@@ -351,8 +352,9 @@ class MarginalizedGraphKernel:
     def hyperparameters(self):
         return namedtuple(
             'GraphKernelHyperparameters',
-            ['q', 'node', 'edge']
-        )(self.q,
+            ['p', 'q', 'node', 'edge']
+        )(self.p.theta,
+          self.q,
           self.node_kernel.theta,
           self.edge_kernel.theta)
 
@@ -362,7 +364,8 @@ class MarginalizedGraphKernel:
 
     @theta.setter
     def theta(self, value):
-        (self.q,
+        (self.p.theta,
+         self.q,
          self.node_kernel.theta,
          self.edge_kernel.theta
          ) = fold_like(np.exp(value), self.hyperparameters)
@@ -371,8 +374,9 @@ class MarginalizedGraphKernel:
     def hyperparameter_bounds(self):
         return namedtuple(
             'GraphKernelHyperparameterBounds',
-            ['q', 'node', 'edge']
-        )(self.q_bounds,
+            ['p', 'q', 'node', 'edge']
+        )(self.p.bounds,
+          self.q_bounds,
           self.node_kernel.bounds,
           self.edge_kernel.bounds)
 
