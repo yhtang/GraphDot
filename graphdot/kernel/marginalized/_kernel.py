@@ -9,7 +9,7 @@ from graphdot.graph import Graph
 from graphdot.util import Timer
 from graphdot.util.iterable import fold_like, flatten
 from ._backend_factory import backend_factory
-from .starting_probability import StartingProbability, Uniform
+from .starting_probability import StartingProbability, Uniform, Adhoc
 
 
 class MarginalizedGraphKernel:
@@ -61,15 +61,17 @@ class MarginalizedGraphKernel:
         self.backend = backend_factory(backend)
 
     def _get_starting_probability(self, p):
-        if isinstance(p, numbers.Number):
+        if isinstance(p, StartingProbability):
+            return p
+        elif callable(p):
+            return Adhoc(p)
+        elif isinstance(p, numbers.Number):
             if p > 0:
                 return Uniform(p)
             else:
                 raise ValueError(f'Starting probability {p} < 0.')
-        elif isinstance(p, StartingProbability):
-            return p
         else:
-            raise ValueError(f'Unknown starting probability specs: {p}')
+            raise ValueError(f'Unknown starting probability: {p}')
 
     def __call__(self, X, Y=None, eval_gradient=False, nodal=False, lmin=0,
                  timing=False):

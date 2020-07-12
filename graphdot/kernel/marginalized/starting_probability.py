@@ -34,20 +34,33 @@ class StartingProbability(ABC):
     @property
     @abstractmethod
     def theta(self):
+        '''The log-scale hyperparameters of the starting probability
+        distribution as an ndarray.'''
         pass
 
     @theta.setter
     @abstractmethod
     def theta(self):
+        '''Sets the hyperparameters of the starting probability distribution
+        from log-scale values in an ndarray.'''
         pass
 
     @property
     @abstractmethod
     def bounds(self):
+        '''The log-scale bounds of the hyperparameters as a 2D array.'''
         pass
 
 
 class Fixed(StartingProbability):
+    '''Assigned all nodes the same starting probability that will remain
+    the same during training.
+
+    Parameters
+    ----------
+    p: float
+        The starting probability value.
+    '''
 
     def __init__(self, p):
         self.p = p
@@ -71,7 +84,16 @@ class Fixed(StartingProbability):
 
 
 class Uniform(StartingProbability):
+    '''Assigned all nodes the same starting probability.
 
+    Parameters
+    ----------
+    p: float
+        The starting probability value.
+    p_bounds: (float, float)
+        The range within which the starting probability can vary during
+        training.
+    '''
     def __init__(self, p, p_bounds=(1e-3, 1e3)):
         assert(isinstance(p_bounds, tuple) and len(p_bounds) == 2)
         self.p = p
@@ -93,3 +115,34 @@ class Uniform(StartingProbability):
     @property
     def bounds(self):
         return (self.p_bounds,)
+
+
+class Adhoc(StartingProbability):
+    '''Converts any callable that takes in a dataframe and produces a starting
+    probability array into a StartingProbability instance. However, note that
+    ad-hoc starting probabilities cannot be optimized during training.
+
+    Parameters
+    ----------
+    f: callable
+        Any callable that takes in a dataframe and produces a same-length
+        ndarray.
+    '''
+
+    def __init__(self, f):
+        self.f = f
+
+    def __call__(self, nodes):
+        return self.f(nodes), []
+
+    @property
+    def theta(self):
+        return tuple()
+
+    @theta.setter
+    def theta(self, t):
+        pass
+
+    @property
+    def bounds(self):
+        return tuple()
