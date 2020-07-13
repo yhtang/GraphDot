@@ -141,7 +141,7 @@ class CUDABackend(Backend):
 
     @staticmethod
     def gencode_kernel(kernel, name):
-        fun, jac = kernel.gen_expr('x1', 'x2', jac=True)
+        fun, jac = kernel.gen_expr('x1', 'x2')
 
         kernel_src = Template(r'''
         using ${name}_theta_t = ${theta_t};

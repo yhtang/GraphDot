@@ -77,22 +77,18 @@ def Composite(oper, **kw_kernels):
                     f(X[k], Y[k]) for k, f in self.kw_kernels.items()
                 ])
 
-        def gen_expr(self, x, y, jac=False, theta_scope=''):
+        def gen_expr(self, x, y, theta_scope=''):
             F, J = list(
                 zip(*[kernel.gen_expr('%s.%s' % (x, key),
                                       '%s.%s' % (y, key),
-                                      True,
                                       '%s%s.' % (theta_scope, key))
                       for key, kernel in self.kw_kernels.items()])
             )
             f = Template('(${F ${opstr} })').render(opstr=self.opstr, F=F)
-            if jac is True:
-                jacobian = [
-                    self.jgen(F, j, i) for i, _ in enumerate(F) for j in J[i]
-                ]
-                return f, jacobian
-            else:
-                return f
+            jacobian = [
+                self.jgen(F, j, i) for i, _ in enumerate(F) for j in J[i]
+            ]
+            return f, jacobian
 
         @property
         def theta(self):
