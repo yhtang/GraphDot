@@ -133,7 +133,7 @@ class Adhoc(StartingProbability):
         self.f = f
 
     def __call__(self, nodes):
-        return self.f(nodes), []
+        return self.f(nodes), np.empty((0, 0))
 
     @property
     def theta(self):
