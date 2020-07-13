@@ -8,6 +8,7 @@
 
 using namespace graphdot::numpy_type;
 using namespace graphdot::basekernel;
+namespace solver_ns = graphdot::marginalized;
 
 ${node_kernel}
 ${edge_kernel}
@@ -16,8 +17,8 @@ using node_t = ${node_t};
 using edge_t = ${edge_t};
 
 using graph_t   = graphdot::graph_t<node_t, edge_t>;
-using scratch_t = graphdot::marginalized::pcg_scratch_t;
-using solver_t  = graphdot::marginalized::labeled_compact_block_dynsched_pcg<graph_t>;
+using scratch_t = solver_ns::pcg_scratch_t;
+using solver_t  = solver_ns::labeled_compact_block_dynsched_pcg<graph_t>;
 
 constexpr static int p_jac_dims = ${p_jac_dims};
 
@@ -168,7 +169,7 @@ extern "C" {
                     }
                     __syncthreads();
 
-                    solver_t::derivative_p<p_jac_dims>(
+                    solver_ns::derivative_p<p_jac_dims>::compute(
                         g1, g2,
                         p1, p2,
                         scratch,
