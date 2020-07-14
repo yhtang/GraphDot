@@ -12,7 +12,7 @@ def test_molecular_kernel():
 
     graphs = [Graph.from_ase(m) for m in molecules]
 
-    kernel = Tang2019MolecularKernel(starting_probability=1.0)
+    kernel = Tang2019MolecularKernel()
 
     R = kernel(graphs)
     D = np.diag(np.diag(R)**-0.5)
@@ -30,6 +30,12 @@ def test_molecular_kernel():
     assert(R_nodal.shape == (natoms, natoms))
     for i in range(natoms):
         assert(K_nodal[i, i] == pytest.approx(1, 1e-6))
+
+
+def test_molecular_kernel_custom_pstart():
+    molecules = [molecule('H2'), molecule('O2'), molecule('CH4')]
+
+    graphs = [Graph.from_ase(m) for m in molecules]
 
     kernel_nocarbon = Tang2019MolecularKernel(
         starting_probability=(

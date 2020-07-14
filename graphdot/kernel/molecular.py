@@ -35,7 +35,7 @@ class Tang2019MolecularKernel:
 
     def __init__(self,
                  stopping_probability=0.01,
-                 starting_probability='uniform',
+                 starting_probability=1.0,
                  element_prior=0.2,
                  edge_length_scale=0.05, **kwargs):
         self.stopping_probability = stopping_probability
