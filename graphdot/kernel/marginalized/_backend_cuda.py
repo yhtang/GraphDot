@@ -87,19 +87,16 @@ class CUDABackend(Backend):
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
-    def _register_graph(self, graph, p):
+    def _register_graph(self, graph):
         if not hasattr(graph, 'cache_tag'):
             graph.cache_tag = uuid.uuid4()
         key = uuid.uuid5(self.uuid, graph.cache_tag.hex)
         if key not in self.graph_cache:
             # convert to GPU format
             og = OctileGraph(graph)
-            # assign starting probabilities
-            ps = umarray(np.array([p(*r) for r in graph.nodes.iterrows()],
-                                  dtype=np.float32))
             i = len(self.graph_cpp)
             self.graph_cpp.append(og.state)
-            self.graph_cache[key] = (i, ps, og)
+            self.graph_cache[key] = (i, og)
         return self.graph_cache[key]
 
     def _compile(self, src):
@@ -143,7 +140,7 @@ class CUDABackend(Backend):
     def gencode_kernel(kernel, name):
         fun, jac = kernel.gen_expr('x1', 'x2')
 
-        kernel_src = Template(r'''
+        return Template(r'''
         using ${name}_theta_t = ${theta_t};
 
         struct ${name}_t : ${name}_theta_t {
@@ -170,7 +167,36 @@ class CUDABackend(Backend):
             jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
         )
 
-        return kernel_src
+    @staticmethod
+    def gencode_probability(pfunc, name):
+        fun, jac = pfunc.gen_expr()
+
+        return Template(r'''
+        using ${name}_theta_t = ${theta_t};
+
+        struct ${name}_t : ${name}_theta_t {
+
+            constexpr static int jac_dims = ${jac_dims};
+
+            template<class N> __device__ __inline__
+            auto operator() (N const &n) const {
+                return ${expr};
+            }
+
+            template<class N> __device__ __inline__
+            void _j_a_c_o_b_i_a_n_(float j[], N const &n) const {
+                ${jac;\n};
+            }
+        };
+
+        __constant__ ${name}_t ${name};
+        ''').render(
+            name=name,
+            jac_dims=len(jac),
+            theta_t=decltype(pfunc),
+            expr=fun,
+            jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
+        )
 
     def __call__(self, graphs, node_kernel, edge_kernel, p, q, jobs, starts,
                  output, output_shape, traits, timer):
@@ -179,15 +205,13 @@ class CUDABackend(Backend):
 
         og_last = None
         og_indices = np.empty(len(graphs), np.uint32)
-        starting_p = umempty(len(graphs), np.uintp)
 
         for i, g in enumerate(graphs):
-            idx, ps, og = self._register_graph(g, p)
+            idx, og = self._register_graph(g)
             if i > 0:
                 self._assert_homogeneous(og_last, og)
             og_last = og
             og_indices[i] = idx
-            starting_p[i] = int(ps.base)
 
         og_indices_d = umlike(self.graph_cpp[og_indices])
 
@@ -210,11 +234,13 @@ class CUDABackend(Backend):
 
         node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')
         edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel')
+        p_start_src = self.gencode_probability(p, 'p_start')
 
         with self.template.context(traits=traits) as template:
             self.source = template.render(
                 node_kernel=node_kernel_src,
                 edge_kernel=edge_kernel_src,
+                p_start=p_start_src,
                 node_t=decltype(node_t),
                 edge_t=decltype(edge_t)
             )
@@ -244,13 +270,15 @@ class CUDABackend(Backend):
         cuda.memcpy_htod(p_edge_kernel, np.array([edge_kernel.state],
                                                  dtype=edge_kernel.dtype))
 
+        p_p_start, _ = self.module.get_global('p_start')
+        cuda.memcpy_htod(p_p_start, np.array([p.state], dtype=p.dtype))
+
         timer.toc('calculating launch configuration')
 
         ''' GPU kernel execution '''
         timer.tic('GPU kernel execution')
         kernel(
             og_indices_d,
-            starting_p,
             self.scratch_d,
             jobs,
             starts,

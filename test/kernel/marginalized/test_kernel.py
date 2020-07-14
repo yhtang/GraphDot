@@ -364,8 +364,7 @@ def test_mlgk_starting_probability(caseitem):
     kedge = case['kedge']
     for q in case['q']:
 
-        mlgk = MarginalizedGraphKernel(knode, kedge, q=q,
-                                       p=lambda i, node: 2.0)
+        mlgk = MarginalizedGraphKernel(knode, kedge, q=q, p=2.0)
         R = mlgk(G)
         R_nodal = mlgk(G, nodal=True)
         gnd_R00 = MLGK(G[0], knode, kedge, q, q) * 2.0**2
