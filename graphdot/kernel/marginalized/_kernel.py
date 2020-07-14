@@ -63,8 +63,15 @@ class MarginalizedGraphKernel:
     def _get_starting_probability(self, p):
         if isinstance(p, StartingProbability):
             return p
-        elif callable(p):
-            return Adhoc(p)
+        elif isinstance(p, tuple) and len(p) == 2:
+            f, expr = p
+            if callable(f) and isinstance(expr, str):
+                return Adhoc(f, expr)
+            else:
+                raise ValueError(
+                    'An ad hoc starting probability must be specified as an'
+                    '(callable, C++ expression) pair.'
+                )
         elif isinstance(p, numbers.Number):
             if p > 0:
                 return Uniform(p)

@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from collections import namedtuple
 import numpy as np
+from graphdot.codegen.cpptool import cpptype
 
 
 class StartingProbability(ABC):
@@ -31,6 +32,12 @@ class StartingProbability(ABC):
         '''
         pass
 
+    @abstractmethod
+    def gen_expr(self):
+        '''Returns the C++ expression for calculating the starting probability
+        and its partial derivatives.'''
+        pass
+
     @property
     @abstractmethod
     def theta(self):
@@ -52,6 +59,7 @@ class StartingProbability(ABC):
         pass
 
 
+@cpptype(null=np.int8)
 class Fixed(StartingProbability):
     '''Assigned all nodes the same starting probability that will remain
     the same during training.
@@ -61,12 +69,16 @@ class Fixed(StartingProbability):
     p: float
         The starting probability value.
     '''
+    null = 0
 
     def __init__(self, p):
         self.p = p
 
     def __call__(self, nodes):
-        return self.p * np.ones(len(nodes)), np.ones((1, len(nodes)))
+        return self.p * np.ones(len(nodes)), np.empty((0, 0))
+
+    def gen_expr(self):
+        return '%f' % self.p, []
 
     @property
     def theta(self):
@@ -83,6 +95,7 @@ class Fixed(StartingProbability):
         return ((self.p, self.p),)
 
 
+@cpptype(p=np.float32)
 class Uniform(StartingProbability):
     '''Assigned all nodes the same starting probability.
 
@@ -102,6 +115,9 @@ class Uniform(StartingProbability):
     def __call__(self, nodes):
         return self.p * np.ones(len(nodes)), np.ones((1, len(nodes)))
 
+    def gen_expr(self):
+        return 'p', ['1.f']
+
     @property
     def theta(self):
         return namedtuple('StartingProbability', ['p'])(
@@ -117,23 +133,34 @@ class Uniform(StartingProbability):
         return (self.p_bounds,)
 
 
+@cpptype(null=np.int8)
 class Adhoc(StartingProbability):
-    '''Converts any callable that takes in a dataframe and produces a starting
-    probability array into a StartingProbability instance. However, note that
-    ad-hoc starting probabilities cannot be optimized during training.
+    '''Converts a pair of callable/C++ expression, where the callable takes in
+    a dataframe and produces a starting probability array and the C++
+    expression works on a node and produces a starting probability number, into
+    a StartingProbability instance. However, note that ad-hoc starting
+    probabilities cannot be optimized during training.
 
     Parameters
     ----------
     f: callable
         Any callable that takes in a dataframe and produces a same-length
         ndarray.
+    expr: str
+        A C++ expression that accesses an object 'n'  with attributes as
+        defined in the Graph.nodes dataframe.
     '''
+    null = 0
 
-    def __init__(self, f):
+    def __init__(self, f, expr):
         self.f = f
+        self.expr = expr
 
     def __call__(self, nodes):
         return self.f(nodes), np.empty((0, 0))
+
+    def gen_expr(self):
+        return f'({self.expr})', []
 
     @property
     def theta(self):

@@ -444,16 +444,15 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         #endif
     }
 
-    template<class NodeKernel, class EdgeKernel>
+    template<class NodeKernel, class EdgeKernel, class StartingProbability>
     __inline__ __device__ static void compute_duo(
         NodeKernel const node_kernel,
         EdgeKernel const edge_kernel,
+        StartingProbability const p_start,
         Graph const    g1,
         Graph const    g2,
         scratch_t      scratch,
         char * const   cache,
-        const float * __restrict p1,
-        const float * __restrict p2,
         const float    q,
         const float    q0) {
 
@@ -498,7 +497,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             scratch.z(i) = z0;
             scratch.p(i) = p0;
             
-            const auto bX = p1[i1] * p2[i2];
+            const auto bX = p_start(g1.node[i1]) * p_start(g2.node[i2]);
             const auto rX = bX;
             const auto zX = rX * vx / dx;
             const auto pX = zX;
@@ -758,13 +757,65 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         #endif
     }
 
-    template<class NodeKernel>
-    __inline__ __device__ static void derivative_q(
-        NodeKernel const node_kernel,
+    // helper for gracefully handling 0-length arrays
+    template<class T, int size> struct array       {using type = T[size];};
+    template<class T>           struct array<T, 0> {using type = T *;};
+    template<class T, int n> using array_t = typename array<T, n>::type;
+
+    template<class StartingProbability>
+    __inline__ __device__ static void derivative_p(
+        StartingProbability const p_start,
         Graph const    g1,
         Graph const    g2,
-        float const  * p1,
-        float const  * p2,
+        pcg_scratch_t  scratch,
+        char * const   cache,
+        float * const  dK) {
+    
+        using namespace graphdot::cuda;
+    
+        const int lane = laneid();
+        const int n1   = g1.n_node;
+        const int n2   = g2.n_node;
+        const int N    = n1 * n2;
+    
+        array_t<float, StartingProbability::jac_dims> dKdp_local;
+        #pragma unroll (StartingProbability::jac_dims)
+        for(int i = 0; i < StartingProbability::jac_dims; ++i) {
+            dKdp_local[i] = 0;
+        }
+    
+        for (int i = threadIdx.x; i < N; i += blockDim.x) {
+            const int i1 = i / n2;
+            const int i2 = i % n2;
+            const auto n1 = g1.node[i1];
+            const auto n2 = g2.node[i2];
+            const float p1 = p_start(n1);
+            const float p2 = p_start(n2);
+            const float r = scratch.x(i);
+    
+            array_t<float, StartingProbability::jac_dims> jac1, jac2;
+            p_start._j_a_c_o_b_i_a_n_(jac1, n1);
+            p_start._j_a_c_o_b_i_a_n_(jac2, n2);
+
+            #pragma unroll (StartingProbability::jac_dims)
+            for(int j = 0; j < StartingProbability::jac_dims; ++j) {
+                dKdp_local[j] += (jac1[j] * p2 + p1 * jac2[j]) * r;
+            }
+        }
+    
+        #pragma unroll (StartingProbability::jac_dims)
+        for(int j = 0; j < StartingProbability::jac_dims; ++j) {
+            dKdp_local[j] = warp_sum(dKdp_local[j]);
+            if (lane == 0) atomicAdd(dK + j, dKdp_local[j]);
+        }
+    }
+    
+    template<class NodeKernel, class StartingProbability>
+    __inline__ __device__ static void derivative_q(
+        NodeKernel const node_kernel,
+        StartingProbability const p_start,
+        Graph const    g1,
+        Graph const    g2,
         scratch_t      scratch,
         char * const   cache,
         float * const  dK,
@@ -792,7 +843,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             const float Yp  = scratch.x(i + N);
             const float v = node_kernel(g1.node[i1], g2.node[i2]);
 
-            dq_local += 2 * rrq * p1[i1] * p2[i2] * YDq - 2 * rrq3 * Yp * rdx / v * YDq;
+            dq_local += 2 * rrq * p_start(g1.node[i1]) * p_start(g2.node[i2]) * YDq - 2 * rrq3 * Yp * rdx / v * YDq;
         }
 
         dq_local = warp_sum(dq_local);
@@ -1010,65 +1061,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             }
         }
     }
-};
-
-
-template<int p_jac_dims> struct derivative_p {
-    template<class Graph> __inline__ __device__ static void compute(
-        Graph const    g1,
-        Graph const    g2,
-        float const  * P1,
-        float const  * P2,
-        pcg_scratch_t  scratch,
-        char * const   cache,
-        float * const  dK) {
-    
-        using namespace graphdot::cuda;
-    
-        const int lane = laneid();
-        const int n1   = g1.n_node;
-        const int n2   = g2.n_node;
-        const int N    = n1 * n2;
-    
-        float dKdp_local[p_jac_dims];
-        #pragma unroll (p_jac_dims)
-        for(int i = 0; i < p_jac_dims; ++i) {
-            dKdp_local[i] = 0;
-        }
-    
-        for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            const int i1 = i / n2;
-            const int i2 = i % n2;
-            const float p1 = P1[i1];
-            const float p2 = P2[i2];
-            const float r = scratch.x(i);
-    
-            #pragma unroll (p_jac_dims)
-            for(int j = 0; j < p_jac_dims; ++j) {
-                const float dp1 = P1[i1 + n1 * j];
-                const float dp2 = P2[i2 + n2 * j];
-                dKdp_local[j] += (dp1 * p2 + p1 * dp2) * r;
-            }
-        }
-    
-        #pragma unroll (p_jac_dims)
-        for(int j = 0; j < p_jac_dims; ++j) {
-            dKdp_local[j] = warp_sum(dKdp_local[j]);
-            if (lane == 0) atomicAdd(dK + j, dKdp_local[j]);
-        }
-    }
-};
-
-template<> struct derivative_p<0> {
-    template<class Graph> __inline__ __device__ static void compute(
-        Graph const    g1,
-        Graph const    g2,
-        float const  * P1,
-        float const  * P2,
-        pcg_scratch_t  scratch,
-        char * const   cache,
-        float * const  dK)
-    {}
 };
 
 }  // namespace marginalized

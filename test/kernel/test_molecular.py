@@ -32,7 +32,10 @@ def test_molecular_kernel():
         assert(K_nodal[i, i] == pytest.approx(1, 1e-6))
 
     kernel_nocarbon = Tang2019MolecularKernel(
-        starting_probability=lambda ns: np.where(ns.element == 6, 0.0, 1.0)
+        starting_probability=(
+            lambda ns: np.where(ns.element == 6, 0.0, 1.0),
+            'n.element == 6 ? 0.f : 1.f'
+        )
     )
 
     R_nocarbon_nodal = kernel_nocarbon(graphs, nodal=True)
