@@ -22,12 +22,8 @@ class Product(MicroKernel):
     def __repr__(self):
         return f'{self.name}()'
 
-    def gen_expr(self, x, y, jac=False, theta_scope=''):
-        f = f'({x} * {y})'
-        if jac is True:
-            return f, []
-        else:
-            return f
+    def gen_expr(self, x, y, theta_scope=''):
+        return f'({x} * {y})', []
 
     @property
     def theta(self):

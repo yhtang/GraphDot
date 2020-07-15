@@ -47,17 +47,14 @@ class MicroKernel(ABC):
         pass
 
     @abstractmethod
-    def gen_expr(self, x, y, jac=False, theta_scope=''):
-        '''Generate the C++ expression for evaluating the kernel.
+    def gen_expr(self, x, y, theta_scope=''):
+        '''Generate the C++ expression for evaluating the kernel and its
+        partial derivatives.
 
         Parameters
         ----------
         x, y: str
             Name of the input variables.
-        jac: Boolean
-            Whether or not to return a list of expressions that evaluate the
-            gradient of the kernel with respect to hyperparameters alongside
-            the kernel value.
         theta_scope: str
             The scope in which the hyperparameters is located.
 
@@ -65,7 +62,7 @@ class MicroKernel(ABC):
         -------
         expr: str
             A C++ expression that evaluates the kernel.
-        jac_expr: list of strs (optional, only if jac is True)
+        jac_expr: list of strs
             C++ expressions that evaluate the derivative of the kernel.
         '''
         pass
@@ -207,15 +204,10 @@ class MicroKernelExpr(MicroKernel):
                 else:
                     return self.k1(i, j, False) + self.k2(i, j, False)
 
-            def gen_expr(self, x, y, jac=False, theta_scope=''):
-                if jac is True:
-                    f1, J1 = self.k1.gen_expr(x, y, True, theta_scope + 'k1.')
-                    f2, J2 = self.k2.gen_expr(x, y, True, theta_scope + 'k2.')
-                    return (f'({f1} + {f2})', J1 + J2)
-                else:
-                    f1 = self.k1.gen_expr(x, y, False, theta_scope + 'k1.')
-                    f2 = self.k2.gen_expr(x, y, False, theta_scope + 'k2.')
-                    return f'({f1} + {f2})'
+            def gen_expr(self, x, y, theta_scope=''):
+                f1, J1 = self.k1.gen_expr(x, y, theta_scope + 'k1.')
+                f2, J2 = self.k2.gen_expr(x, y, theta_scope + 'k2.')
+                return (f'({f1} + {f2})', J1 + J2)
 
         return Add(k1, k2)
 
@@ -248,19 +240,14 @@ class MicroKernelExpr(MicroKernel):
                 else:
                     return self.k1(i, j, False) * self.k2(i, j, False)
 
-            def gen_expr(self, x, y, jac=False, theta_scope=''):
-                if jac is True:
-                    f1, J1 = self.k1.gen_expr(x, y, True, theta_scope + 'k1.')
-                    f2, J2 = self.k2.gen_expr(x, y, True, theta_scope + 'k2.')
-                    return (
-                        f'({f1} * {f2})',
-                        [f'({j1} * {f2})' for j1 in J1] +
-                        [f'({f1} * {j2})' for j2 in J2]
-                    )
-                else:
-                    f1 = self.k1.gen_expr(x, y, False, theta_scope + 'k1.')
-                    f2 = self.k2.gen_expr(x, y, False, theta_scope + 'k2.')
-                    return f'({f1} * {f2})'
+            def gen_expr(self, x, y, theta_scope=''):
+                f1, J1 = self.k1.gen_expr(x, y, theta_scope + 'k1.')
+                f2, J2 = self.k2.gen_expr(x, y, theta_scope + 'k2.')
+                return (
+                    f'({f1} * {f2})',
+                    [f'({j1} * {f2})' for j1 in J1] +
+                    [f'({f1} * {j2})' for j2 in J2]
+                )
 
         return Multiply(k1, k2)
 
@@ -303,21 +290,14 @@ class MicroKernelExpr(MicroKernel):
                 else:
                     return self.k1(i, j, False)**self.k2(i, j, False)
 
-            def gen_expr(self, x, y, jac=False, theta_scope=''):
-                if jac is True:
-                    f1, J1 = self.k1.gen_expr(x, y, True, theta_scope + 'k1.')
-                    f2, J2 = self.k2.gen_expr(x, y, True, theta_scope + 'k2.')
-                    return (
-                        f'__powf({f1}, {f2})',
-                        [f'({f2} * __powf({f1}, {f2} - 1) * {j})'
-                         for j in J1] +
-                        [f'(__powf({f1}, {f2}) * __logf({f1}) * {j})'
-                         for j in J2]
-                    )
-                else:
-                    f1 = self.k1.gen_expr(x, y, False, theta_scope + 'k1.')
-                    f2 = self.k2.gen_expr(x, y, False, theta_scope + 'k2.')
-                    return f'__powf({f1}, {f2})'
+            def gen_expr(self, x, y, theta_scope=''):
+                f1, J1 = self.k1.gen_expr(x, y, theta_scope + 'k1.')
+                f2, J2 = self.k2.gen_expr(x, y, theta_scope + 'k2.')
+                return (
+                    f'__powf({f1}, {f2})',
+                    [f'({f2} * __powf({f1}, {f2} - 1) * {j})' for j in J1] +
+                    [f'(__powf({f1}, {f2}) * __logf({f1}) * {j})' for j in J2]
+                )
 
         return Exponentiation(k1, k2)
 
@@ -355,12 +335,8 @@ def Constant(c, c_bounds=None):
         def __repr__(self):
             return f'{self.name}({self.c})'
 
-        def gen_expr(self, x, y, jac=False, theta_scope=''):
-            f = f'{theta_scope}c'
-            if jac is True:
-                return f, ['1.0f']
-            else:
-                return f
+        def gen_expr(self, x, y, theta_scope=''):
+            return f'{theta_scope}c', ['1.0f']
 
         @property
         def theta(self):
@@ -557,21 +533,18 @@ def _from_sympy(name, desc, expr, vars, *hyperparameter_specs):
                         for n, v in self._theta_bounds.items()]
             )
 
-        def gen_expr(self, x, y, jac=False, theta_scope=''):
+        def gen_expr(self, x, y, theta_scope=''):
             nmap = {
                 str(self._vars[0]): x,
                 str(self._vars[1]): y,
                 **{t: theta_scope + t for t in self._hyperdefs}
             }
 
-            if jac is True:
-                return (
-                    cudacxxcode(self._expr, nmap),
-                    [cudacxxcode(sy.diff(self._expr, h), nmap)
-                        for h in self._hyperdefs]
-                )
-            else:
-                return cudacxxcode(self._expr, nmap)
+            return (
+                cudacxxcode(self._expr, nmap),
+                [cudacxxcode(sy.diff(self._expr, h), nmap)
+                 for h in self._hyperdefs]
+            )
 
         @property
         def dtype(self):

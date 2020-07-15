@@ -45,27 +45,21 @@ def Convolution(kernel: MicroKernel, normalize=True):
         def __repr__(self):
             return f'{self.name}({repr(self.kernel)})'
 
-        def gen_expr(self, x, y, jac=False, theta_scope=''):
-            F, J = self.kernel.gen_expr(
-                '_1', '_2', True, theta_scope + 'kernel.'
-            )
+        def gen_expr(self, x, y, theta_scope=''):
+            F, J = self.kernel.gen_expr('_1', '_2', theta_scope + 'kernel.')
             f = Template(
                 r'convolution([&](auto _1, auto _2){return ${f};}, ${x}, ${y})'
             ).render(
                 x=x, y=y, f=F
             )
-            if jac is True:
-                template = Template(
-                    r'''convolution_jacobian(
-                            [&](auto _1, auto _2){return ${j};},
-                            ${x},
-                            ${y}
-                        )'''
-                )
-                jacobian = [template.render(x=x, y=y, j=j) for j in J]
-                return f, jacobian
-            else:
-                return f
+            template = Template(
+                r'''convolution_jacobian(
+                        [&](auto _1, auto _2){return ${j};},
+                        ${x}, ${y}
+                )'''
+            )
+            jacobian = [template.render(x=x, y=y, j=j) for j in J]
+            return f, jacobian
 
         @property
         def theta(self):

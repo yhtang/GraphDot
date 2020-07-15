@@ -72,6 +72,45 @@ def test_gpr_gramian():
         gpr._gramian(X, Y, diag=True)
 
 
+def test_gpr_check_matrix():
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                return f, np.stack((j, ), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.L = np.exp(t[0])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0)
+            k.theta = theta
+            return k
+
+    with pytest.raises(np.linalg.LinAlgError):
+        X = np.ones(3)
+        y = np.ones(3)
+        gpr = GaussianProcessRegressor(kernel=Kernel(1.0), alpha=0)
+        gpr.fit(X, y)
+
+
 @pytest.mark.parametrize('X', [
     np.arange(5),
     np.linspace(0, 1, 5),
@@ -164,7 +203,9 @@ def test_gpr_predict_loocv():
         assert(std_loocv_i.item() == pytest.approx(std_loocv[i], 1e-7))
 
 
-def test_gpr_fit_mle():
+@pytest.mark.parametrize('repeat', [1, 3])
+@pytest.mark.parametrize('verbose', [True, False])
+def test_gpr_fit_mle(repeat, verbose):
     '''test with a function with exactly two periods, and see if the GPR
     can identify the frequency via hyperparameter optimization.'''
 
@@ -204,7 +245,7 @@ def test_gpr_fit_mle():
     y = np.sin(X * 4 * np.pi)
     kernel = Kernel(0.49, 0.1)
     gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10, optimizer=True)
-    gpr.fit(X, y)
+    gpr.fit(X, y, tol=1e-5, repeat=repeat, verbose=verbose)
     assert(kernel.p == pytest.approx(0.5, 1e-2))
 
 
@@ -312,7 +353,8 @@ def test_gpr_squared_loocv_error():
         assert(de.item() == pytest.approx(de_diff, 1e-3, 1e-3))
 
 
-def test_gpr_fit_loocv_no_opt():
+@pytest.mark.parametrize('normalize_y', [True, False])
+def test_gpr_fit_loocv_no_opt(normalize_y):
 
     class Kernel:
         def __init__(self, L):
@@ -329,14 +371,21 @@ def test_gpr_fit_loocv_no_opt():
     X = np.linspace(-1, 1, 6, endpoint=False)
     y = np.sin(X * np.pi)
     kernel = Kernel(0.1)
-    gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10, optimizer=False)
+    gpr = GaussianProcessRegressor(
+        kernel=kernel,
+        alpha=1e-10,
+        normalize_y=normalize_y,
+        optimizer=False,
+    )
     _, m1, s1 = gpr.fit_loocv(X, y, return_mean=True, return_std=True)
     m2, s2 = gpr.predict_loocv(X, y, return_std=True)
     assert(m1 == pytest.approx(m2))
     assert(s1 == pytest.approx(s2))
 
 
-def test_gpr_fit_loocv_opt():
+@pytest.mark.parametrize('normalize_y', [True, False])
+@pytest.mark.parametrize('repeat', [1, 3])
+def test_gpr_fit_loocv_opt(normalize_y, repeat):
 
     class Kernel:
         def __init__(self, L):
@@ -375,9 +424,14 @@ def test_gpr_fit_loocv_opt():
     X = np.linspace(-1, 1, 6, endpoint=False)
     y = np.sin(X * np.pi)
     kernel = Kernel(0.1)
-    gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-10, optimizer=True)
+    gpr = GaussianProcessRegressor(
+        kernel=kernel,
+        alpha=1e-10,
+        normalize_y=normalize_y,
+        optimizer=True
+    )
     e1 = gpr.squared_loocv_error(X=X, y=y)
-    gpr.fit_loocv(X, y)
+    gpr.fit_loocv(X, y, repeat=repeat, verbose=True)
     e2 = gpr.squared_loocv_error(X=X, y=y)
     assert(e1 > e2)
     assert(kernel.L == pytest.approx(0.86, 0.01))

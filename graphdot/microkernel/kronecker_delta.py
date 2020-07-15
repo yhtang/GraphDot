@@ -41,12 +41,10 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         def __repr__(self):
             return f'{self.name}({self.h})'
 
-        def gen_expr(self, x, y, jac=False, theta_scope=''):
+        def gen_expr(self, x, y, theta_scope=''):
             f = f'({x} == {y} ? 1.0f : {theta_scope}h)'
-            if jac is True:
-                return f, [f'({x} == {y} ? 0.0f : 1.0f)']
-            else:
-                return f
+            j = [f'({x} == {y} ? 0.0f : 1.0f)']
+            return f, j
 
         @property
         def theta(self):

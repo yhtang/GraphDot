@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from collections import namedtuple
 import numpy as np
 import copy
 
@@ -106,6 +107,104 @@ class Normalization:
     @property
     def bounds(self):
         return self.graph_kernel.bounds
+
+    def clone_with_theta(self, theta):
+        clone = copy.deepcopy(self)
+        clone.theta = theta
+        return clone
+
+
+class Exponentiation:
+    r"""Raises a kernel to some exponentiation.
+    :math:`k_\mathrm{exponentiation}(x, y) = k(x, y)^\xi`.
+
+    Parameters
+    ----------
+    graph_kernel: object
+        The graph kernel to be exponentiated.
+    xi: float
+        The exponent to be raises.
+    xi_bounds: (float, float)
+        The range of the exponents to be searched during hyperparameter
+        optimization.
+    """
+    def __init__(self, graph_kernel, xi=1.0, xi_bounds=(0.1, 20.0)):
+        self.graph_kernel = graph_kernel
+        self.xi = xi
+        self.xi_bounds = xi_bounds
+
+    def __call__(self, X, Y=None, eval_gradient=False, **options):
+        """Normalized outcome of
+        :py:`self.graph_kernel(X, Y, eval_gradient, **options)`.
+
+        Parameters
+        ----------
+        Inherits that of the graph kernel object.
+
+        Returns
+        -------
+        Inherits that of the graph kernel object.
+        """
+        if eval_gradient is True:
+            R, dR = self.graph_kernel(X, Y, eval_gradient=True, **options)
+            K = R**self.xi
+            dK = []
+            dK.append(K * np.log(R))  # \frac{d R^\xi}{d \xi} = R^\xi \log R
+            KK = self.xi * R**(self.xi - 1)
+            # \frac{d R^\xi}{d \theta} = \xi R^(\xi - 1) \frac{d R}{d \theta}
+            for i in range(dR.shape[-1]):
+                dK.append(KK * dR[:, :, i])
+            dK = np.stack(dK, axis=2)
+            return K, dK
+        else:
+            R = self.graph_kernel(X, Y, **options)
+            return R**self.xi
+
+    def diag(self, X, **options):
+        """Normalized outcome of :py:`self.graph_kernel.diag(X, **options)`.
+
+        Parameters
+        ----------
+        Inherits that of the graph kernel object.
+
+        Returns
+        -------
+        Inherits that of the graph kernel object.
+        """
+        return self.graph_kernel.diag(X, **options)**self.xi
+
+    """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
+
+    @property
+    def hyperparameters(self):
+        return namedtuple('ExponentiationHyperparameters', ['xi', 'kernel'])(
+            self.xi, self.graph_kernel.hyperparameters
+        )
+
+    @property
+    def theta(self):
+        return np.concatenate((np.log([self.xi]), self.graph_kernel.theta))
+
+    @theta.setter
+    def theta(self, value):
+        self.xi = np.exp(value[0])
+        self.graph_kernel.theta = value[1:]
+
+    @property
+    def hyperparameter_bounds(self):
+        return namedtuple(
+            'ExponentiationHyperparameterBounds',
+            ['xi', 'kernel']
+        )(
+            self.xi_bounds, self.graph_kernel.hyperparameter_bounds
+        )
+
+    @property
+    def bounds(self):
+        return np.vstack((
+            np.log([self.xi_bounds]),
+            self.graph_kernel.bounds
+        ))
 
     def clone_with_theta(self, theta):
         clone = copy.deepcopy(self)
