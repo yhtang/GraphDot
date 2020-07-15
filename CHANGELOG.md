@@ -1,5 +1,18 @@
 # Change log of GraphDot
 
+## 0.6a5 (2020-07-15)
+
+- Introduced a graph reordering mechanism to improve computational performance
+  on GPUs.
+- The default starting probability of the marginalized graph kernel is now
+  hyperparameterized and will be optimized by default during training.
+- Allow users to specify custom starting probability distributions.
+- Performance improvements due to the in situ computation of starting
+  probabilities instead of loading from memory.
+- Added `repeat`, `theta_jitter` and `tol` options to the Gaussian process
+  regressor.
+- Fixed a normalization bug in `GaussianProcessRegressor.fit_loocv`. 
+
 ## 0.5.1 (2020-06-30)
 
 - Added a verbose training progress option to the GPR module. 
