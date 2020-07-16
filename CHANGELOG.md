@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.6a6 (2020-07-16)
+
+- Fixes a problem with caching graphs on the GPU.
+
 ## 0.6a5 (2020-07-15)
 
 - Introduced a graph reordering mechanism to improve computational performance
@@ -11,7 +15,7 @@
   probabilities instead of loading from memory.
 - Added `repeat`, `theta_jitter` and `tol` options to the Gaussian process
   regressor.
-- Fixed a normalization bug in `GaussianProcessRegressor.fit_loocv`. 
+- Fixed a normalization bug in `GaussianProcessRegressor.fit_loocv`.
 
 ## 0.5.1 (2020-06-30)
 

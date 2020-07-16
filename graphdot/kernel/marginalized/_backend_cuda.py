@@ -52,8 +52,6 @@ class CUDABackend(Backend):
         self.device = self.ctx.get_device()
         self.scratch = None
         self.scratch_capacity = 0
-        self.graph_cache = {}
-        self.graph_cpp = ResizableArray(OctileGraph.dtype, allocator='numpy')
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -88,16 +86,11 @@ class CUDABackend(Backend):
             self.ctx.synchronize()
 
     def _register_graph(self, graph):
-        if not hasattr(graph, 'cache_tag'):
-            graph.cache_tag = uuid.uuid4()
-        key = uuid.uuid5(self.uuid, graph.cache_tag.hex)
-        if key not in self.graph_cache:
+        if self.uuid not in graph.cookie:
             # convert to GPU format
             og = OctileGraph(graph)
-            i = len(self.graph_cpp)
-            self.graph_cpp.append(og.state)
-            self.graph_cache[key] = (i, og)
-        return self.graph_cache[key]
+            graph.cookie[self.uuid] = (og, og.state)
+        return graph.cookie[self.uuid]
 
     def _compile(self, src):
         with warnings.catch_warnings(record=True) as w:
@@ -204,16 +197,13 @@ class CUDABackend(Backend):
         timer.tic('transferring graphs to GPU')
 
         og_last = None
-        og_indices = np.empty(len(graphs), np.uint32)
-
+        graphs_d = umempty(len(graphs), dtype=OctileGraph.dtype)
         for i, g in enumerate(graphs):
-            idx, og = self._register_graph(g)
+            og, ogstate = self._register_graph(g)
             if i > 0:
                 self._assert_homogeneous(og_last, og)
             og_last = og
-            og_indices[i] = idx
-
-        og_indices_d = umlike(self.graph_cpp[og_indices])
+            graphs_d[i] = ogstate
 
         weighted = og_last.weighted
         node_t = og_last.node_t
@@ -278,7 +268,7 @@ class CUDABackend(Backend):
         ''' GPU kernel execution '''
         timer.tic('GPU kernel execution')
         kernel(
-            og_indices_d,
+            graphs_d,
             self.scratch_d,
             jobs,
             starts,
