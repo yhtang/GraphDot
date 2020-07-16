@@ -99,10 +99,11 @@ class OctileGraph:
             edges['labeled'] = np.zeros(len(edges), np.bool_)
 
         ''' determine node type '''
+        i = nodes['!i']
         nodes.drop(['!i'], inplace=True)
         self.node_t = node_t = nodes.rowtype()
         self.nodes_aos = umempty(len(nodes), dtype=node_t)
-        self.nodes_aos[:] = list(nodes.iterstates())
+        self.nodes_aos[i] = list(nodes.iterstates())
 
         ''' determine whether graph is weighted, determine edge type,
             and compute node degrees '''
