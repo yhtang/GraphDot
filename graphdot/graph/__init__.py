@@ -12,6 +12,7 @@ import numpy as np
 import scipy.sparse
 from graphdot.codegen.typetool import common_min_type
 from graphdot.minipandas import DataFrame
+from graphdot.util.cookie import VolatileCookie
 from ._from_ase import _from_ase
 from ._from_networkx import _from_networkx
 from ._from_pymatgen import _from_pymatgen
@@ -47,6 +48,7 @@ class Graph:
         self.title = str(title)
         self.nodes = _from_dict(nodes)
         self.edges = _from_dict(edges)
+        self.__cookie = VolatileCookie()
         assert('!i' in self.nodes)
         assert('!i' in self.edges and '!j' in self.edges)
 
@@ -57,8 +59,9 @@ class Graph:
                    repr(self.edges),
                    repr(self.title))
 
-    def _remove_cache_tag(self):
-        self.__dict__.pop('cache_tag', None)
+    @property
+    def cookie(self):
+        return self.__cookie
 
     def copy(self, deep=False):
         '''Make a copy of an existing graph.
@@ -104,6 +107,7 @@ class Graph:
         '''
         if inplace:
             g = self
+            self.cookie.clear()
         else:
             g = self.copy(deep=True)
 
@@ -182,7 +186,7 @@ class Graph:
 
         '''copy graphs if not editing in-place'''
         for g in graphs:
-            g._remove_cache_tag()
+            g.cookie.clear()
         if inplace is not True:
             graphs = [g.copy(deep=False) for g in graphs]
 
