@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.6a7 (2020-07-16)
+
+- Fixed a problem assocaited with converting permuted graphs to octilegraphs.
+
 ## 0.6a6 (2020-07-16)
 
 - Fixed a problem with caching graphs on the GPU.
