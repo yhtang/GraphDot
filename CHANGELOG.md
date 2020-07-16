@@ -1,6 +1,6 @@
 # Change log of GraphDot
 
-## 0.6a7 (2020-07-16)
+## 0.6a7, 0.6a8 (2020-07-16)
 
 - Fixed a problem assocaited with converting permuted graphs to octilegraphs.
 

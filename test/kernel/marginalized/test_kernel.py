@@ -4,6 +4,7 @@ import numpy as np
 import scipy.sparse as sp
 import pytest
 import networkx as nx
+from ase.build import molecule
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
 from graphdot.microkernel import (
@@ -432,3 +433,18 @@ def test_mlgk_dtype():
 
         assert(mlgk([dfg]).dtype == dtype)
         assert(mlgk.diag([dfg]).dtype == dtype)
+
+
+def test_mlgk_on_permuted_graph():
+    g = Graph.from_ase(molecule('C6H6'))
+    for _ in range(10):
+        h = g.permute(np.random.permutation(len(g.nodes)))
+        kernel = MarginalizedGraphKernel(
+            TensorProduct(
+                element=KroneckerDelta(0.5)
+            ),
+            TensorProduct(
+                length=SquareExponential(0.1)
+            )
+        )
+        assert(kernel([g], [h]).item() == pytest.approx(kernel([g]).item()))
