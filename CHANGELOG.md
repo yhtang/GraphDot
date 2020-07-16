@@ -2,7 +2,7 @@
 
 ## 0.6a6 (2020-07-16)
 
-- Fixes a problem with caching graphs on the GPU.
+- Fixed a problem with caching graphs on the GPU.
 
 ## 0.6a5 (2020-07-15)
 

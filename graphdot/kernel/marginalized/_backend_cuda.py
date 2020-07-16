@@ -12,8 +12,7 @@ import graphdot.cuda
 from graphdot import cpp
 from graphdot.codegen import Template
 from graphdot.codegen.cpptool import decltype
-from graphdot.cuda.array import umempty, umzeros, umarray, umlike
-from graphdot.cuda.resizable_array import ResizableArray
+from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
 from ._backend import Backend
 from ._scratch import BlockScratch
