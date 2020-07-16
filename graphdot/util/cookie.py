@@ -4,11 +4,8 @@
 
 class VolatileCookie(dict):
 
-    def __getstate__(self):
-        return None
-
-    def __setstate__(self, state):
-        pass
+    def __reduce__(self):
+        return (VolatileCookie.__new__, (VolatileCookie,))
 
     def __deepcopy__(self, memo):
         '''Deep copy of a volatile cookie is intentionally nullified.'''
