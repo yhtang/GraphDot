@@ -48,7 +48,6 @@ class Graph:
         self.title = str(title)
         self.nodes = _from_dict(nodes)
         self.edges = _from_dict(edges)
-        self.__cookie = VolatileCookie()
         assert('!i' in self.nodes)
         assert('!i' in self.edges and '!j' in self.edges)
 
@@ -61,7 +60,11 @@ class Graph:
 
     @property
     def cookie(self):
-        return self.__cookie
+        try:
+            return self.__cookie
+        except AttributeError:
+            self.__cookie = VolatileCookie()
+            return self.__cookie
 
     def copy(self, deep=False):
         '''Make a copy of an existing graph.

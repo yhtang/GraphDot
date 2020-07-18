@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.6a9 (2020-07-17)
+
+- Ensures that graph cookies are not pickled.
+
 ## 0.6a7, 0.6a8 (2020-07-16)
 
 - Fixed a problem assocaited with converting permuted graphs to octilegraphs.
