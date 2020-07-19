@@ -3,6 +3,7 @@
 from collections import namedtuple
 import numpy as np
 import pandas as pd
+from graphdot.codegen.typetool import common_concrete_type
 from .series import Series
 
 
@@ -18,7 +19,13 @@ class DataFrame:
         if isinstance(key, str):
             return self._data[key]
         elif hasattr(key, '__iter__'):
-            return self.__class__({k: self._data[k] for k in key})
+            t = common_concrete_type.of_values(key)
+            if np.issubsctype(t, np.bool_):
+                return self.__class__({
+                    k: v[key] for k, v in self._data.items()
+                })
+            else:
+                return self.__class__({k: self._data[k] for k in key})
         else:
             raise TypeError(f'Invalid column index {key}')
 
