@@ -110,6 +110,28 @@ def test_column_access():
         df[['x', 'y']]
 
 
+def test_masking():
+    df = DataFrame({
+        'a': range(5),
+        'b': np.linspace(0, 1, 5)
+    })
+
+    for mask in [
+        np.ones(5, dtype=np.bool_),
+        np.zeros(5, dtype=np.bool_),
+        np.array([True, True, False, False, False], dtype=np.bool_),
+    ]:
+
+        df_masked = df[mask]
+
+        assert(isinstance(df_masked, DataFrame))
+        assert(len(df_masked) == np.count_nonzero(mask))
+        for c in df.columns:
+            assert(c in df_masked)
+        for c in df_masked:
+            assert(c in df)
+
+
 def test_column_attribute_access():
     df = DataFrame({
         'a': range(5),
