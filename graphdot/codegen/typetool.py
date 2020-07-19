@@ -129,9 +129,11 @@ class common_concrete_type:
             Returns the type of the elements if all elements share a common
             type, and returns `None` otherwise.
         '''
-        t = next(iter(types))
+        t = None
         for i in types:
-            if t != i:
+            if t is None:
+                t = i
+            elif t != i:
                 return None
         return t
 
