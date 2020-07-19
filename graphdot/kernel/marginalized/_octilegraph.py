@@ -39,7 +39,6 @@ class OctileGraph:
         self.nodes = nodes = graph.nodes.copy(deep=False)
         self.edges = edges = graph.edges.copy(deep=False)
         self.n_node = len(nodes)
-        nnz = len(edges)
 
         ''' substitute columns corresponding to object-type node/edge
         attributes to their GPU counterparts '''
@@ -109,12 +108,13 @@ class OctileGraph:
             and compute node degrees '''
         self.degree = degree = umzeros(self.n_node, dtype=np.float32)
         edge_t = edges.drop(['!i', '!j', '!w']).rowtype()
-        selfloops = edges[edges['!i'] == edges['!j']]
+        self_loops = edges[edges['!i'] == edges['!j']]
+        nnz = len(edges)
         if '!w' in edges:  # weighted graph
             self.weighted = True
             np.add.at(degree, edges['!i'], edges['!w'])
             np.add.at(degree, edges['!j'], edges['!w'])
-            np.subtract.at(degree, selfloops['!i'], selfloops['!w'])
+            np.subtract.at(degree, self_loops['!i'], self_loops['!w'])
 
             if edge_t.itemsize != 0:
                 labels = list(edges[edge_t.names].iterstates())
@@ -132,7 +132,7 @@ class OctileGraph:
             self.weighted = False
             np.add.at(degree, edges['!i'], 1.0)
             np.add.at(degree, edges['!j'], 1.0)
-            np.subtract.at(degree, selfloops['!i'], 1.0)
+            np.subtract.at(degree, self_loops['!i'], 1.0)
             edges_aos = np.fromiter(edges[edge_t.names].iterstates(),
                                     dtype=edge_t, count=nnz)
         self.edge_t = edge_t
@@ -149,14 +149,13 @@ class OctileGraph:
         up[:] = i - i % 8
         lf[:] = j - j % 8
 
-        perm = np.lexsort(indices, axis=0)
-        # Do not delete this line even though it looks useless. It does change
-        # i, j, up, lf
-        indices[:, :] = indices[:, perm]
-        self.edges_aos = umempty(nnz * 2, edge_t)
+        # np.unique implies lexical sort
+        indices, perm = np.unique(indices, axis=1, return_index=True)
+        i, j, up, lf = indices
+        self.edges_aos = umempty(len(i), edge_t)
         self.edges_aos[:] = edges_aos[perm % nnz]  # mod nnz due to symmetry
 
-        diff = np.empty(nnz * 2)
+        diff = np.empty_like(up)
         diff[1:] = (up[:-1] != up[1:]) | (lf[:-1] != lf[1:])
         diff[:1] = True
         oct_offset = np.flatnonzero(diff)
