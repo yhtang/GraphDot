@@ -20,12 +20,13 @@ _convertible = {
 
 
 def can_cast(src, dst):
-    return src.kind in _convertible[dst.kind]
+    return np.dtype(src).kind in _convertible[np.dtype(dst).kind]
 
 
 class common_min_type:
     @staticmethod
-    def of_values(iterable, coerce=True, min_float=np.float32, signed=True):
+    def of_values(iterable, coerce=True, min_float=np.float32,
+                  ensure_signed=True):
         '''Find the common minimum elemet type that can safely hold all
         elements of an iterable sequence.
 
@@ -39,6 +40,8 @@ class common_min_type:
         min_float: dtype
             The smallest floating-point type that should be returned.
             Introduced because float16 is not universally supported yet.
+        ensure_signed: bool
+            Whehter to promote the result to a signed type.
 
         Returns
         -------
@@ -51,7 +54,7 @@ class common_min_type:
         t = None
         for i in iterable:
             r = np.min_scalar_type(i) if np.isscalar(i) else type(i)
-            if signed and isinstance(r, np.dtype) and r.kind == 'u':
+            if ensure_signed and isinstance(r, np.dtype) and r.kind == 'u':
                 r = np.promote_types(r, np.int8)
             t = t or r
             if t != r:
@@ -66,7 +69,7 @@ class common_min_type:
         return t
 
     @staticmethod
-    def of_types(types, coerce=True, min_float=np.float32, signed=True):
+    def of_types(types, coerce=True, min_float=np.float32, ensure_signed=True):
         '''Find the common minimum elemet type that can safely hold all types
         in the given list.
 
@@ -80,6 +83,8 @@ class common_min_type:
         min_float: dtype
             The smallest floating-point type that should be returned.
             Introduced because float16 is not universally supported yet.
+        ensure_signed: bool
+            Whehter to promote the result to a signed type.
 
         Returns
         -------
@@ -89,10 +94,11 @@ class common_min_type:
             smallest numpy dtype or the Python class that the elements
             belongs to.
         '''
-        t = next(iter(types))
+        t = None
         for r in types:
-            if signed and isinstance(r, np.dtype) and r.kind == 'u':
+            if ensure_signed and isinstance(r, np.dtype) and r.kind == 'u':
                 r = np.promote_types(r, np.int8)
+            t = t or r
             if t != r:
                 if coerce:
                     t = np.promote_types(t, r)
