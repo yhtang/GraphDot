@@ -156,8 +156,8 @@ class GaussianProcessRegressor:
 
         '''build and store GPR model'''
         self.K = K = self._gramian(self.X)
-        self.L = CholSolver(K)
-        self.Ky = self.L(self.y)
+        self.Kinv = CholSolver(K)
+        self.Ky = self.Kinv @ self.y
         return self
 
     def fit_loocv(self, X, y, return_mean=False, return_std=False,
@@ -225,15 +225,15 @@ class GaussianProcessRegressor:
 
         '''build and store GPR model'''
         self.K = self._gramian(X)
-        self.L = CholSolver(self.K)
-        self.Ky = self.L(y)
+        self.Kinv = CholSolver(self.K)
+        self.Ky = self.Kinv @ y
         if return_mean is False and return_std is False:
             return self
         else:
             retvals = []
-            Kinv_diag = self.L(np.eye(len(self.X))).diagonal()
+            Kinv_diag = (self.Kinv @ np.eye(len(self.X))).diagonal()
             if return_mean is True:
-                ymean = self.y - self.L(self.y) / Kinv_diag
+                ymean = self.y - self.Kinv @ self.y / Kinv_diag
                 retvals.append(ymean * self.y_std + self.y_mean)
             if return_std is True:
                 ystd = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
@@ -263,17 +263,19 @@ class GaussianProcessRegressor:
         cov: 2D matrix
             Covariance of the predictive distribution at query points.
         """
-        if not hasattr(self, 'L'):
+        if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
         Ks = self._gramian(Z, self.X)
         ymean = (Ks @ self.Ky) * self.y_std + self.y_mean
         if return_std is True:
             Kss = self._gramian(Z, diag=True)
-            std = np.sqrt(np.maximum(Kss - (Ks @ self.L(Ks.T)).diagonal(), 0))
+            std = np.sqrt(
+                np.maximum(0, Kss - (Ks @ (self.Kinv @ Ks.T)).diagonal())
+            )
             return (ymean, std * self.y_std)
         elif return_cov is True:
             Kss = self._gramian(Z)
-            cov = np.maximum(Kss - Ks @ self.L(Ks.T), 0)
+            cov = np.maximum(0, Kss - Ks @ (self.Kinv @ Ks.T))
             return (ymean, cov * self.y_std**2)
         else:
             return ymean
@@ -307,9 +309,9 @@ class GaussianProcessRegressor:
             z = (z - z_mean) / z_std
         else:
             z_mean, z_std = 0, 1
-        L = CholSolver(self._gramian(Z))
-        Kinv_diag = L(np.eye(len(Z))).diagonal()
-        ymean = (z - L(z) / Kinv_diag) * z_std + z_mean
+        Kinv = CholSolver(self._gramian(Z))
+        Kinv_diag = (Kinv @ np.eye(len(Z))).diagonal()
+        ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
         if return_std is True:
             std = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
             return (ymean, std * z_std)
@@ -373,13 +375,13 @@ class GaussianProcessRegressor:
 
         t_linalg = time.perf_counter()
         try:
-            L = CholSolver(K)
+            Kinv = CholSolver(K)
         except np.linalg.LinAlgError as e:
             raise np.linalg.LinAlgError(
                 'Kernel matrix is singular, try a larger `alpha` value.\n'
                 f'NumPy error information: {e}'
             )
-        Ky = L(y)
+        Ky = Kinv @ y
         yKy = y @ Ky
         logdet = np.prod(np.linalg.slogdet(K))
         t_linalg = time.perf_counter() - t_linalg
@@ -388,10 +390,10 @@ class GaussianProcessRegressor:
             D_theta = np.zeros_like(theta)
             for i, t in enumerate(theta):
                 dk = dK[:, :, i]
-                D_theta[i] = (L(dk).trace() - Ky @ dk @ Ky) * np.exp(t)
+                D_theta[i] = ((Kinv @ dk).trace() - Ky @ dk @ Ky) * np.exp(t)
             if verbose:
                 mprint.table(
-                    ('log(L)', '%12.5g', yKy + logdet),
+                    ('log(P)', '%12.5g', yKy + logdet),
                     ('yKy', '%12.5g', yKy),
                     ('logdet(K)', '%12.5g', logdet),
                     ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
@@ -459,8 +461,7 @@ class GaussianProcessRegressor:
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
-        L = CholSolver(K)
-        Kinv = L(np.eye(len(X)))
+        Kinv = CholSolver(K) @ np.eye(len(X))
         Kinv_diag = Kinv.diagonal()
         Ky = Kinv @ y
         e = Ky / Kinv_diag
