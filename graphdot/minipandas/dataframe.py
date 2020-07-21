@@ -18,7 +18,11 @@ class DataFrame:
         if isinstance(key, str):
             return self._data[key]
         elif hasattr(key, '__iter__'):
-            return self.__class__({k: self._data[k] for k in key})
+            i = np.array(key)
+            if np.issubsctype(i.dtype, np.bool_):
+                return self.__class__({k: v[i] for k, v in self._data.items()})
+            else:
+                return self.__class__({k: self._data[k] for k in key})
         else:
             raise TypeError(f'Invalid column index {key}')
 

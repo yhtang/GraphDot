@@ -30,20 +30,25 @@ def MLGK(G, knode, kedge, q, q0, nodal=False):
     for i1, j1, e1 in zip(G.edges['!i'], G.edges['!j'], G.edges.rows()):
         for i2, j2, e2 in zip(G.edges['!i'], G.edges['!j'], G.edges.rows()):
             Ex[i1 * N + i2, j1 * N + j2] = kedge(e1, e2)
-            Ex[i1 * N + j2, j1 * N + i2] = kedge(e1, e2)
-            Ex[j1 * N + j2, i1 * N + i2] = kedge(e1, e2)
-            Ex[j1 * N + i2, i1 * N + j2] = kedge(e1, e2)
+            if i2 != j2:
+                Ex[i1 * N + j2, j1 * N + i2] = kedge(e1, e2)
+            if i1 != j1:
+                Ex[j1 * N + j2, i1 * N + i2] = kedge(e1, e2)
+                if i2 != j2:
+                    Ex[j1 * N + i2, i1 * N + j2] = kedge(e1, e2)
 
     if '!w' in G.edges:
         for i, j, w in zip(G.edges['!i'], G.edges['!j'], G.edges['!w']):
             D[i] += w
-            D[j] += w
+            if i != j:
+                D[j] += w
             A[i, j] = w
             A[j, i] = w
     else:
         for i, j in zip(G.edges['!i'], G.edges['!j']):
             D[i] += 1.0
-            D[j] += 1.0
+            if i != j:
+                D[j] += 1.0
             A[i, j] = 1.0
             A[j, i] = 1.0
 
@@ -448,3 +453,25 @@ def test_mlgk_on_permuted_graph():
             )
         )
         assert(kernel([g], [h]).item() == pytest.approx(kernel([g]).item()))
+
+
+def test_mlgk_self_loops():
+
+    kedge = Constant(1.0)
+    knode = Constant(1.0)
+    q = 0.1
+    mlgk = MarginalizedGraphKernel(knode, kedge, q=q)
+
+    np.random.seed(2)
+    for i in range(10):
+        n = np.random.randint(4, 20)
+        A = np.random.randn(n, n)
+        A = A + A.T
+        # A.flat[::len(A) + 1] = 0
+
+        G = [Graph.from_networkx(nx.from_numpy_array(A), weight='weight')]
+
+        K = mlgk(G).item()
+        K0 = MLGK(G[0], knode, kedge, q, q, nodal=False)
+
+        assert(K == pytest.approx(K0, 5e-4))
