@@ -54,6 +54,29 @@ def test_nystrom_fit_self_consistency(X, y):
     assert(cov == pytest.approx(np.zeros((len(C), len(C))), 1e-3, 1e-3))
 
 
+def test_nystrom_large_dataset():
+
+    class Kernel:
+        def __call__(self, X, Y=None, s=1.0):
+            return np.exp(
+                -np.subtract.outer(X, Y if Y is not None else X)**2 / s**2
+            )
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    kernel = Kernel()
+    X = np.linspace(0, 1, 10000)
+    Z = np.linspace(0, 1, 9999)
+    y = np.sin(X * np.pi)
+    z = np.sin(Z * np.pi)
+    C = np.linspace(0, 1, 5)
+    gpr = LowRankApproximateGPR(kernel=kernel, core=C, alpha=1e-7)
+    gpr.fit(X, y)
+    z_pred = gpr.predict(Z)
+    assert(z_pred == pytest.approx(z, 1e-3, 1e-3))
+
+
 # def test_gpr_predict_periodic():
 #     '''test with a function with exactly two periods, and see if the GPR
 #     can use information across the periods to fill in the missing points.'''
