@@ -68,7 +68,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     def __init__(self, kernel, core, alpha=1e-7,
                  optimizer=None, normalize_y=False, kernel_options={}):
         self.kernel = kernel
-        self._core = core
+        self.C = core
         self.alpha = alpha
         self.optimizer = optimizer
         if optimizer is True:
@@ -269,7 +269,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         cov: 2D matrix
             Covariance of the predictive distribution at query points.
         """
-        if not hasattr(self, 'L'):
+        if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
         Kzc = self._gramian(Z, self.C)
         Fzc = Kzc @ self.Kcc_rsqrt
