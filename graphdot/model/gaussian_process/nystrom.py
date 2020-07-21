@@ -43,6 +43,9 @@ class LowRankApproximateInverse:
     def __matmul__(self, y):
         return self.K_rsqrt @ (self.K_rsqrt.T @ y)
 
+    def diagonal(self):
+        return np.sum(self.K_rsqrt**2, axis=1)
+
     def quadratic(self, F):
         H = F @ self.K_rsqrt
         return H @ H.T
@@ -204,7 +207,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         std: 1D array, only if return_std is True
             Standard deviation of the leave-one-out predictive distribution.
         """
-        raise RuntimeError('Not implemented')
         self.X = X
         self.y = y
 
@@ -229,17 +231,21 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                     f'{opt}'
                 )
 
+
         '''build and store GPR model'''
-        self.K = self._gramian(X)
-        self.L = CholSolver(self.K)
-        self.Ky = self.L(y)
+        self._set_low_rank_subspace()
+        self.Kxc = self._gramian(self.X, self.C)
+        self.Fxc = self.Kxc @ self.Kcc_rsqrt
+        self.Kinv = LowRankApproximateInverse(self.Fxc, self.alpha)
+        self.Ky = self.Kinv @ self.y
+
         if return_mean is False and return_std is False:
             return self
         else:
             retvals = []
-            Kinv_diag = self.L(np.eye(len(self.X))).diagonal()
+            Kinv_diag = self.Kinv.diagonal()
             if return_mean is True:
-                ymean = self.y - self.L(self.y) / Kinv_diag
+                ymean = self.y - self.Kinv @ self.y / Kinv_diag
                 retvals.append(ymean * self.y_std + self.y_mean)
             if return_std is True:
                 ystd = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
@@ -309,7 +315,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             Leave-one-out standard deviation of the predictive distribution at
             query points.
         """
-        raise RuntimeError('Not implemented')
         assert(len(Z) == len(z))
         z = np.asarray(z)
         if self.normalize_y is True:
@@ -317,9 +322,13 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             z = (z - z_mean) / z_std
         else:
             z_mean, z_std = 0, 1
-        L = CholSolver(self._gramian(Z))
-        Kinv_diag = L(np.eye(len(Z))).diagonal()
-        ymean = (z - L(z) / Kinv_diag) * z_std + z_mean
+
+        Kzc = self._gramian(Z, self.C)
+        Fzc = Kzz @ self.Kcc_rsqrt
+        Kinv = LowRankApproximateInverse(Fzc, self.alpha)
+        Kinv_diag = Kinv.diagonal()
+
+        ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
         if return_std is True:
             std = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
             return (ymean, std * z_std)
