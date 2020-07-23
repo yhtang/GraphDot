@@ -88,19 +88,23 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     def C(self, core):
         self._core = core
 
-    def _set_low_rank_subspace(self):
+    def _compute_low_rank_subspace(self, inplace=False):
         r'''
         Given the eigendecomposition $K_{cc} = U_{cc} W_{cc} U_{cc}^T$,
         we have $K_{cc}^{-1} = U_{cc} W_{cc}^{-1} U_{cc}^T$.
         '''
-        self.Kcc = Kcc = self._gramian(self.C)
+        Kcc = self._gramian(self.C)
         Kcc.flat[::len(Kcc) + 1] += self.alpha
-        self.Wcc, self.Ucc = Wcc, Ucc = np.linalg.eigh(Kcc)
+        Wcc, Ucc = np.linalg.eigh(Kcc)
         if np.any(Wcc <= 0):
             raise np.linalg.LinAlgError(
                 'Core matrix singular, try to increase `alpha`.\n'
             )
-        self.Kcc_rsqrt = Ucc * Wcc**-0.5
+        Kcc_rsqrt = Ucc * Wcc**-0.5
+        if inplace is True:
+            self.Kcc_rsqrt = Kcc_rsqrt
+        else
+            return Kcc_rsqrt
 
     def choose_core(self, X, method='random'):
         '''
@@ -160,7 +164,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 )
 
         '''build and store GPR model'''
-        self._set_low_rank_subspace()
+        self._compute_low_rank_subspace(inplace=True)
         self.Kxc = self._gramian(self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
         self.Kinv = LowRankApproximateInverse(self.Fxc, self.beta)
@@ -233,7 +237,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
 
         '''build and store GPR model'''
-        self._set_low_rank_subspace()
+        self._compute_low_rank_subspace(inplace=True)
         self.Kxc = self._gramian(self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
         self.Kinv = LowRankApproximateInverse(self.Fxc, self.beta)
@@ -324,7 +328,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             z_mean, z_std = 0, 1
 
         if not hasattr(self, 'Kcc_rsqrt'):
-            self._set_low_rank_subspace()
+            self._compute_low_rank_subspace(inplace=True)
         Kzc = self._gramian(Z, self.C)
 
         Fzc = Kzc @ self.Kcc_rsqrt
@@ -404,7 +408,8 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
-        Kinv = LowRankApproximateInverse(Kxc @ self.Kcc_rsqrt, self.beta)
+        Kcc_rsqrt = self._compute_low_rank_subspace(inplace=False)
+        Kinv = LowRankApproximateInverse(Kxc @ Kcc_rsqrt, self.beta)
         Ky = Kinv @ y
         yKy = y @ Ky
         logdet = -Kinv.slogdet
