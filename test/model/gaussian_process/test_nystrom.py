@@ -77,25 +77,64 @@ def test_nystrom_large_dataset():
     assert(z_pred == pytest.approx(z, 1e-3, 1e-3))
 
 
-# def test_gpr_predict_periodic():
-#     '''test with a function with exactly two periods, and see if the GPR
-#     can use information across the periods to fill in the missing points.'''
+@pytest.mark.parametrize('cstride', [2])
+def test_nystrom_predict_loocv(cstride):
 
-#     class Kernel:
-#         def __call__(self, X, Y=None):
-#             d = np.subtract.outer(X, Y if Y is not None else X)
-#             return np.exp(-2 * np.sin(np.pi / 0.5 * d)**2)
+    class Kernel:
+        def __call__(self, X, Y=None):
+            return np.exp(-np.subtract.outer(X, Y if Y is not None else X)**2)
 
-#         def diag(self, X):
-#             return np.ones_like(X)
+        def diag(self, X):
+            return np.ones_like(X)
 
-#     kernel = Kernel()
-#     X = np.linspace(0, 1, 16, endpoint=False)
-#     y = np.sin(X * 4 * np.pi)
-#     mask = np.array([1, 0, 1, 0, 1, 0, 1, 0,
-#                      0, 1, 0, 1, 0, 1, 0, 1], dtype=np.bool_)
+    kernel = Kernel()
+    X = np.linspace(-1, 1, 6)
+    C = X[::cstride]
+    gpr = LowRankApproximateGPR(kernel=kernel, core=C, alpha=1e-7)
+    y = np.cos(X * np.pi)
+    y_loocv, std_loocv = gpr.predict_loocv(X, y, return_std=True)
+    assert(y_loocv == pytest.approx(gpr.predict_loocv(X, y, return_std=False)))
+    print('y\n', y, sep='')
+    print('y_loocv\n', y_loocv, sep='')
+    for i, _ in enumerate(X):
+        Xi = np.delete(X, i)
+        yi = np.delete(y, i)
+        gpr_loocv = LowRankApproximateGPR(kernel=kernel, core=C, alpha=1e-7)
+        gpr_loocv.fit(Xi, yi)
+        y_loocv_i, std_loocv_i = gpr_loocv.predict(X[[i]], return_std=True)
+        print(f'i {y_loocv_i}')
+        assert(y_loocv_i.item() == pytest.approx(y_loocv[i], abs=1e-5))
+        assert(std_loocv_i.item() == pytest.approx(std_loocv[i], abs=1e-5))
 
-#     gpr = LowRankApproximateGPR(kernel=kernel, alpha=1e-10)
-#     gpr.fit(X[mask], y[mask])
-#     z = gpr.predict(X[~mask])
-#     assert(z == pytest.approx(y[~mask], 1e-6))
+
+@pytest.mark.parametrize('normalize_y', [True, False])
+def test_nystrom_fit_loocv_no_opt(normalize_y):
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            return np.exp(-0.5 * d**2 / L**2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    X = np.linspace(-1, 1, 10, endpoint=False)
+    C = np.linspace(-1, 1, 5, endpoint=False)
+    y = np.sin(X * np.pi)
+    kernel = Kernel(0.3)
+    gpr = LowRankApproximateGPR(
+        kernel=kernel,
+        core=C,
+        alpha=1e-7,
+        normalize_y=normalize_y,
+        optimizer=False,
+    )
+    _, m1, s1 = gpr.fit_loocv(X, y, return_mean=True, return_std=True)
+    m2, s2 = gpr.predict_loocv(X, y, return_std=True)
+    assert(m1 == pytest.approx(m2))
+    assert(s1 == pytest.approx(s2))
+
