@@ -32,9 +32,9 @@ class LowRankApproximateInverse:
     such that
     $\hat{K}_{xx}^\frac{1}{2} = U_{xx} S_{xx} V_{xx}^T$.
     '''
-    def __init__(self, F, alpha):
+    def __init__(self, F, beta):
         self.Uxx, self.Sxx, _ = np.linalg.svd(F, full_matrices=False)
-        mask = self.Sxx > alpha
+        mask = self.Sxx > beta
         self.Uxx = self.Uxx[:, mask]
         self.Sxx = self.Sxx[mask]
 
@@ -68,11 +68,12 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     approximation.
     """
 
-    def __init__(self, kernel, core, alpha=1e-7,
+    def __init__(self, kernel, core, alpha=1e-7, beta=1e-7,
                  optimizer=None, normalize_y=False, kernel_options={}):
         self.kernel = kernel
         self.C = core
         self.alpha = alpha
+        self.beta = beta
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
@@ -99,7 +100,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             raise np.linalg.LinAlgError(
                 'Core matrix singular, try to increase `alpha`.\n'
             )
-        self.Kcc_inv = (Ucc / Wcc).dot(Ucc.T)
         self.Kcc_rsqrt = Ucc * Wcc**-0.5
 
     def choose_core(self, X, method='random'):
@@ -163,7 +163,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         self._set_low_rank_subspace()
         self.Kxc = self._gramian(self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
-        self.Kinv = LowRankApproximateInverse(self.Fxc, self.alpha)
+        self.Kinv = LowRankApproximateInverse(self.Fxc, self.beta)
         self.Ky = self.Kinv @ self.y
 
         return self
@@ -236,7 +236,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         self._set_low_rank_subspace()
         self.Kxc = self._gramian(self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
-        self.Kinv = LowRankApproximateInverse(self.Fxc, self.alpha)
+        self.Kinv = LowRankApproximateInverse(self.Fxc, self.beta)
         self.Ky = self.Kinv @ self.y
 
         if return_mean is False and return_std is False:
@@ -323,17 +323,28 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         else:
             z_mean, z_std = 0, 1
 
+        if not hasattr(self, 'Kcc_rsqrt'):
+            self._set_low_rank_subspace()
         Kzc = self._gramian(Z, self.C)
-        Fzc = Kzz @ self.Kcc_rsqrt
-        Kinv = LowRankApproximateInverse(Fzc, self.alpha)
+
+        Fzc = Kzc @ self.Kcc_rsqrt
+
+        if True:
+            Kzz = Fzc @ Fzc.T + np.eye(len(Fzc)) * self.beta
+            Sz, Uz = np.linalg.eigh(Kzz)
+            Kz_rsqrt = Uz * Sz**-0.5
+            Kinv = Kz_rsqrt @ Kz_rsqrt.T
+        else:
+            Kinv = LowRankApproximateInverse(Fzc, self.beta)
+        
         Kinv_diag = Kinv.diagonal()
 
-        ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
+        mean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
         if return_std is True:
             std = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
-            return (ymean, std * z_std)
+            return (mean, std * z_std)
         else:
-            return ymean
+            return mean
 
     def log_marginal_likelihood(self, theta=None, X=None, y=None, C=None,
                                 eval_gradient=False, clone_kernel=True,
@@ -393,7 +404,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
-        Kinv = LowRankApproximateInverse(Kxc @ self.Kcc_rsqrt, self.alpha)
+        Kinv = LowRankApproximateInverse(Kxc @ self.Kcc_rsqrt, self.beta)
         Ky = Kinv @ y
         yKy = y @ Ky
         logdet = -Kinv.slogdet
