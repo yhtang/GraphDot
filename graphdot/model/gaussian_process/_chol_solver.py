@@ -23,7 +23,7 @@ class CholSolver:
     def __init__(self, A):
         self.L = np.linalg.cholesky(A)
 
-    def __call__(self, b):
+    def __matmul__(self, b):
         return scipy.linalg.solve_triangular(
             self.L,
             scipy.linalg.solve_triangular(

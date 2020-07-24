@@ -1,5 +1,11 @@
 # Change log of GraphDot
 
+## 0.6a10 (2020-07-21)
+
+- Supports graphs with self-looping edges.
+- Made the `Graph.from_rdkit` method optional in case if RDKit itself is
+  not available.
+
 ## 0.6a9 (2020-07-17)
 
 - Ensures that graph cookies are not pickled.
