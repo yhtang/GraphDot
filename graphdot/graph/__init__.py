@@ -10,13 +10,19 @@ import itertools as it
 import copy as cp
 import numpy as np
 import scipy.sparse
+import warnings
 from graphdot.codegen.typetool import common_min_type
 from graphdot.minipandas import DataFrame
 from graphdot.util.cookie import VolatileCookie
 from ._from_ase import _from_ase
 from ._from_networkx import _from_networkx
 from ._from_pymatgen import _from_pymatgen
-from ._from_rdkit import _from_rdkit
+try:
+    from ._from_rdkit import _from_rdkit
+except ImportError:
+    warnings.warn(
+        'Cannot import RDKit, `graph.from_rdkit()` will be unavailable.\n'
+    )
 
 
 __all__ = ['Graph']
