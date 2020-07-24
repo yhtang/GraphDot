@@ -56,11 +56,11 @@ class LowRankApproximateInverse:
 
     @property
     def slogdet(self):
-        return -2 * np.log(self.Uxx).sum()
+        return 2 * np.log(self.Sxx).sum()
 
     @property
     def cond(self):
-        return self.Uxx.min() / self.Uxx.max()
+        return self.Sxx.min() / self.Sxx.max()
 
 
 class LowRankApproximateGPR(GaussianProcessRegressor):
@@ -103,7 +103,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         Kcc_rsqrt = Ucc * Wcc**-0.5
         if inplace is True:
             self.Kcc_rsqrt = Kcc_rsqrt
-        else
+        else:
             return Kcc_rsqrt
 
     def choose_core(self, X, method='random'):
@@ -388,7 +388,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             hyperparameters at position theta. Only returned when eval_gradient
             is True.
         """
-        raise RuntimeError('Not implemented')
         theta = theta if theta is not None else self.kernel.theta
         X = X if X is not None else self.X
         y = y if y is not None else self.y
@@ -403,22 +402,38 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         t_kernel = time.perf_counter()
         if eval_gradient is True:
             Kxc, dKxc = self._gramian(X, C, kernel=kernel, jac=True)
+            Kcc, dKcc = self._gramian(C, kernel=kernel, jac=True)
         else:
             Kxc = self._gramian(X, C, kernel=kernel)
+            Kcc = self._gramian(self.C)
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
-        Kcc_rsqrt = self._compute_low_rank_subspace(inplace=False)
+
+        Kcc.flat[::len(Kcc) + 1] += self.alpha
+        Wcc, Ucc = np.linalg.eigh(Kcc)
+        if np.any(Wcc <= 0):
+            raise np.linalg.LinAlgError(
+                'Core matrix singular, try to increase `alpha`.\n'
+            )
+        Kcc_rsqrt = Ucc * Wcc**-0.5
+        Kcc_inv = (Ucc / Wcc) @ Ucc.T
+
         Kinv = LowRankApproximateInverse(Kxc @ Kcc_rsqrt, self.beta)
         Ky = Kinv @ y
         yKy = y @ Ky
         logdet = -Kinv.slogdet
         t_linalg = time.perf_counter() - t_linalg
 
+        print('yKy', yKy)
+        print('logdet', logdet)
+
         if eval_gradient is True:
             D_theta = np.zeros_like(theta)
             for i, t in enumerate(theta):
-                dk = dK[:, :, i]
+                dkxc = dKxc[:, :, i]
+                dkcc = dKcc[:, :, i]
+                dk = Kxc @ Kcc_inv @ dkxc.T + dkxc @ Kcc_inv @ Kxc.T - (Kcc_inv @ Kxc.T).T @ dkcc @ (Kcc_inv @ Kxc.T)
                 D_theta[i] = ((Kinv @ dk).trace() - Ky @ dk @ Ky) * np.exp(t)
             if verbose:
                 mprint.table(

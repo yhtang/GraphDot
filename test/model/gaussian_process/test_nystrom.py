@@ -77,6 +77,62 @@ def test_nystrom_large_dataset():
     assert(z_pred == pytest.approx(z, 1e-3, 1e-3))
 
 
+def test_nystrom_log_marginal_likelihood():
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                return f, np.stack((j, ), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.L = np.exp(t[0])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0)
+            k.theta = theta
+            return k
+
+    X = np.linspace(-1, 1, 24, endpoint=False)
+    C = np.linspace(-1, 1, 6, endpoint=False)
+    y = np.sin(X * np.pi)
+    eps = 1e-3
+    # for L in np.logspace(-1, 0.5, 10):
+    for L in [1.0]:
+        kernel = Kernel(L)
+        gpr = LowRankApproximateGPR(kernel=kernel, core=C, alpha=1e-10)
+        _, dL = gpr.log_marginal_likelihood(X=X, y=y, eval_gradient=True)
+        theta0 = np.copy(kernel.theta)
+
+        L_pos = gpr.log_marginal_likelihood(
+            theta=theta0 + eps, X=X, y=y, eval_gradient=False
+        ).item()
+        L_neg = gpr.log_marginal_likelihood(
+            theta=theta0 - eps, X=X, y=y, eval_gradient=False
+        ).item()
+
+        print('L_pos, L_neg', L_pos, L_neg)
+
+        dL_diff = (L_pos - L_neg) / (2 * eps)
+        assert(dL.item() == pytest.approx(dL_diff, 1e-3, 1e-3))
+
+
 @pytest.mark.parametrize('cstride', [2])
 def test_nystrom_predict_loocv(cstride):
 
@@ -94,15 +150,12 @@ def test_nystrom_predict_loocv(cstride):
     y = np.cos(X * np.pi)
     y_loocv, std_loocv = gpr.predict_loocv(X, y, return_std=True)
     assert(y_loocv == pytest.approx(gpr.predict_loocv(X, y, return_std=False)))
-    print('y\n', y, sep='')
-    print('y_loocv\n', y_loocv, sep='')
     for i, _ in enumerate(X):
         Xi = np.delete(X, i)
         yi = np.delete(y, i)
         gpr_loocv = LowRankApproximateGPR(kernel=kernel, core=C, alpha=1e-7)
         gpr_loocv.fit(Xi, yi)
         y_loocv_i, std_loocv_i = gpr_loocv.predict(X[[i]], return_std=True)
-        print(f'i {y_loocv_i}')
         assert(y_loocv_i.item() == pytest.approx(y_loocv[i], abs=1e-5))
         assert(std_loocv_i.item() == pytest.approx(std_loocv[i], abs=1e-5))
 
