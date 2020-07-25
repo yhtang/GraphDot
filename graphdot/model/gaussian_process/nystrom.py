@@ -55,8 +55,8 @@ class LowRankApproximateInverse:
         return np.sum(H**2, axis=1)
 
     @property
-    def slogdet(self):
-        return 2 * np.log(self.Sxx).sum()
+    def logdet(self):
+        return -2 * np.log(self.Sxx).sum()
 
     @property
     def cond(self):
@@ -95,12 +95,12 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         '''
         Kcc = self._gramian(self.C)
         Kcc.flat[::len(Kcc) + 1] += self.alpha
-        Wcc, Ucc = np.linalg.eigh(Kcc)
-        if np.any(Wcc <= 0):
+        a, Q = np.linalg.eigh(Kcc)
+        if np.any(a <= 0):
             raise np.linalg.LinAlgError(
                 'Core matrix singular, try to increase `alpha`.\n'
             )
-        Kcc_rsqrt = Ucc * Wcc**-0.5
+        Kcc_rsqrt = Q * a**-0.5
         if inplace is True:
             self.Kcc_rsqrt = Kcc_rsqrt
         else:
@@ -333,13 +333,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         Fzc = Kzc @ self.Kcc_rsqrt
 
-        if True:
-            Kzz = Fzc @ Fzc.T + np.eye(len(Fzc)) * self.beta
-            Sz, Uz = np.linalg.eigh(Kzz)
-            Kz_rsqrt = Uz * Sz**-0.5
-            Kinv = Kz_rsqrt @ Kz_rsqrt.T
-        else:
-            Kinv = LowRankApproximateInverse(Fzc, self.beta)
+        Kinv = LowRankApproximateInverse(Fzc, self.beta)
         
         Kinv_diag = Kinv.diagonal()
 
@@ -411,13 +405,13 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         t_linalg = time.perf_counter()
 
         Kcc.flat[::len(Kcc) + 1] += self.alpha
-        Wcc, Ucc = np.linalg.eigh(Kcc)
-        if np.any(Wcc <= 0):
+        Acc, Qcc = np.linalg.eigh(Kcc)
+        if np.any(Acc <= 0):
             raise np.linalg.LinAlgError(
                 'Core matrix singular, try to increase `alpha`.\n'
             )
-        Kcc_rsqrt = Ucc * Wcc**-0.5
-        Kcc_inv = (Ucc / Wcc) @ Ucc.T
+        Kcc_rsqrt = Qcc * Acc**-0.5
+        Kcc_inv = (Qcc / Acc) @ Qcc.T
 
         Kinv = LowRankApproximateInverse(Kxc @ Kcc_rsqrt, self.beta)
         Ky = Kinv @ y
