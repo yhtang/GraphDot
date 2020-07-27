@@ -391,19 +391,22 @@ class GaussianProcessRegressor:
             for i, t in enumerate(theta):
                 dk = dK[:, :, i]
                 D_theta[i] = ((Kinv @ dk).trace() - Ky @ dk @ Ky) * np.exp(t)
-            if verbose:
-                mprint.table(
-                    ('log(P)', '%12.5g', yKy + logdet),
-                    ('yKy', '%12.5g', yKy),
-                    ('logdet(K)', '%12.5g', logdet),
-                    ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
-                    ('Cond(K)', '%12.5g', np.linalg.cond(K)),
-                    ('t_GPU (s)', '%10.2g', t_kernel),
-                    ('t_CPU (s)', '%10.2g', t_linalg),
-                )
-            return yKy + logdet, D_theta
+            retval = (yKy + logdet, D_theta)
         else:
-            return yKy + logdet
+            retval = yKy + logdet
+
+        if verbose:
+            mprint.table(
+                ('log(P)', '%12.5g', yKy + logdet),
+                ('yKy', '%12.5g', yKy),
+                ('logdet(K)', '%12.5g', logdet),
+                ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
+                ('Cond(K)', '%12.5g', np.linalg.cond(K)),
+                ('t_GPU (s)', '%10.2g', t_kernel),
+                ('t_CPU (s)', '%10.2g', t_linalg),
+            )
+        
+        return retval
 
     def squared_loocv_error(self, theta=None, X=None, y=None,
                             eval_gradient=False, clone_kernel=True,
@@ -477,18 +480,21 @@ class GaussianProcessRegressor:
                     - (e / Kinv_diag) @ (KdK @ Ky)
                     + (e**2 / Kinv_diag) @ (KdK @ Kinv).diagonal()
                 ) * np.exp(t)
-            if verbose:
-                mprint.table(
-                    ('Sq.Err.', '%12.5g', squared_error),
-                    ('logdet(K)', '%12.5g', np.prod(np.linalg.slogdet(K))),
-                    ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
-                    ('Cond(K)', '%12.5g', np.linalg.cond(K)),
-                    ('t_GPU (s)', '%10.2g', t_kernel),
-                    ('t_CPU (s)', '%10.2g', t_linalg),
-                )
-            return squared_error, D_theta
+            retval = (squared_error, D_theta)
         else:
-            return squared_error
+            retval = squared_error
+
+        if verbose:
+            mprint.table(
+                ('Sq.Err.', '%12.5g', squared_error),
+                ('logdet(K)', '%12.5g', np.prod(np.linalg.slogdet(K))),
+                ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
+                ('Cond(K)', '%12.5g', np.linalg.cond(K)),
+                ('t_GPU (s)', '%10.2g', t_kernel),
+                ('t_CPU (s)', '%10.2g', t_linalg),
+            )
+
+        return retval
 
     def _hyper_opt(self, fun, x0, tol, repeat, theta_jitter, verbose):
         X0 = np.copy(self.kernel.theta)
