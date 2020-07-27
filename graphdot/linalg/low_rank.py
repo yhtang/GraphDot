@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''Low-rank approximation of square matrices.'''
-from abc import ABC, abstractmethod
 import numpy as np
 
 
@@ -9,7 +8,7 @@ class FactorApprox:
     def __init__(self, lhs, rhs):
         self._lhs = lhs
         self._rhs = rhs
-    
+
     def __repr__(self):
         return f'{self.lhs.shape} @ {self.rhs.shape}'
 
@@ -71,6 +70,7 @@ class FactorApprox:
         '''Computes diag(a.T @ X @ b).'''
         return np.sum((a @ self.lhs) * (self.rhs @ b), axis=1)
 
+
 class BilinearSums(FactorApprox):
     def __init__(self, factors):
         self.factors = factors
@@ -92,7 +92,7 @@ class BilinearSums(FactorApprox):
             return BilinearSums((*self.factors, *other.factors))
         else:
             raise
-    
+
     def __matmul__(self, other):
         if isinstance(other, BilinearSums):
             return BilinearSums(tuple(
@@ -126,7 +126,7 @@ class SpectralApprox(FactorApprox):
         elif isinstance(X, tuple) and len(X) == 2:
             self.U, self.S = X
         self._lhs = self.U * self.S
-    
+
     @property
     def lhs(self):
         return self._lhs
@@ -146,7 +146,7 @@ class SpectralApprox(FactorApprox):
 
     def cond(self):
         return self.S.max() / self.S.min()
-    
+
     def __pow__(self, exp):
         return SpectralApprox((self.U, self.S**exp))
 

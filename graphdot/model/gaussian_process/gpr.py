@@ -405,7 +405,7 @@ class GaussianProcessRegressor:
                 ('t_GPU (s)', '%10.2g', t_kernel),
                 ('t_CPU (s)', '%10.2g', t_linalg),
             )
-        
+
         return retval
 
     def squared_loocv_error(self, theta=None, X=None, y=None,

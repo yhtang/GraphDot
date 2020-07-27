@@ -2,14 +2,13 @@
 # -*- coding: utf-8 -*-
 import time
 import numpy as np
-from scipy.optimize import minimize
 from graphdot.util.printer import markdown as mprint
 import graphdot.linalg.low_rank as lr
 from .gpr import GaussianProcessRegressor
 
 
 class LowRankApproximateGPR(GaussianProcessRegressor):
-    """Accelerated Gaussian process regression (GPR) using the Nystrom low-rank
+    r"""Accelerated Gaussian process regression (GPR) using the Nystrom low-rank
     approximation.
 
     In the Nystrom method, the low-rank approximation to $K_{xx}$ is
@@ -197,7 +196,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     #                 f'{opt}'
     #             )
 
-
     #     '''build and store GPR model'''
     #     self._compute_low_rank_subspace(inplace=True)
     #     self.Kxc = self._gramian(self.X, self.C)
@@ -298,7 +296,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     #     Fzc = Kzc @ self.Kcc_rsqrt
 
     #     Kinv = LowRankApproximateInverse(Fzc, self.beta)
-        
+
     #     Kinv_diag = Kinv.diagonal()
 
     #     mean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
@@ -376,12 +374,12 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             )
         Kcc_rsqrt = Qcc * Acc**-0.5
 
-        Fx = Kxc @ Kcc_rsqrt
-        Kxx = lr.dot(Fx, rcut=self.beta)
-        Kxx_inv = Kxx.inverse()
+        F = Kxc @ Kcc_rsqrt
+        K = lr.dot(F, rcut=self.beta)
+        K_inv = K.inverse()
 
-        logdet = Kxx.logdet()
-        Ky = Kxx_inv @ y
+        logdet = K.logdet()
+        Ky = K_inv @ y
         yKy = y @ Ky
         logP = yKy + logdet
 
@@ -389,22 +387,21 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         if eval_gradient is True:
             D_theta = np.zeros_like(theta)
-            Kxx_inv2 = Kxx_inv**2
+            K_inv2 = K_inv**2
             for i, t in enumerate(theta):
-                d_Fx = d_Kxc[:, :, i] @ Kcc_rsqrt
-
-                d_Kxx = lr.dot(Fx, d_Fx.T) + lr.dot(d_Fx, Fx.T) - lr.dot(Fx @ Kcc_rsqrt.T @ d_Kcc[:, :, i], Kcc_rsqrt @ Fx.T)
-                d_logdet = (Kxx_inv @ d_Kxx).trace()
-
-                d_Kinv_part = Kxx_inv2 @ d_Kxx - Kxx_inv2 @ d_Kxx @ (Kxx @ Kxx_inv)
-                d_Kinv = d_Kinv_part + d_Kinv_part.T - Kxx_inv @ d_Kxx @ Kxx_inv
-
+                d_F = d_Kxc[:, :, i] @ Kcc_rsqrt
+                d_K = lr.dot(F, d_F.T) + lr.dot(d_F, F.T) - lr.dot(
+                            F @ Kcc_rsqrt.T @ d_Kcc[:, :, i],
+                            Kcc_rsqrt @ F.T
+                        )
+                d_logdet = (K_inv @ d_K).trace()
+                d_Kinv_part = K_inv2 @ d_K - K_inv2 @ d_K @ (K @ K_inv)
+                d_Kinv = d_Kinv_part + d_Kinv_part.T - K_inv @ d_K @ K_inv
                 d_yKy = d_Kinv.quadratic(y, y)
-                
                 D_theta[i] = (d_logdet + d_yKy) * np.exp(t)
-            retval = (yKy + logdet, D_theta)
+            retval = (logP, D_theta)
         else:
-            retval = yKy + logdet
+            retval = logP
 
         if verbose:
             mprint.table(
@@ -412,11 +409,11 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 ('yKy', '%12.5g', yKy),
                 ('logdet(K)', '%12.5g', logdet),
                 ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
-                ('Cond(K)', '%12.5g', Kxx.cond()),
+                ('Cond(K)', '%12.5g', K.cond()),
                 ('t_GPU (s)', '%10.2g', t_kernel),
                 ('t_CPU (s)', '%10.2g', t_linalg),
             )
-        
+
         return retval
 
     # def squared_loocv_error(self, theta=None, X=None, y=None,
@@ -429,21 +426,22 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     #     ----------
     #     theta: array-like
     #         Kernel hyperparameters for which the log-marginal likelihood is
-    #         to be evaluated. If None, the current hyperparameters will be used.
+    #         to be evaluated. If None, the current hyperparameters will be
+    #         used.
     #     X: list of objects or feature vectors.
     #         Input values of the training data. If None, the data saved by
     #         fit() will be used.
     #     y: 1D array
-    #         Output/target values of the training data. If None, the data saved
-    #         by fit() will be used.
+    #         Output/target values of the training data. If None, the data
+    #         saved by fit() will be used.
     #     eval_gradient: boolean
     #         If True, the gradient of the log-marginal likelihood with respect
     #         to the kernel hyperparameters at position theta will be returned
     #         alongside.
     #     clone_kernel: boolean
     #         If True, the kernel is copied so that probing with theta does not
-    #         alter the trained kernel. If False, the kernel hyperparameters will
-    #         be modified in-place.
+    #         alter the trained kernel. If False, the kernel hyperparameters
+    #         will be modified in-place.
     #     verbose: boolean
     #         If True, the log-likelihood value and its components will be
     #         printed to the screen.
@@ -454,8 +452,8 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     #         Squared LOOCV error of theta for training data.
     #     squared_error_gradient: 1D array
     #         Gradient of the Squared LOOCV error with respect to the kernel
-    #         hyperparameters at position theta. Only returned when eval_gradient
-    #         is True.
+    #         hyperparameters at position theta. Only returned when
+    #         eval_gradient is True.
     #     """
     #     raise RuntimeError('Not implemented')
     #     theta = theta if theta is not None else self.kernel.theta
