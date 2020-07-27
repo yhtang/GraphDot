@@ -48,11 +48,12 @@ class GaussianProcessRegressor:
 
     @property
     def X(self):
+        '''The input values of the training set.'''
         try:
             return self._X
         except AttributeError:
             raise AttributeError(
-                'Training data does not exist. Please provided using fit().'
+                'Training data does not exist. Please provide using fit().'
             )
 
     @X.setter
@@ -61,11 +62,12 @@ class GaussianProcessRegressor:
 
     @property
     def y(self):
+        '''The output/target values of the training set.'''
         try:
             return self._y
         except AttributeError:
             raise AttributeError(
-                'Training data does not exist. Please provided using fit().'
+                'Training data does not exist. Please provide using fit().'
             )
 
     @y.setter
@@ -330,11 +332,10 @@ class GaussianProcessRegressor:
             Kernel hyperparameters for which the log-marginal likelihood is
             to be evaluated. If None, the current hyperparameters will be used.
         X: list of objects or feature vectors.
-            Input values of the training data. If None, the data saved by
-            fit() will be used.
+            Input values of the training data. If None, `self.X` will be used.
         y: 1D array
-            Output/target values of the training data. If None, the data saved
-            by fit() will be used.
+            Output/target values of the training data. If None, `self.y` will
+            be used.
         eval_gradient: boolean
             If True, the gradient of the log-marginal likelihood with respect
             to the kernel hyperparameters at position theta will be returned
@@ -420,11 +421,10 @@ class GaussianProcessRegressor:
             Kernel hyperparameters for which the log-marginal likelihood is
             to be evaluated. If None, the current hyperparameters will be used.
         X: list of objects or feature vectors.
-            Input values of the training data. If None, the data saved by
-            fit() will be used.
+            Input values of the training data. If None, `self.X` will be used.
         y: 1D array
-            Output/target values of the training data. If None, the data saved
-            by fit() will be used.
+            Output/target values of the training data. If None, `self.y` will
+            be used.
         eval_gradient: boolean
             If True, the gradient of the log-marginal likelihood with respect
             to the kernel hyperparameters at position theta will be returned

@@ -11,6 +11,35 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     r"""Accelerated Gaussian process regression (GPR) using the Nystrom low-rank
     approximation.
 
+    Parameters
+    ----------
+    kernel: kernel instance
+        The covariance function of the GP.
+    alpha: float > 0, default = 1e-7
+        Value added to the diagonal of the core matrix during fitting. Larger
+        values correspond to increased noise level in the observations. A
+        practical usage of this parameter is to prevent potential numerical
+        stability issues during fitting, and ensures that the core matrix is
+        always positive definite in the precense of duplicate entries and/or
+        round-off error.
+    beta: float > 0, default = 1e-7
+        Threshold value for truncating the singular values when computing the
+        pseudoinverse of the low-rank kernel matrix. Can be used to tune the
+        numerical stability of the model.
+    optimizer: one of (str, True, None, callable)
+        A string or callable that represents one of the optimizers usable in
+        the scipy.optimize.minimize method.
+        If None, no hyperparameter optimization will be carried out in fitting.
+        If True, the optimizer will default to L-BFGS-B.
+    normalize_y: boolean
+        Whether to normalize the target values y so that the mean and variance
+        become 0 and 1, respectively. Recommended for cases where zero-mean,
+        unit-variance kernels are used. The normalization will be
+        reversed when the GP predictions are returned.
+    kernel_options: dict, optional
+        A dictionary of additional options to be passed along when applying the
+        kernel to data.
+
     In the Nystrom method, the low-rank approximation to $K_{xx}$ is
     \begin{equation}
     \hat{K}_{xx} = K_{xc} K_{cc}^{-1} K_{xc}^T.
@@ -48,7 +77,14 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
     @property
     def C(self):
-        return self._C
+        '''The core sample set for constructing the subspace for low-rank
+        approximation.'''
+        try:
+            return self._C
+        except AttributeError:
+            raise AttributeError(
+                'Core samples do not exist. Please provide using fit().'
+            )
 
     @C.setter
     def C(self, C):
@@ -79,6 +115,8 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         Parameters
         ----------
+        C: list of objects or feature vectors.
+            The core set that defines the subspace of low-rank approximation.
         X: list of objects or feature vectors.
             Input values of the training data.
         y: 1D array
@@ -96,7 +134,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         Returns
         -------
-        self: GaussianProcessRegressor
+        self: LowRankApproximateGPR
             returns an instance of self.
         """
         self.C = C
@@ -317,12 +355,14 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         theta: array-like
             Kernel hyperparameters for which the log-marginal likelihood is
             to be evaluated. If None, the current hyperparameters will be used.
+        C: list of objects or feature vectors.
+            The core set that defines the subspace of low-rank approximation.
+            If None, `self.C` will be used.
         X: list of objects or feature vectors.
-            Input values of the training data. If None, the data saved by
-            fit() will be used.
+            Input values of the training data. If None, `self.X` will be used.
         y: 1D array
-            Output/target values of the training data. If None, the data saved
-            by fit() will be used.
+            Output/target values of the training data. If None, `self.y` will
+            be used.
         eval_gradient: boolean
             If True, the gradient of the log-marginal likelihood with respect
             to the kernel hyperparameters at position theta will be returned

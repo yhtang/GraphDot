@@ -5,6 +5,9 @@ import numpy as np
 
 
 class FactorApprox:
+    '''Represents an N-by-N square matrix A as L @ R, where L and R are N-by-k
+    and k-by-N (k << N) rectangular matrices.'''
+
     def __init__(self, lhs, rhs):
         self._lhs = lhs
         self._rhs = rhs
@@ -63,15 +66,19 @@ class FactorApprox:
         return self.diagonal().sum()
 
     def quadratic(self, a, b):
-        '''Computes a.T @ X @ b.'''
+        '''Computes a @ X @ b.'''
         return (a @ self.lhs) @ (self.rhs @ b)
 
     def quadratic_diag(self, a, b):
-        '''Computes diag(a.T @ X @ b).'''
+        '''Computes diag(a @ X @ b).'''
         return np.sum((a @ self.lhs) * (self.rhs @ b), axis=1)
 
 
 class BilinearSums(FactorApprox):
+    '''Represents summations of factor approximations. Due to the bilinear
+    nature of matrix inner product, it is best to store the summation as-is so
+    as to preserve the low-rank structure of the matrices.'''
+
     def __init__(self, factors):
         self.factors = factors
 
@@ -109,7 +116,7 @@ class BilinearSums(FactorApprox):
         return np.sum([f.trace() for f in self.factors])
 
     def quadratic(self, a, b):
-        '''Computes a.T @ X @ b.'''
+        '''Computes a @ X @ b.'''
         return np.sum([f.quadratic(a, b) for f in self.factors], axis=0)
 
     def todense(self):
@@ -117,6 +124,10 @@ class BilinearSums(FactorApprox):
 
 
 class SpectralApprox(FactorApprox):
+    '''A special case of factor approximation where the matrix is symmetric and
+    positive-semidefinite. In this case, the matrix can be represented using a
+    spectral decomposition.'''
+
     def __init__(self, X, rcut=0, acut=0):
         if isinstance(X, np.ndarray):
             U, S, _ = np.linalg.svd(X, full_matrices=False)
@@ -152,6 +163,7 @@ class SpectralApprox(FactorApprox):
 
 
 def dot(X, Y=None, rcut=0, acut=0):
+    '''A utility method that creates factor-approximated matrix objects.'''
     if Y is None:
         return SpectralApprox(X, rcut=rcut, acut=acut)
     else:
