@@ -402,9 +402,9 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 d_yKy = d_Kinv.quadratic(y, y)
                 
                 D_theta[i] = (d_logdet + d_yKy) * np.exp(t)
-            return yKy + logdet, D_theta
+            retval = (yKy + logdet, D_theta)
         else:
-            return yKy + logdet
+            retval = yKy + logdet
 
         if verbose:
             mprint.table(
@@ -416,6 +416,8 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 ('t_GPU (s)', '%10.2g', t_kernel),
                 ('t_CPU (s)', '%10.2g', t_linalg),
             )
+        
+        return retval
 
     # def squared_loocv_error(self, theta=None, X=None, y=None,
     #                         eval_gradient=False, clone_kernel=True,
