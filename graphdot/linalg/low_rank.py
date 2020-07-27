@@ -67,6 +67,9 @@ class FactorApprox:
         '''Computes a.T @ X @ b.'''
         return (a @ self.lhs) @ (self.rhs @ b)
 
+    def quadratic_diag(self, a, b):
+        '''Computes diag(a.T @ X @ b).'''
+        return np.sum((a @ self.lhs) * (self.rhs @ b), axis=1)
 
 class BilinearSums(FactorApprox):
     def __init__(self, factors):
