@@ -117,7 +117,7 @@ class SpectralApprox(FactorApprox):
     def __init__(self, X, rcut=0, acut=0):
         if isinstance(X, np.ndarray):
             U, S, _ = np.linalg.svd(X, full_matrices=False)
-            mask = (S >= S.max() * rcut) | (S >= acut)
+            mask = (S >= S.max() * rcut) & (S >= acut)
             self.U = U[:, mask]
             self.S = S[mask]
         elif isinstance(X, tuple) and len(X) == 2:
