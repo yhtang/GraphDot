@@ -194,8 +194,8 @@ def test_gpr_predict_loocv():
     y_loocv, std_loocv = gpr.predict_loocv(X, y, return_std=True)
     assert(y_loocv == pytest.approx(gpr.predict_loocv(X, y, return_std=False)))
     for i, _ in enumerate(X):
-        Xi = np.concatenate((X[:i], X[i+1:]))
-        yi = np.concatenate((y[:i], y[i+1:]))
+        Xi = np.delete(X, i)
+        yi = np.delete(y, i)
         gpr_loocv = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
         gpr_loocv.fit(Xi, yi)
         y_loocv_i, std_loocv_i = gpr_loocv.predict(X[[i]], return_std=True)

@@ -1,5 +1,15 @@
 # Change log of GraphDot
 
+## 0.6 (2020-07-26)
+
+This version formally releases the new features as have been introduced in
+the various 0.6alpha versions, such as:
+- Nystrom low-rank approximate Gaussian process regressor
+- Graphs with self-looping edges
+- Graph permutation and reordering operations for GPU performance boost.
+- Hyperparameterized and optimizable starting probabilities for the graph
+  kernel.
+
 ## 0.6a10 (2020-07-21)
 
 - Supports graphs with self-looping edges.
