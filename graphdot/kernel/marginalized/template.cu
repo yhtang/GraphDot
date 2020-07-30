@@ -197,11 +197,17 @@ extern "C" {
                         shmem,
                         jac + jac_starts[3]);
 
-                    for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
-                        out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = jac[i];
-                        if (?{traits.symmetric is True}) {
-                            if (job.x != job.y) {
-                                out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                    if (?{traits.diagonal is True}) {
+                        for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
+                            out[I1 + (i + 1) * out_h] = jac[i];
+                        }
+                    } else {
+                        for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
+                            out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                            if (?{traits.symmetric is True}) {
+                                if (job.x != job.y) {
+                                    out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                                }
                             }
                         }
                     }
