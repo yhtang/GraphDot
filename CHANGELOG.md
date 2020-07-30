@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.6.2 (2020-07-30)
+
+- Fixed a bug in computing the gradient of diagonal kernel entries.
+
 ## 0.6.1 (2020-07-29)
 
 - Fixed a bug in kernel normalization.
