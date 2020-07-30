@@ -336,6 +336,7 @@ class MarginalizedGraphKernel:
         timer.reset()
 
         if traits.eval_gradient is True:
+            output = output.reshape(*output_shape, order='F')
             return (
                 output[:, 0].astype(self.element_dtype),
                 output[:, 1:].astype(self.element_dtype)
