@@ -120,10 +120,6 @@ class MaxiMin(MarginalizedGraphKernel):
             )
         diags = [backend.array(diag[b:e])
                  for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
-        print(f'starts\n{starts}')
-        print('diags\n', diags, sep='')
-        for d in diags:
-            print(d.dtype)
         diags_d = backend.empty(len(diags), dtype=np.uintp)
         diags_d[:] = [int(d.base) for d in diags]
 

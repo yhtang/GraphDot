@@ -61,7 +61,6 @@ extern "C" {
             const int   N  = n1 * n2;
             auto const diag1 = diags[job.x];
             auto const diag2 = diags[job.y];
-            printf("I1 %d I2 %d job.x %d job.y %d\n", I1, I2, job.x, job.y);
 
             if (?{traits.eval_gradient is True}) {
                 solver_t::compute_duo(
@@ -110,22 +109,18 @@ extern "C" {
                 auto r2 = diag2[i2];
                 auto k = r12 * rsqrtf(r1 * r2);
                 auto d = sqrtf(2 - 2 * max(k, 0.f));
-                // printf("i1 %d i2 %d d %f k12 %f k1 %f k2 %f\n", i1, i2, d, k12, k1, k2);
                 atomicMin(d12 + i1, d);
                 atomicMin(d21 + i2, d);
             }
 
             for (int i = threadIdx.x; i < n1; i += blockDim.x) {
-                printf("d12[%d] = %f\n", i, d12[i]);
                 atomicMax(d12, d12[i]);
             }
             for (int i = threadIdx.x; i < n2; i += blockDim.x) {
-                printf("d21[%d] = %f\n", i, d21[i]);
                 atomicMax(d21, d21[i]);
             }
 
             auto dh = max(*d12, *d21);
-            // printf("dh %f\n", dh);
 
             // write to output buffer
             if (graphdot::cuda::laneid() == 0) {
