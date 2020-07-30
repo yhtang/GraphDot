@@ -1,27 +1,37 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import itertools as it
+import numpy as np
+from graphdot.graph import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
+from graphdot.util import Timer
+from ._backend_hausdorff import HausdorffBackend
 
 
 class MaxiMin(MarginalizedGraphKernel):
-    '''The maximin distance metric, also known as the supinf distance or the
-    Hausdorff distance named after Felix Hausdorff, measures how far two point
-    sets are from each other. Informally, the maximin distance is the greatest
-    of all the distances from a point in one set to the closest point in the
-    other set. Two sets are close in the maximin distance if every point of
-    either set is close to some point of the other set.
+    '''The maximin graph distance is a variant of the Hausdorff distance. Given
+    the nodal similarity measure defined on individual nodes by the
+    marginalized graph kernel, the maximin distance is the greatest of all the
+    kernel-induced distances from a node in one graph to the closest node
+    in the other graph. Two graphs are close in the maximin distance if every
+    node of either graph is close to some node of the other graph.
 
     Parameters
     ----------
-    args, kwargs: 
-        Inherits :py:class:`MarginalizedGraphKernel`.
+    args: arguments
+        Inherits from
+        :py:class:`graphdot.kernel.marginalized.MarginalizedGraphKernel`.
+    kwargs: keyword arguments
+        Inherits from
+        :py:class:`graphdot.kernel.marginalized.MarginalizedGraphKernel`.
     '''
 
     def __init__(self, *args, **kwargs):
-        self.kernel = kernel
-        self.kernel_options = kernel_options
+        kwargs['dtype'] = np.float32
+        super().__init__(*args, **kwargs)
+        self.maximin_backend = HausdorffBackend()
 
-    def __call__(self, X, Y=None, eval_gradient=False, **options):
+    def __call__(self, X, Y=None, eval_gradient=False, lmin=0, timing=False):
         '''Computes the distance matrix and optionally its gradient with respect
         to hyperparameters.
 
@@ -47,18 +57,113 @@ class MaxiMin(MarginalizedGraphKernel):
             derivative of the distance matrix with respect to the i-th
             hyperparameter.
         '''
+        timer = Timer()
+        backend = self.maximin_backend
+        traits = self.traits(
+            symmetric=Y is None,
+            nodal=False,
+            lmin=lmin,
+            eval_gradient=eval_gradient
+        )
 
-    @property
-    def theta(self):
-        '''An ndarray of all the hyperparameters in log scale.'''
-        return self.kernel.theta
+        ''' assert graph attributes are compatible with each other '''
+        all_graphs = list(it.chain(X, Y)) if Y is not None else X
+        pred_or_tuple = Graph.has_unified_types(all_graphs)
+        if pred_or_tuple is not True:
+            group, first, second = pred_or_tuple
+            raise TypeError(
+                f'The two graphs have mismatching {group} attributes or '
+                'attribute types. If the attributes match in name but differ '
+                'in type, try `Graph.unify_datatype` as an automatic fix.\n'
+                f'First graph: {first}\n'
+                f'Second graph: {second}\n'
+            )
 
-    @theta.setter
-    def theta(self, values):
-        '''Set the hyperparameters from an array of log-scale values.'''
-        self.kernel.theta = values
+        ''' generate jobs '''
+        timer.tic('generating jobs')
+        if traits.symmetric:
+            i, j = np.triu_indices(len(X))
+            i, j = i.astype(np.uint32), j.astype(np.uint32)
+        else:
+            i, j = np.indices((len(X), len(Y)), dtype=np.uint32)
+            j += len(X)
+        jobs = backend.array(
+            np.column_stack((i.ravel(), j.ravel()))
+            .ravel()
+            .view(np.dtype([('i', np.uint32), ('j', np.uint32)]))
+        )
+        timer.toc('generating jobs')
 
-    @property
-    def bounds(self):
-        '''The log-scale bounds of the hyperparameters as a 2D array.'''
-        return self.kernel.bounds
+        ''' create output buffer '''
+        timer.tic('creating output buffer')
+        if traits.symmetric:
+            output_shape = (len(X), len(X))
+            starts = backend.zeros(len(X) + 1, dtype=np.uint32)
+            starts[:] = np.arange(len(X) + 1)
+            starts_nodal = backend.zeros(len(X) + 1, dtype=np.uint32)
+            sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
+            np.cumsum(sizes, out=starts_nodal[1:])
+            diag = backend.array(
+                self.diag(X, eval_gradient=False, nodal=True, lmin=lmin)
+            )
+        else:
+            output_shape = (len(X), len(Y))
+            XY = np.concatenate((X, Y))
+            starts = backend.zeros(len(X) + len(Y) + 1, dtype=np.uint32)
+            starts[:len(X)] = np.arange(len(X))
+            starts[len(X):] = np.arange(len(Y) + 1)
+            starts_nodal = backend.zeros(len(XY) + 1, dtype=np.uint32)
+            sizes = np.array([len(g.nodes) for g in XY], dtype=np.uint32)
+            np.cumsum(sizes, out=starts_nodal[1:])
+            diag = backend.array(
+                self.diag(XY, eval_gradient=False, nodal=True, lmin=lmin)
+            )
+        diags = [backend.array(diag[b:e])
+                 for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
+        print(f'starts\n{starts}')
+        print('diags\n', diags, sep='')
+        for d in diags:
+            print(d.dtype)
+        diags_d = backend.empty(len(diags), dtype=np.uintp)
+        diags_d[:] = [int(d.base) for d in diags]
+
+        if traits.eval_gradient is True:
+            output_shape = (*output_shape, 1 + self.n_dims)
+        output = backend.empty(int(np.prod(output_shape)), np.float32)
+        timer.toc('creating output buffer')
+
+        ''' call GPU kernel '''
+        timer.tic('calling GPU kernel (overall)')
+        backend(
+            np.concatenate((X, Y)) if Y is not None else X,
+            diags_d,
+            self.node_kernel,
+            self.edge_kernel,
+            self.p,
+            self.q,
+            jobs,
+            starts,
+            output,
+            output_shape,
+            traits,
+            timer,
+        )
+        timer.toc('calling GPU kernel (overall)')
+
+        ''' collect result '''
+        timer.tic('collecting result')
+        output = output.reshape(*output_shape, order='F')
+        timer.toc('collecting result')
+
+        if timing:
+            timer.report(unit='ms')
+        timer.reset()
+
+        if traits.eval_gradient is True:
+            raise
+            return (
+                output[:, :, 0].astype(self.element_dtype),
+                output[:, :, 1:].astype(self.element_dtype)
+            )
+        else:
+            return output.astype(self.element_dtype)
