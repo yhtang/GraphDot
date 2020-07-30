@@ -411,6 +411,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         if np.any(Acc <= 0):
             raise np.linalg.LinAlgError(
                 'Core matrix singular, try to increase `alpha`.\n'
+                f'{Kcc}'
             )
         Kcc_rsqrt = Qcc * Acc**-0.5
 
