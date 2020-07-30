@@ -24,7 +24,7 @@ class MarginalizedGraphKernel:
         A kernelet that computes the similarity between individual nodes
     edge_kernel: microkernel
         A kernelet that computes the similarity between individual edge
-    p: positive number (default=1.0) or :py:class:`graphdot.kernel.marginalized.starting_probability.StartingProbability`
+    p: positive number (default=1.0) or :py:class:`StartingProbability`
         The starting probability of the random walk on each node. Must be
         either a positive number or a concrete subclass instance of
         :py:class:`StartingProbability`.
