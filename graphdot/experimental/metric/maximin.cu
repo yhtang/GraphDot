@@ -100,6 +100,7 @@ extern "C" {
                 d12[i] = std::numeric_limits<float32>::max();
                 d21[i] = std::numeric_limits<float32>::max();
             }
+            __syncthreads();
 
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
                 int i1 = i / n2;
@@ -112,6 +113,7 @@ extern "C" {
                 atomicMin(d12 + i1, d);
                 atomicMin(d21 + i2, d);
             }
+            __syncthreads();
 
             for (int i = threadIdx.x; i < n1; i += blockDim.x) {
                 atomicMax(d12, d12[i]);
@@ -119,11 +121,11 @@ extern "C" {
             for (int i = threadIdx.x; i < n2; i += blockDim.x) {
                 atomicMax(d21, d21[i]);
             }
-
-            auto dh = max(*d12, *d21);
+            __syncthreads();
 
             // write to output buffer
             if (graphdot::cuda::laneid() == 0) {
+                auto dh = max(*d12, *d21);
                 out[I1 + I2 * out_h] = dh;
                 if (?{traits.symmetric is True}) {
                     if (job.x != job.y) {
@@ -131,6 +133,7 @@ extern "C" {
                     }
                 }
             }
+            __syncthreads();
 
             // if (?{traits.eval_gradient is True}) {
 
