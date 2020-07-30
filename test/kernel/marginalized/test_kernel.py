@@ -241,7 +241,7 @@ def test_mlgk_cross_similarity(caseitem):
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
-def test_mlgk_derivative(caseitem):
+def test_mlgk_gradient(caseitem):
     '''derivative w.r.t. hyperparameters'''
 
     _, case = caseitem
@@ -335,6 +335,51 @@ def test_mlgk_diag(caseitem):
             gnd = np.diag(R_nodal[i:j, :][:, i:j])
             for r1, r2 in zip(sub, gnd):
                 assert(r1 == pytest.approx(r2, 1e-7))
+
+
+@pytest.mark.parametrize('caseitem', case_dict.items())
+def test_mlgk_diag_gradient(caseitem):
+    '''derivative w.r.t. hyperparameters'''
+
+    _, case = caseitem
+
+    G = case['graphs']
+    knode = case['knode']
+    kedge = case['kedge']
+    for q in case['q']:
+
+        mlgk = MarginalizedGraphKernel(knode, kedge, q=q)
+
+        R, dR = mlgk.diag(G, nodal=False, eval_gradient=True)
+
+        assert(len(dR.shape) == 2)
+        assert(R.shape[0] == dR.shape[0])
+        assert(dR.shape[1] >= 1)
+
+        for i in range(len(mlgk.theta)):
+
+            theta = mlgk.theta
+
+            eps = 1e-3
+
+            t = np.copy(theta)
+            t[i] += eps
+            mlgk.theta = t
+            Rr = mlgk.diag(G, nodal=False, eval_gradient=False)
+
+            t = np.copy(theta)
+            t[i] -= eps
+            mlgk.theta = t
+            Rl = mlgk.diag(G, nodal=False, eval_gradient=False)
+
+            mlgk.theta = theta
+
+            dR_dLogt = (Rr - Rl) / (2 * eps)
+            dLogt_dt = 1 / np.exp(theta)[i]
+            dR_dt = dR_dLogt * dLogt_dt
+
+            for a, b in zip(dR[:, i].ravel(), dR_dt.ravel()):
+                assert(a == pytest.approx(b, rel=0.05, abs=0.05))
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())

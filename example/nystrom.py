@@ -52,11 +52,11 @@ kernel = MarginalizedGraphKernel(
             stereo=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9))
         )
     ),
-    p=Uniform(1.0, (0.1, 1.0)),
+    p=Uniform(1.0, (0.1, 40.0)),
     q=0.05
 )
 
-gpr = LowRankApproximateGPR(kernel=kernel, optimizer=True)
+gpr = LowRankApproximateGPR(kernel=kernel, alpha=1.0, optimizer=True)
 gpr.fit(core, train_X, train_y, verbose=True)
 predict_y = gpr.predict(test_X)
 
