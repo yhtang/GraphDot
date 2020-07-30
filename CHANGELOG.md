@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.6.1 (2020-07-29)
+
+- Fixed a bug in kernel normalization.
+
 ## 0.6 (2020-07-26)
 
 This version formally releases the new features as have been introduced in
