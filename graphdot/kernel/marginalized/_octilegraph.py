@@ -144,14 +144,15 @@ class OctileGraph:
         i[:nnz] = edges['!i']
         j[:nnz] = edges['!j']
         # replicate & swap i and j for the lower triangular part
-        indices[[0, 1], nnz:] = indices[[1, 0], :nnz]
+        i[nnz:], j[nnz:] = j[:nnz], i[:nnz]
         # get upper left corner of owner octiles
         up[:] = i - i % 8
         lf[:] = j - j % 8
 
         # np.unique implies lexical sort
-        indices, perm = np.unique(indices, axis=1, return_index=True)
-        i, j, up, lf = indices
+        (lf, up, j, i), perm = np.unique(
+            indices[-1::-1, :], axis=1, return_index=True
+        )
         self.edges_aos = umempty(len(i), edge_t)
         self.edges_aos[:] = edges_aos[perm % nnz]  # mod nnz due to symmetry
 
