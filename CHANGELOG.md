@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.6.3 (2020-07-30)
+
+- Fixed a performance degradation due to the inconsistent lexical sorting
+behavior between `numpy.lexsort` and `numpy.unique`.
+
 ## 0.6.2 (2020-07-30)
 
 - Fixed a bug in computing the gradient of diagonal kernel entries.
