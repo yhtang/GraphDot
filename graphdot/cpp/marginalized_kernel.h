@@ -834,14 +834,14 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             const int i2 = i % n2;
             const auto n1 = g1.node[i1];
             const auto n2 = g2.node[i2];
-            const float rd1 = g1.degree[i1];// / (1 - q);
-            const float rd2 = g2.degree[i2];// / (1 - q);
-            const float rdx = rd1 * rd2;        
+            const float do1 = g1.degree[i1];
+            const float do2 = g2.degree[i2];
+            const float dox = do1 * do2;        
             const float YDq = scratch.x(i);
             const float Yp  = scratch.x(i + N);
             const float v = node_kernel(n1, n2);
 
-            dq_local += 2 * rrq * p_start(n1) * p_start(n2) * YDq - 2 * rrq3 * Yp * rdx / v * YDq;
+            dq_local += 2 * rrq * p_start(n1) * p_start(n2) * YDq - 2 * rrq3 * Yp * dox / v * YDq;
         }
 
         dq_local = warp_sum(dq_local);
