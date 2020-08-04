@@ -766,21 +766,17 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         constexpr static int _offset_e = _offset_v + NodeKernel::jac_dims;
         constexpr static int size      = _offset_e + EdgeKernel::jac_dims;
 
-        float _data[size];
+        array<float, size> _data;
 
         template<class T>
-        __device__ __inline__ jacobian_t(T const value) {
-            #pragma unroll (size)
-            for(int i = 0; i < size; ++i) {
-                _data[i] = value;
-            }
-        }
+        __host__ __device__ __inline__
+        jacobian_t(T const value) : _data(value) {}
 
-        __device__ __inline__ float & operator [] (int i) {return _data[i];}
-        __device__ __inline__ float & d_p(int i) {return _data[_offset_p + i];}
-        __device__ __inline__ float & d_q(int i) {return _data[_offset_q + i];}
-        __device__ __inline__ float & d_e(int i) {return _data[_offset_e + i];}
-        __device__ __inline__ float & d_v(int i) {return _data[_offset_v + i];}
+        __device__ __inline__ auto & operator [] (int i) {return _data[i];}
+        __device__ __inline__ auto & d_p(int i) {return _data[_offset_p + i];}
+        __device__ __inline__ auto & d_q(int i) {return _data[_offset_q + i];}
+        __device__ __inline__ auto & d_e(int i) {return _data[_offset_e + i];}
+        __device__ __inline__ auto & d_v(int i) {return _data[_offset_v + i];}
     };
 
     template<class StartingProbability, class NodeKernel, class EdgeKernel>
@@ -835,21 +831,19 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             const auto v     = node_kernel(n1, n2);
 
-            array_t<float, StartingProbability::jac_dims> dp1, dp2;
-            p_start._j_a_c_o_b_i_a_n_(dp1, n1);
-            p_start._j_a_c_o_b_i_a_n_(dp2, n2);
-            array_t<float, NodeKernel::jac_dims> dv;
-            node_kernel._j_a_c_o_b_i_a_n_(dv, n1, n2);
+            auto dp1         = p_start._j_a_c_o_b_i_a_n_(n1);
+            auto dp2         = p_start._j_a_c_o_b_i_a_n_(n2);
+            auto dv          = node_kernel._j_a_c_o_b_i_a_n_(n1, n2);
 
-            #pragma unroll (StartingProbability::jac_dims)
-            for(int j = 0; j < StartingProbability::jac_dims; ++j) {
+            #pragma unroll (dp1.size)
+            for(int j = 0; j < dp1.size; ++j) {
                 jacobian.d_p(j) += (dp1[j] * p2 + p1 * dp2[j]) * r;
             }
 
             jacobian.d_q(0) += 2 * rrq * p1 * p2 * YDq - 2 * rrq3 * Yp * dox / v * YDq;
 
-            #pragma unroll (NodeKernel::jac_dims)
-            for(int j = 0; j < NodeKernel::jac_dims; ++j) {
+            #pragma unroll (dv.size)
+            for(int j = 0; j < dv.size; ++j) {
                 jacobian.d_v(j) += -dK_dZ / (v * v) * dv[j];
             }
         }
@@ -933,14 +927,12 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                     auto e2 = octile2(i2, j2);
                                     const float dK_dY_upper = -Yp[i1_upper * octile_h + i2] * YDq[j1 * octile_w + j2];
                                     const float dK_dY_lower = -Yp[i1_lower * octile_h + i2] * YDq[j1 * octile_w + j2];
-                                    array_t<float, EdgeKernel::jac_dims> de_upper, de_lower;
-                                    if (m1_upper) edge_kernel._j_a_c_o_b_i_a_n_(de_upper, e1_upper, e2);
-                                    if (m1_lower) edge_kernel._j_a_c_o_b_i_a_n_(de_lower, e1_lower, e2);
+                                    array<float, EdgeKernel::jac_dims> de_upper(0), de_lower(0);
+                                    if (m1_upper) de_upper = edge_kernel._j_a_c_o_b_i_a_n_(e1_upper, e2);
+                                    if (m1_lower) de_lower = edge_kernel._j_a_c_o_b_i_a_n_(e1_lower, e2);
                                     #pragma unroll (EdgeKernel::jac_dims)
                                     for(int j = 0; j < EdgeKernel::jac_dims; ++j) {
-                                        jacobian.d_e(j) -=
-                                            dK_dY_upper * (m1_upper ? de_upper[j] : 0.f) + 
-                                            dK_dY_lower * (m1_lower ? de_lower[j] : 0.f);
+                                        jacobian.d_e(j) -= dK_dY_upper * de_upper[j] + dK_dY_lower * de_lower[j];
                                     }
                                 }
                             }
@@ -964,10 +956,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                             auto e2 = octile2(p2);
 
                             const float dK_dY = -Yp[i1 * octile_h + i2] * YDq[j1 * octile_w + j2];
-                            array_t<float, EdgeKernel::jac_dims> de;
-                            edge_kernel._j_a_c_o_b_i_a_n_(de, e1, e2);
-                            #pragma unroll (EdgeKernel::jac_dims)
-                            for(int j = 0; j < EdgeKernel::jac_dims; ++j) {
+                            auto de = edge_kernel._j_a_c_o_b_i_a_n_(e1, e2);
+                            #pragma unroll (de.size)
+                            for(int j = 0; j < de.size; ++j) {
                                 jacobian.d_e(j) -= dK_dY * de[j];
                             }
                         }

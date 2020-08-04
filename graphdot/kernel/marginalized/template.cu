@@ -1,3 +1,4 @@
+#include <array.h>
 #include <basekernel.h>
 #include <graph.h>
 #include <marginalized_kernel.h>

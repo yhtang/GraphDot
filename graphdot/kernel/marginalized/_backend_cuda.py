@@ -139,14 +139,18 @@ class CUDABackend(Backend):
 
             constexpr static int jac_dims = ${jac_dims};
 
-            template<class X> __device__ __inline__
+            template<class X>
+            __device__ __inline__
             auto operator() (X const &x1, X const &x2) const {
                 return ${expr};
             }
 
-            template<class X> __device__ __inline__
-            void _j_a_c_o_b_i_a_n_(float j[], X const &x1, X const &x2) const {
+            template<class X>
+            __device__ __inline__
+            auto _j_a_c_o_b_i_a_n_(X const &x1, X const &x2) const {
+                graphdot::array<float, jac_dims> j;
                 ${jac;\n};
+                return j;
             }
         };
 
@@ -170,14 +174,18 @@ class CUDABackend(Backend):
 
             constexpr static int jac_dims = ${jac_dims};
 
-            template<class N> __device__ __inline__
+            template<class N>
+            __device__ __inline__
             auto operator() (N const &n) const {
                 return ${expr};
             }
 
-            template<class N> __device__ __inline__
-            void _j_a_c_o_b_i_a_n_(float j[], N const &n) const {
+            template<class N>
+            __device__ __inline__
+            auto _j_a_c_o_b_i_a_n_(N const &n) const {
+                graphdot::array<float, jac_dims> j;
                 ${jac;\n};
+                return j;
             }
         };
 
