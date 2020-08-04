@@ -40,6 +40,7 @@ extern "C" {
         extern __shared__ char shmem[];
         __shared__ uint32 i_job;
 
+        const int lane = graphdot::cuda::laneid();
         auto scratch = scratches[blockIdx.x];
 
         while (true) {
@@ -137,7 +138,7 @@ extern "C" {
                     sum += scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
                 }
                 sum = graphdot::cuda::warp_sum(sum);
-                if (graphdot::cuda::laneid() == 0) {
+                if (lane == 0) {
                     if (?{traits.diagonal is True}) {
                         atomicAdd(out + I1, sum);
                     } else {
@@ -152,65 +153,104 @@ extern "C" {
 
                 if (?{traits.eval_gradient is True}) {
 
-                    constexpr static int jac_starts[] {
-                        0,
-                        p_start.jac_dims,
-                        p_start.jac_dims + 1,
-                        p_start.jac_dims + 1 + node_kernel.jac_dims,
-                        p_start.jac_dims + 1 + node_kernel.jac_dims + edge_kernel.jac_dims
-                    };
-
-                    __shared__ float jac[jac_starts[4]];
-
-                    for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
-                        jac[i] = 0;
-                    }
-                    __syncthreads();
-
-                    solver_t::derivative_p(
+                    auto jacobian = solver_t::derivative(
                         p_start,
-                        g1, g2,
-                        scratch,
-                        shmem,
-                        jac + jac_starts[0]);
-
-                    solver_t::derivative_q(
                         node_kernel,
-                        p_start,
-                        g1, g2,
-                        scratch,
-                        shmem,
-                        jac + jac_starts[1],
-                        q);
-
-                    solver_t::derivative_node(
-                        node_kernel,
-                        g1, g2,
-                        scratch,
-                        shmem,
-                        jac + jac_starts[2],
-                        q);
-
-                    solver_t::derivative_edge(
                         edge_kernel,
                         g1, g2,
                         scratch,
                         shmem,
-                        jac + jac_starts[3]);
+                        q
+                    );
+
+                    // constexpr static int jac_starts[] {
+                    //     0,
+                    //     p_start.jac_dims,
+                    //     p_start.jac_dims + 1,
+                    //     p_start.jac_dims + 1 + node_kernel.jac_dims,
+                    //     p_start.jac_dims + 1 + node_kernel.jac_dims + edge_kernel.jac_dims
+                    // };
+
+                    // solver_t::derivative_p(
+                    //     p_start,
+                    //     g1, g2,
+                    //     scratch,
+                    //     shmem,
+                    //     jac + jac_starts[0]);
+
+                    // __shared__ float foo[1];
+                    // solver_t::derivative_q(
+                    //     node_kernel,
+                    //     p_start,
+                    //     g1, g2,
+                    //     scratch,
+                    //     shmem,
+                    //     // jac + jac_starts[1],
+                    //     foo, 
+                    //     q);
+
+                    // solver_t::derivative_node(
+                    //     node_kernel,
+                    //     g1, g2,
+                    //     scratch,
+                    //     shmem,
+                    //     jac + jac_starts[2],
+                    //     q);
+
+                    // solver_t::derivative_edge(
+                    //     edge_kernel,
+                    //     g1, g2,
+                    //     scratch,
+                    //     shmem,
+                    //     jac + jac_starts[3]);
+
+                    // #pragma unroll (jacobian.size)
+                    // for(int i = 0; i < jacobian.size; ++i) {
+                    //     auto j = graphdot::cuda::warp_sum(jacobian[i]);
+                    //     if (graphdot::cuda::laneid() == 0) {
+                    //         atomicAdd(jac + i, j);
+                    //     };
+                    // }
+                    // __syncthreads();
 
                     if (?{traits.diagonal is True}) {
-                        for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
-                            out[I1 + (i + 1) * out_h] = jac[i];
+                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
+                            out[I1 + (i + 1) * out_h] = 0;
                         }
+                        __syncthreads();
+
+                        #pragma unroll (jacobian.size)
+                        for(int i = 0; i < jacobian.size; ++i) {
+                            auto j = graphdot::cuda::warp_sum(jacobian[i]);
+                            if (lane == 0) {
+                                atomicAdd(out + I1 + (i + 1) * out_h, j);
+                            };
+                        }
+                        __syncthreads();
                     } else {
-                        for (int i = threadIdx.x; i < jac_starts[4]; i += blockDim.x) {
-                            out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
+                            out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = 0;
                             if (?{traits.symmetric is True}) {
                                 if (job.x != job.y) {
-                                    out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = jac[i];
+                                    out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = 0;
                                 }
                             }
                         }
+                        __syncthreads();
+
+                        #pragma unroll (jacobian.size)
+                        for(int i = 0; i < jacobian.size; ++i) {
+                            auto j = graphdot::cuda::warp_sum(jacobian[i]);
+                            if (lane == 0) {
+                                atomicAdd(out + I1 + I2 * out_h + (i + 1) * out_h * out_w, j);
+                                if (?{traits.symmetric is True}) {
+                                    if (job.x != job.y) {
+                                        atomicAdd(out + I2 + I1 * out_h + (i + 1) * out_h * out_w, j);
+                                    }
+                                }
+                            };
+                        }
+                        __syncthreads();
                     }
                 }
             }

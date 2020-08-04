@@ -42,11 +42,6 @@ class MarginalizedGraphKernel:
         traits = cls.trait_t(
             diagonal, symmetric, nodal, lmin, eval_gradient
         )
-        if traits.eval_gradient is True:
-            if nodal is not False:
-                raise ValueError(
-                    'Gradients can only be evaluated with nodal=False'
-                )
         return traits
 
     def __init__(self, node_kernel, edge_kernel, p=1.0, q=0.01,
