@@ -163,56 +163,6 @@ extern "C" {
                         q
                     );
 
-                    // constexpr static int jac_starts[] {
-                    //     0,
-                    //     p_start.jac_dims,
-                    //     p_start.jac_dims + 1,
-                    //     p_start.jac_dims + 1 + node_kernel.jac_dims,
-                    //     p_start.jac_dims + 1 + node_kernel.jac_dims + edge_kernel.jac_dims
-                    // };
-
-                    // solver_t::derivative_p(
-                    //     p_start,
-                    //     g1, g2,
-                    //     scratch,
-                    //     shmem,
-                    //     jac + jac_starts[0]);
-
-                    // __shared__ float foo[1];
-                    // solver_t::derivative_q(
-                    //     node_kernel,
-                    //     p_start,
-                    //     g1, g2,
-                    //     scratch,
-                    //     shmem,
-                    //     // jac + jac_starts[1],
-                    //     foo, 
-                    //     q);
-
-                    // solver_t::derivative_node(
-                    //     node_kernel,
-                    //     g1, g2,
-                    //     scratch,
-                    //     shmem,
-                    //     jac + jac_starts[2],
-                    //     q);
-
-                    // solver_t::derivative_edge(
-                    //     edge_kernel,
-                    //     g1, g2,
-                    //     scratch,
-                    //     shmem,
-                    //     jac + jac_starts[3]);
-
-                    // #pragma unroll (jacobian.size)
-                    // for(int i = 0; i < jacobian.size; ++i) {
-                    //     auto j = graphdot::cuda::warp_sum(jacobian[i]);
-                    //     if (graphdot::cuda::laneid() == 0) {
-                    //         atomicAdd(jac + i, j);
-                    //     };
-                    // }
-                    // __syncthreads();
-
                     if (?{traits.diagonal is True}) {
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
                             out[I1 + (i + 1) * out_h] = 0;
