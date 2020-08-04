@@ -59,18 +59,6 @@ extern "C" {
             const int  n2  = g2.n_node;
             const int   N  = n1 * n2;
 
-            // wipe output buffer for atomic accumulations
-            if (?{traits.nodal is False}) {
-                if (?{traits.diagonal is True}) {
-                    out[I1] = 0.f;
-                } else {
-                    out[I1 + I2 * out_h] = 0.f;
-                    if (?{traits.symmetric is True}) {
-                        if (job.x != job.y) out[I2 + I1 * out_h] = 0.f;
-                    }
-                }
-            }
-
             if (?{traits.eval_gradient is True}) {
                 solver_t::compute_duo(
                     node_kernel,
@@ -132,6 +120,18 @@ extern "C" {
                 }
             }
             if (?{traits.nodal is False}) {
+                // wipe output buffer for atomic accumulations
+                if (threadIdx.x == 0) {
+                    if (?{traits.diagonal is True}) {
+                        out[I1] = 0.f;
+                   } else {
+                       out[I1 + I2 * out_h] = 0.f;
+                       if (?{traits.symmetric is True}) out[I2 + I1 * out_h] = 0.f;
+                   }   
+                }
+
+                __syncthreads();
+
                 float32 sum = 0;
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
@@ -164,12 +164,21 @@ extern "C" {
                         q
                     );
 
+                    // wipe output buffer for atomic accumulations
                     if (?{traits.diagonal is True}) {
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
                             out[I1 + (i + 1) * out_h] = 0;
+                        }    
+                    } else {
+                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
+                            out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = 0;
+                            if (?{traits.symmetric is True} && job.x != job.y) {
+                                out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = 0;
+                            }
                         }
-                        __syncthreads();
+                    }
 
+                    if (?{traits.diagonal is True}) {
                         #pragma unroll (jacobian.size)
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
@@ -179,16 +188,6 @@ extern "C" {
                         }
                         __syncthreads();
                     } else {
-                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = 0;
-                            if (?{traits.symmetric is True}) {
-                                if (job.x != job.y) {
-                                    out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = 0;
-                                }
-                            }
-                        }
-                        __syncthreads();
-
                         #pragma unroll (jacobian.size)
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
