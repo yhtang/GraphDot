@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.6.4 (2020-08-03)
+
+- Fixed a bug regarding target value normalization in the `fit_loocv` method of
+  GPR.
+
 ## 0.6.3 (2020-07-30)
 
 - Fixed a performance degradation due to the inconsistent lexical sorting

@@ -5,6 +5,7 @@
 #include "util_cuda.h"
 #include "graph.h"
 #include "fmath.h"
+#include "array.h"
 
 namespace graphdot {
 
@@ -757,11 +758,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         #endif
     }
 
-    // helper for gracefully handling 0-length arrays
-    template<class T, int size> struct array       {using type = T[size];};
-    template<class T>           struct array<T, 0> {using type = T *;};
-    template<class T, int n> using array_t = typename array<T, n>::type;
-
     template<class StartingProbability>
     __inline__ __device__ static void derivative_p(
         StartingProbability const p_start,
@@ -836,14 +832,16 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             const int i1 = i / n2;
             const int i2 = i % n2;
+            const auto n1 = g1.node[i1];
+            const auto n2 = g2.node[i2];
             const float rd1 = g1.degree[i1];// / (1 - q);
             const float rd2 = g2.degree[i2];// / (1 - q);
             const float rdx = rd1 * rd2;        
             const float YDq = scratch.x(i);
             const float Yp  = scratch.x(i + N);
-            const float v = node_kernel(g1.node[i1], g2.node[i2]);
+            const float v = node_kernel(n1, n2);
 
-            dq_local += 2 * rrq * p_start(g1.node[i1]) * p_start(g2.node[i2]) * YDq - 2 * rrq3 * Yp * rdx / v * YDq;
+            dq_local += 2 * rrq * p_start(n1) * p_start(n2) * YDq - 2 * rrq3 * Yp * rdx / v * YDq;
         }
 
         dq_local = warp_sum(dq_local);
@@ -876,6 +874,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             const int i1 = i / n2;
             const int i2 = i % n2;
+            const auto n1 = g1.node[i1];
+            const auto n2 = g2.node[i2];
             const float d1 = g1.degree[i1] / (1 - q);
             const float d2 = g2.degree[i2] / (1 - q);
             const float dx = d1 * d2;        
@@ -883,9 +883,9 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             const float Yp  = scratch.x(i + N);
             const float dK_dZ = -dx * Yp * YDq;
 
-            const float v = node_kernel(g1.node[i1], g2.node[i2]);
+            const float v = node_kernel(n1, n2);
             float jac[NodeKernel::jac_dims];
-            node_kernel._j_a_c_o_b_i_a_n_(jac, g1.node[i1], g2.node[i2]);
+            node_kernel._j_a_c_o_b_i_a_n_(jac, n1, n2);
             #pragma unroll (NodeKernel::jac_dims)
             for(int j = 0; j < NodeKernel::jac_dims; ++j) {
                 dK_local[j] += -dK_dZ / (v * v) * jac[j];
