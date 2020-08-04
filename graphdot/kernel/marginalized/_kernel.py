@@ -328,21 +328,22 @@ class MarginalizedGraphKernel:
         timer.tic('collecting result')
         output = output.reshape(*output_shape, order='F')
         if nodal == 'block':
-            output = [output[s:s + n**2].reshape(n, n)
+            retval = [output[s:s + n**2].reshape(n, n)
                       for s, n in zip(starts[:-1], sizes)]
+        elif traits.eval_gradient is True:
+            retval = (
+                output[:, 0].ravel().astype(self.element_dtype),
+                output[:, 1:].astype(self.element_dtype)
+            )
+        else:
+            retval = output.ravel().astype(self.element_dtype)
         timer.toc('collecting result')
 
         if timing:
             timer.report(unit='ms')
         timer.reset()
 
-        if traits.eval_gradient is True:
-            return (
-                output[:, 0].astype(self.element_dtype),
-                output[:, 1:].astype(self.element_dtype)
-            )
-        else:
-            return output.astype(self.element_dtype)
+        return retval
 
     """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
 
