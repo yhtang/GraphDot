@@ -357,28 +357,31 @@ def test_gpr_squared_loocv_error():
 def test_gpr_fit_loocv_no_opt(normalize_y):
 
     class Kernel:
-        def __init__(self, L):
-            self.L = L
-
         def __call__(self, X, Y=None):
-            L = self.L
             d = np.subtract.outer(X, Y if Y is not None else X)
-            return np.exp(-0.5 * d**2 / L**2)
+            return np.exp(-2 * np.sin(np.pi / 0.5 * d)**2)
 
         def diag(self, X):
             return np.ones_like(X)
 
-    X = np.linspace(-1, 1, 6, endpoint=False)
-    y = np.sin(X * np.pi)
-    kernel = Kernel(0.1)
+
+    X = np.linspace(0, 1, 16, endpoint=False)
+    y = np.sin(X * 4 * np.pi)
+    mask = np.array([1, 0, 1, 0, 1, 0, 1, 0,
+                     0, 1, 0, 1, 0, 1, 0, 1], dtype=np.bool_)
+    kernel = Kernel()
     gpr = GaussianProcessRegressor(
         kernel=kernel,
         alpha=1e-10,
         normalize_y=normalize_y,
         optimizer=False,
     )
-    _, m1, s1 = gpr.fit_loocv(X, y, return_mean=True, return_std=True)
-    m2, s2 = gpr.predict_loocv(X, y, return_std=True)
+    _, m1, s1 = gpr.fit_loocv(X[mask], y[mask], return_mean=True,
+                              return_std=True)
+    z = gpr.predict(X[~mask])
+    assert(z == pytest.approx(y[~mask], 1e-6))
+
+    m2, s2 = gpr.predict_loocv(X[mask], y[mask], return_std=True)
     assert(m1 == pytest.approx(m2))
     assert(s1 == pytest.approx(s2))
 
