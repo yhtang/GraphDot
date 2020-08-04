@@ -364,7 +364,6 @@ def test_gpr_fit_loocv_no_opt(normalize_y):
         def diag(self, X):
             return np.ones_like(X)
 
-
     X = np.linspace(0, 1, 16, endpoint=False)
     y = np.sin(X * 4 * np.pi)
     mask = np.array([1, 0, 1, 0, 1, 0, 1, 0,
