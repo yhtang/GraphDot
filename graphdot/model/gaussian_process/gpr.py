@@ -228,7 +228,7 @@ class GaussianProcessRegressor:
         '''build and store GPR model'''
         self.K = self._gramian(X)
         self.Kinv = CholSolver(self.K)
-        self.Ky = self.Kinv @ y
+        self.Ky = self.Kinv @ self.y
         if return_mean is False and return_std is False:
             return self
         else:
