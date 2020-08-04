@@ -522,3 +522,22 @@ class GaussianProcessRegressor:
                 opt = opt_local
 
         return opt
+
+    def save(self, dir):
+        theta = os.path.join(dir, 'theta.pkl')
+        pickle.dump(self.kernel.theta, open(theta, 'wb'), protocol=4)
+        store_dict = self.__dict__.copy()
+        if 'kernel' in store_dict.keys():
+            store_dict.pop('kernel')
+        model = os.path.join(dir, 'model.pkl')
+        pickle.dump(store_dict, open(model, 'wb'), protocol=4)
+
+    def load(self, dir):
+        theta = os.path.join(dir, 'theta.pkl')
+        theta = pickle.load(open(theta, 'rb'))
+        if self.kernel is not None:
+            self.kernel = self.kernel.clone_with_theta(theta)
+        model = os.path.join(dir, 'model.pkl')
+        store_dict = pickle.load(open(model, 'rb'))
+        for key in store_dict.keys():
+            setattr(self, key, store_dict[key])
