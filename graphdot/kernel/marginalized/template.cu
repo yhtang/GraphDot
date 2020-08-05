@@ -30,11 +30,13 @@ extern "C" {
         scratch_t       * scratches,
         uint2           * jobs,
         uint32          * starts,
-        float32         * out,
+        float32         * gramian,
+        float32         * gradient,
         uint32          * i_job_global,
         const uint32      n_jobs,
-        const uint32      out_h,
-        const uint32      out_w,
+        const uint32      gramian_h,
+        const uint32      gramian_w,
+        const uint32      gradient_dim,
         const float32     q,
         const float32     q0
     ) {
@@ -96,24 +98,24 @@ extern "C" {
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
                     int i2 = i % n2;
-                    out[I1 + i1 + i2 * g1.n_node] =
+                    gramian[I1 + i1 + i2 * g1.n_node] =
                         scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
                 }
             }
             if (?{traits.nodal is True}) {
                 if (?{traits.diagonal is True}) {
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
-                        out[I1 + i1] = scratch.x(i1 + i1 * n1) * graphdot::ipow<2>(p_start(g1.node[i1]));
+                        gramian[I1 + i1] = scratch.x(i1 + i1 * n1) * graphdot::ipow<2>(p_start(g1.node[i1]));
                     }
                 } else {
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
                         auto r = scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
-                        out[(I1 + i1) + (I2 + i2) * out_h] = r;
+                        gramian[(I1 + i1) + (I2 + i2) * gramian_h] = r;
                         if (?{traits.symmetric is True}) {
                             if (job.x != job.y) {
-                                out[(I2 + i2) + (I1 + i1) * out_h] = r;
+                                gramian[(I2 + i2) + (I1 + i1) * gramian_h] = r;
                             }
                         }
                     }    
@@ -123,10 +125,10 @@ extern "C" {
                 // wipe output buffer for atomic accumulations
                 if (threadIdx.x == 0) {
                     if (?{traits.diagonal is True}) {
-                        out[I1] = 0.f;
+                        gramian[I1] = 0.f;
                    } else {
-                       out[I1 + I2 * out_h] = 0.f;
-                       if (?{traits.symmetric is True}) out[I2 + I1 * out_h] = 0.f;
+                       gramian[I1 + I2 * gramian_h] = 0.f;
+                       if (?{traits.symmetric is True}) gramian[I2 + I1 * gramian_h] = 0.f;
                    }   
                 }
 
@@ -141,12 +143,12 @@ extern "C" {
                 sum = graphdot::cuda::warp_sum(sum);
                 if (lane == 0) {
                     if (?{traits.diagonal is True}) {
-                        atomicAdd(out + I1, sum);
+                        atomicAdd(gramian + I1, sum);
                     } else {
-                        atomicAdd(out + I1 + I2 * out_h, sum);
+                        atomicAdd(gramian + I1 + I2 * gramian_h, sum);
                         if (?{traits.symmetric is True}) {
                             if (job.x != job.y) {
-                                atomicAdd(out + I2 + I1 * out_h, sum);
+                                atomicAdd(gramian + I2 + I1 * gramian_h, sum);
                             }
                         }
                     }
@@ -167,13 +169,13 @@ extern "C" {
                     // wipe output buffer for atomic accumulations
                     if (?{traits.diagonal is True}) {
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            out[I1 + (i + 1) * out_h] = 0;
+                            gradient[i + I1 * gradient_dim] = 0;
                         }    
                     } else {
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            out[I1 + I2 * out_h + (i + 1) * out_h * out_w] = 0;
+                            gradient[i + I1 * gradient_dim + I2 * gradient_dim * gramian_h] = 0;
                             if (?{traits.symmetric is True} && job.x != job.y) {
-                                out[I2 + I1 * out_h + (i + 1) * out_h * out_w] = 0;
+                                gradient[i + I1 * gradient_dim + I2 * gradient_dim * gramian_h] = 0;
                             }
                         }
                     }
@@ -183,7 +185,7 @@ extern "C" {
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
                             if (lane == 0) {
-                                atomicAdd(out + I1 + (i + 1) * out_h, j);
+                                atomicAdd(gradient + i + I1 * gradient_dim, j);
                             };
                         }
                         __syncthreads();
@@ -192,10 +194,10 @@ extern "C" {
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
                             if (lane == 0) {
-                                atomicAdd(out + I1 + I2 * out_h + (i + 1) * out_h * out_w, j);
+                                atomicAdd(gradient + i + I1 * gradient_dim + I2 * gradient_dim * gramian_h, j);
                                 if (?{traits.symmetric is True}) {
                                     if (job.x != job.y) {
-                                        atomicAdd(out + I2 + I1 * out_h + (i + 1) * out_h * out_w, j);
+                                        atomicAdd(gradient + i + I2 * gradient_dim + I1 * gradient_dim * gramian_h, j);
                                     }
                                 }
                             };
