@@ -208,7 +208,7 @@ class MarginalizedGraphKernel:
         gramian = gramian.reshape(*output_shape, order='F')
         if gradient is not None:
             gradient = gradient.reshape(
-                (*output_shape, self.n_dims), order='C'
+                (*output_shape, self.n_dims), order='F'
             )
         timer.toc('collecting result')
 
@@ -339,7 +339,7 @@ class MarginalizedGraphKernel:
         timer.tic('collecting result')
         if gradient is not None:
             gradient = gradient.reshape(
-                (output_length, self.n_dims), order='C'
+                (output_length, self.n_dims), order='F'
             )
         if nodal == 'block':
             retval = [gramian[s:s + n**2].reshape(n, n)

@@ -169,13 +169,13 @@ extern "C" {
                     // wipe output buffer for atomic accumulations
                     if (?{traits.diagonal is True}) {
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            gradient[i + I1 * gradient_dim] = 0;
+                            gradient[I1 + i * gramian_h] = 0;
                         }    
                     } else {
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            gradient[i + I1 * gradient_dim + I2 * gradient_dim * gramian_h] = 0;
+                            gradient[I1 + I2 * gramian_h + i * gramian_h * gramian_w] = 0;
                             if (?{traits.symmetric is True} && job.x != job.y) {
-                                gradient[i + I1 * gradient_dim + I2 * gradient_dim * gramian_h] = 0;
+                                gradient[I1 + I2 * gramian_h + i * gramian_h * gramian_w] = 0;
                             }
                         }
                     }
@@ -185,7 +185,7 @@ extern "C" {
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
                             if (lane == 0) {
-                                atomicAdd(gradient + i + I1 * gradient_dim, j);
+                                atomicAdd(gradient + I1 + i * gramian_h, j);
                             };
                         }
                         __syncthreads();
@@ -194,10 +194,10 @@ extern "C" {
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
                             if (lane == 0) {
-                                atomicAdd(gradient + i + I1 * gradient_dim + I2 * gradient_dim * gramian_h, j);
+                                atomicAdd(gradient + I1 + I2 * gramian_h + i * gramian_h * gramian_w, j);
                                 if (?{traits.symmetric is True}) {
                                     if (job.x != job.y) {
-                                        atomicAdd(gradient + i + I2 * gradient_dim + I1 * gradient_dim * gramian_h, j);
+                                        atomicAdd(gradient + I2 + I1 * gramian_h + i * gramian_h * gramian_w, j);
                                     }
                                 }
                             };
