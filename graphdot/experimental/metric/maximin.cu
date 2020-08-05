@@ -109,7 +109,7 @@ extern "C" {
                 auto r1 = diag1[i1];
                 auto r2 = diag2[i2];
                 auto k = r12 * rsqrtf(r1 * r2);
-                auto d = sqrtf(2 - 2 * max(k, 0.f));
+                auto d = sqrtf(max(0.f, 2 - 2 * k));
                 atomicMin(d12 + i1, d);
                 atomicMin(d21 + i2, d);
             }
@@ -124,8 +124,8 @@ extern "C" {
             __syncthreads();
 
             // write to output buffer
-            if (graphdot::cuda::laneid() == 0) {
-                auto dh = max(*d12, *d21);
+            auto dh = max(*d12, *d21);
+            if (threadIdx.x == 0) {
                 out[I1 + I2 * out_h] = dh;
                 if (?{traits.symmetric is True}) {
                     if (job.x != job.y) {
