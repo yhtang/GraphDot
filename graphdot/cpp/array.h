@@ -54,7 +54,7 @@ struct array<type, 0> {
     }
 
     __host__ __device__ __inline__
-    auto operator [] (int i) {return *nullptr;}
+    auto operator [] (int i) {return element_type {};}
 };
 
 }
