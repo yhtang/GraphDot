@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.6.5 (2020-08-05)
+
+- Fixed a bug related to the `lmin=1` option of the marginalized graph kernel.
+
 ## 0.6.4 (2020-08-03)
 
 - Fixed a bug regarding target value normalization in the `fit_loocv` method of
