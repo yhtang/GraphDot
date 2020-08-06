@@ -1,10 +1,11 @@
 #include <array.h>
 #include <basekernel.h>
-#include <graph.h>
-#include <marginalized_kernel.h>
 #include <fmath.h>
 #include <frozen_array.h>
+#include <graph.h>
+#include <marginalized_kernel.h>
 #include <numpy_type.h>
+#include <tensor_view.h>
 #include <util_cuda.h>
 
 using namespace graphdot::numpy_type;
@@ -29,19 +30,19 @@ extern "C" {
         graph_t const   * graphs,
         scratch_t       * scratches,
         uint2           * jobs,
-        uint32          * starts,
+        uint            * starts,
         float32         * gramian,
         float32         * gradient,
-        uint32          * i_job_global,
-        const uint32      n_jobs,
-        const uint32      gramian_h,
-        const uint32      gramian_w,
-        const uint32      gradient_dim,
+        uint            * i_job_global,
+        const uint        n_jobs,
+        const uint        nX,
+        const uint        nY,
+        const uint        nJ,
         const float32     q,
         const float32     q0
     ) {
         extern __shared__ char shmem[];
-        __shared__ uint32 i_job;
+        __shared__ uint i_job;
 
         const int lane = graphdot::cuda::laneid();
         auto scratch = scratches[blockIdx.x];
@@ -52,14 +53,14 @@ extern "C" {
 
             if (i_job >= n_jobs) break;
 
-            auto const job = jobs[i_job];
-            auto const g1  = graphs[job.x];
-            auto const g2  = graphs[job.y];
-            auto const I1  = std::size_t(starts[job.x]);
-            auto const I2  = std::size_t(starts[job.y]);
-            const int  n1  = g1.n_node;
-            const int  n2  = g2.n_node;
-            const int   N  = n1 * n2;
+            const auto job = jobs[i_job];
+            const auto g1  = graphs[job.x];
+            const auto g2  = graphs[job.y];
+            const auto I1  = starts[job.x];
+            const auto I2  = starts[job.y];
+            const uint n1  = g1.n_node;
+            const uint n2  = g2.n_node;
+            const uint N   = n1 * n2;
 
             if (?{traits.eval_gradient is True}) {
                 solver_t::compute_duo(
@@ -98,7 +99,7 @@ extern "C" {
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
                     int i2 = i % n2;
-                    gramian[I1 + i1 + i2 * g1.n_node] =
+                    gramian[I1 + i1 + i2 * n1] =
                         scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
                 }
             }
@@ -108,14 +109,15 @@ extern "C" {
                         gramian[I1 + i1] = scratch.x(i1 + i1 * n1) * graphdot::ipow<2>(p_start(g1.node[i1]));
                     }
                 } else {
+                    auto K = graphdot::tensor_view(gramian, nX, nY);
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
                         auto r = scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
-                        gramian[(I1 + i1) + (I2 + i2) * gramian_h] = r;
+                        K(I1 + i1, I2 + i2) = r;
                         if (?{traits.symmetric is True}) {
                             if (job.x != job.y) {
-                                gramian[(I2 + i2) + (I1 + i1) * gramian_h] = r;
+                                K(I2 + i2, I1 + i1) = r;
                             }
                         }
                     }    
@@ -127,8 +129,8 @@ extern "C" {
                     if (?{traits.diagonal is True}) {
                         gramian[I1] = 0.f;
                    } else {
-                       gramian[I1 + I2 * gramian_h] = 0.f;
-                       if (?{traits.symmetric is True}) gramian[I2 + I1 * gramian_h] = 0.f;
+                       gramian[I1 + I2 * nX] = 0.f;
+                       if (?{traits.symmetric is True}) gramian[I2 + I1 * nX] = 0.f;
                    }   
                 }
 
@@ -145,10 +147,11 @@ extern "C" {
                     if (?{traits.diagonal is True}) {
                         atomicAdd(gramian + I1, sum);
                     } else {
-                        atomicAdd(gramian + I1 + I2 * gramian_h, sum);
+                        auto K = graphdot::tensor_view(gramian, nX, nY);
+                        atomicAdd(K.at(I1, I2), sum);
                         if (?{traits.symmetric is True}) {
                             if (job.x != job.y) {
-                                atomicAdd(gramian + I2 + I1 * gramian_h, sum);
+                                atomicAdd(K.at(I2, I1), sum);
                             }
                         }
                     }
@@ -168,42 +171,49 @@ extern "C" {
 
                     // wipe output buffer for atomic accumulations
                     if (?{traits.diagonal is True}) {
-                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            gradient[I1 + i * gramian_h] = 0;
-                        }    
-                    } else {
-                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            gradient[I1 + I2 * gramian_h + i * gramian_h * gramian_w] = 0;
-                            if (?{traits.symmetric is True} && job.x != job.y) {
-                                gradient[I1 + I2 * gramian_h + i * gramian_h * gramian_w] = 0;
-                            }
-                        }
-                    }
 
-                    if (?{traits.diagonal is True}) {
+                        auto J = graphdot::tensor_view(gradient, nX, nJ);
+
+                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
+                            J(I1, i) = 0;
+                        }    
+
+                        __syncthreads();
+
                         #pragma unroll (jacobian.size)
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
                             if (lane == 0) {
-                                atomicAdd(gradient + I1 + i * gramian_h, j);
+                                atomicAdd(J.at(I1, i), j);
                             };
                         }
-                        __syncthreads();
                     } else {
+
+                        auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
+
+                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
+                            J(I1, I2, i) = 0;
+                            if (?{traits.symmetric is True} && job.x != job.y) {
+                                J(I2, I1, i) = 0;
+                            }
+                        }
+
+                        __syncthreads();
+
                         #pragma unroll (jacobian.size)
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
                             if (lane == 0) {
-                                atomicAdd(gradient + I1 + I2 * gramian_h + i * gramian_h * gramian_w, j);
+                                atomicAdd(J.at(I1, I2, i), j);
                                 if (?{traits.symmetric is True}) {
                                     if (job.x != job.y) {
-                                        atomicAdd(gradient + I2 + I1 * gramian_h + i * gramian_h * gramian_w, j);
+                                        atomicAdd(J.at(I2, I1, i), j);
                                     }
                                 }
                             };
                         }
-                        __syncthreads();
                     }
+                    __syncthreads();
                 }
             }
         }
