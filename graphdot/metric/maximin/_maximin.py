@@ -103,9 +103,7 @@ class MaxiMin(MarginalizedGraphKernel):
             starts_nodal = backend.zeros(len(X) + 1, dtype=np.uint32)
             sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
             np.cumsum(sizes, out=starts_nodal[1:])
-            diag = backend.array(
-                self.diag(X, eval_gradient=False, nodal=True, lmin=lmin)
-            )
+            diag = self.diag(X, eval_gradient, nodal=True, lmin=lmin)
         else:
             output_shape = (len(X), len(Y))
             XY = np.concatenate((X, Y))
@@ -115,9 +113,6 @@ class MaxiMin(MarginalizedGraphKernel):
             starts_nodal = backend.zeros(len(XY) + 1, dtype=np.uint32)
             sizes = np.array([len(g.nodes) for g in XY], dtype=np.uint32)
             np.cumsum(sizes, out=starts_nodal[1:])
-            diag = backend.array(
-                self.diag(XY, eval_gradient=False, nodal=True, lmin=lmin)
-            )
 
         gramian = backend.empty(int(np.prod(output_shape)), np.float32)
         if traits.eval_gradient is True:
@@ -127,8 +122,14 @@ class MaxiMin(MarginalizedGraphKernel):
         else:
             gradient = None
 
-        diags = [backend.array(diag[b:e])
-                 for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
+        diag = super().diag(XY, eval_gradient, nodal=True, lmin=lmin)
+        if eval_gradient is True:
+            r, dr = diag
+            diags = [backend.array(np.concatenate(r[b:e], dr[b:e, :].ravel()))
+                     for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
+        else:
+            diags = [backend.array(diag[b:e])
+                     for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
         diags_d = backend.empty(len(diags), dtype=np.uintp)
         diags_d[:] = [int(d.base) for d in diags]
 
@@ -169,7 +170,6 @@ class MaxiMin(MarginalizedGraphKernel):
         timer.reset()
 
         if traits.eval_gradient is True:
-            raise
             return (
                 gramian.astype(self.element_dtype),
                 gradient.astype(self.element_dtype)
