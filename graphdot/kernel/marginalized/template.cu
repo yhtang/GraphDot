@@ -62,7 +62,25 @@ extern "C" {
             const uint n2  = g2.n_node;
             const uint N   = n1 * n2;
 
-            if (?{traits.eval_gradient is True}) {
+            #if ?{traits.nodal == "block"}
+                auto K = graphdot::tensor_view(gramian, nX);
+            #else
+                #if ?{traits.diagonal is True}
+                    auto K = graphdot::tensor_view(gramian, nX);
+                #else
+                    auto K = graphdot::tensor_view(gramian, nX, nY);
+                #endif
+            #endif
+
+            #if ?{traits.eval_gradient is True}
+                #if ?{traits.diagonal is True}
+                    auto J = graphdot::tensor_view(gradient, nX, nJ);
+                #else
+                    auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
+                #endif
+            #endif
+
+            #if ?{traits.eval_gradient is True}
                 solver_t::compute_duo(
                     node_kernel,
                     edge_kernel,
@@ -71,7 +89,7 @@ extern "C" {
                     scratch,
                     shmem,
                     q, q0);
-            } else {
+            #else
                 solver_t::compute(
                     node_kernel,
                     edge_kernel,
@@ -79,59 +97,56 @@ extern "C" {
                     scratch,
                     shmem,
                     q, q0);
-            }
+            #endif
             __syncthreads();
 
             /********* post-processing *********/
 
             // apply starting probability and min-path truncation
-            if (?{traits.lmin == 1}) {
+            #if ?{traits.lmin == 1}
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
                     int i2 = i % n2;
                     scratch.x(i) -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
-            }
+            #endif
             __syncthreads();
 
             // write to output buffer
-            if (?{traits.nodal == "block"}) {
+            #if ?{traits.nodal == "block"}
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
                     int i2 = i % n2;
-                    gramian[I1 + i1 + i2 * n1] =
+                    K(I1 + i1 + i2 * n1) =
                         scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
                 }
-            }
-            if (?{traits.nodal is True}) {
-                if (?{traits.diagonal is True}) {
+            #elif ?{traits.nodal is True}
+                #if ?{traits.diagonal is True}
                     for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
-                        gramian[I1 + i1] = scratch.x(i1 + i1 * n1) * graphdot::ipow<2>(p_start(g1.node[i1]));
+                        K(I1 + i1) = scratch.x(i1 + i1 * n1) * graphdot::ipow<2>(p_start(g1.node[i1]));
                     }
-                } else {
-                    auto K = graphdot::tensor_view(gramian, nX, nY);
+                #else
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
                         auto r = scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
                         K(I1 + i1, I2 + i2) = r;
-                        if (?{traits.symmetric is True}) {
-                            if (job.x != job.y) {
-                                K(I2 + i2, I1 + i1) = r;
-                            }
-                        }
+                        #if ?{traits.symmetric is True}
+                            if (job.x != job.y) K(I2 + i2, I1 + i1) = r;
+                        #endif
                     }    
-                }
-            }
-            if (?{traits.nodal is False}) {
+                #endif
+            #elif ?{traits.nodal is False}
                 // wipe output buffer for atomic accumulations
                 if (threadIdx.x == 0) {
-                    if (?{traits.diagonal is True}) {
-                        gramian[I1] = 0.f;
-                   } else {
-                       gramian[I1 + I2 * nX] = 0.f;
-                       if (?{traits.symmetric is True}) gramian[I2 + I1 * nX] = 0.f;
-                   }   
+                    #if ?{traits.diagonal is True}
+                        K(I1) = 0.f;
+                    #else
+                        K(I1, I2) = 0.f;
+                        #if ?{traits.symmetric is True}
+                            K(I2, I1) = 0.f;
+                        #endif
+                    #endif
                 }
 
                 __syncthreads();
@@ -144,20 +159,19 @@ extern "C" {
                 }
                 sum = graphdot::cuda::warp_sum(sum);
                 if (lane == 0) {
-                    if (?{traits.diagonal is True}) {
-                        atomicAdd(gramian + I1, sum);
-                    } else {
-                        auto K = graphdot::tensor_view(gramian, nX, nY);
+                    #if ?{traits.diagonal is True}
+                        atomicAdd(K.at(I1), sum);
+                    #else
                         atomicAdd(K.at(I1, I2), sum);
-                        if (?{traits.symmetric is True}) {
+                        #if ?{traits.symmetric is True}
                             if (job.x != job.y) {
                                 atomicAdd(K.at(I2, I1), sum);
                             }
-                        }
-                    }
+                        #endif
+                    #endif
                 }
 
-                if (?{traits.eval_gradient is True}) {
+                #if ?{traits.eval_gradient is True}
 
                     auto jacobian = solver_t::derivative(
                         p_start,
@@ -169,10 +183,7 @@ extern "C" {
                         q
                     );
 
-                    // wipe output buffer for atomic accumulations
-                    if (?{traits.diagonal is True}) {
-
-                        auto J = graphdot::tensor_view(gradient, nX, nJ);
+                    #if ?{traits.diagonal is True}
 
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
                             J(I1, i) = 0;
@@ -187,15 +198,13 @@ extern "C" {
                                 atomicAdd(J.at(I1, i), j);
                             };
                         }
-                    } else {
-
-                        auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
+                    #else
 
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
                             J(I1, I2, i) = 0;
-                            if (?{traits.symmetric is True} && job.x != job.y) {
-                                J(I2, I1, i) = 0;
-                            }
+                            #if ?{traits.symmetric is True}
+                                if (job.x != job.y) J(I2, I1, i) = 0;
+                            #endif
                         }
 
                         __syncthreads();
@@ -205,17 +214,15 @@ extern "C" {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
                             if (lane == 0) {
                                 atomicAdd(J.at(I1, I2, i), j);
-                                if (?{traits.symmetric is True}) {
-                                    if (job.x != job.y) {
-                                        atomicAdd(J.at(I2, I1, i), j);
-                                    }
-                                }
+                                #if ?{traits.symmetric is True}
+                                    if (job.x != job.y) atomicAdd(J.at(I2, I1, i), j);
+                                #endif
                             };
                         }
-                    }
+                    #endif
                     __syncthreads();
-                }
-            }
+                #endif
+            #endif
         }
     }
 }
