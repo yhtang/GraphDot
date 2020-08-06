@@ -99,6 +99,7 @@ extern "C" {
                     scratch.x(i) -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                 }
             }
+            __syncthreads();
 
             // write to output buffer
             if (?{traits.nodal == "block"}) {
