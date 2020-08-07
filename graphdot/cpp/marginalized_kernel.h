@@ -792,7 +792,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
     ) {
 
         using namespace graphdot::cuda;
-    
+
         const int warp_id_local  = threadIdx.x / warp_size;
         const int warp_num_local = blockDim.x / warp_size;
         const int lane           = laneid();
@@ -803,12 +803,12 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         const int n1             = g1.n_node;
         const int n2             = g2.n_node;
         const int N              = n1 * n2;
-    
+
         const float rrq          = 1.0f / (1.0f - q);
         const float rrq3         = rrq * rrq * rrq;
 
         jacobian_t<StartingProbability, NodeKernel, EdgeKernel> jacobian(0);
-        
+
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             const int i1     = i / n2;
             const int i2     = i % n2;

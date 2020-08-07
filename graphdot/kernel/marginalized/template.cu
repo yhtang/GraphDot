@@ -62,9 +62,16 @@ extern "C" {
             const uint n2  = g2.n_node;
             const uint N   = n1 * n2;
 
+            // setup kernel matrix view
             #if ?{traits.nodal == "block"}
                 auto K = graphdot::tensor_view(gramian, nX);
-            #else
+            #elif ?{traits.nodal is True}
+                #if ?{traits.diagonal is True}
+                    auto K = graphdot::tensor_view(gramian, nX);
+                #else
+                    auto K = graphdot::tensor_view(gramian, nX, nY);
+                #endif
+            #elif ?{traits.nodal is False}
                 #if ?{traits.diagonal is True}
                     auto K = graphdot::tensor_view(gramian, nX);
                 #else
@@ -72,6 +79,7 @@ extern "C" {
                 #endif
             #endif
 
+            // setup Jacobian matrix view
             #if ?{traits.eval_gradient is True}
                 #if ?{traits.diagonal is True}
                     auto J = graphdot::tensor_view(gradient, nX, nJ);
@@ -80,6 +88,7 @@ extern "C" {
                 #endif
             #endif
 
+            // solve the MLGK equation
             #if ?{traits.eval_gradient is True}
                 solver_t::compute_duo(
                     node_kernel,
@@ -100,9 +109,7 @@ extern "C" {
             #endif
             __syncthreads();
 
-            /********* post-processing *********/
-
-            // apply starting probability and min-path truncation
+            // apply min-path truncation
             #if ?{traits.lmin == 1}
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
@@ -112,7 +119,7 @@ extern "C" {
             #endif
             __syncthreads();
 
-            // write to output buffer
+            // write kernel matrix elements to output
             #if ?{traits.nodal == "block"}
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
@@ -170,9 +177,14 @@ extern "C" {
                         #endif
                     #endif
                 }
+            #endif
 
-                #if ?{traits.eval_gradient is True}
+            // optionally evaluate the gradient
+            #if ?{traits.eval_gradient is True}
 
+                #if ?{traits.nodal is True}
+                    // auto jacobian
+                #elif ?{traits.nodal is False}
                     auto jacobian = solver_t::derivative(
                         p_start,
                         node_kernel,
@@ -184,13 +196,10 @@ extern "C" {
                     );
 
                     #if ?{traits.diagonal is True}
-
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
                             J(I1, i) = 0;
-                        }    
-
+                        }
                         __syncthreads();
-
                         #pragma unroll (jacobian.size)
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
@@ -199,16 +208,13 @@ extern "C" {
                             };
                         }
                     #else
-
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
                             J(I1, I2, i) = 0;
                             #if ?{traits.symmetric is True}
                                 if (job.x != job.y) J(I2, I1, i) = 0;
                             #endif
                         }
-
                         __syncthreads();
-
                         #pragma unroll (jacobian.size)
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
@@ -220,8 +226,8 @@ extern "C" {
                             };
                         }
                     #endif
-                    __syncthreads();
                 #endif
+                __syncthreads();
             #endif
         }
     }
