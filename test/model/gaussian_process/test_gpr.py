@@ -3,6 +3,7 @@
 import unittest.mock
 import pytest
 import numpy as np
+import os
 from graphdot.model.gaussian_process import GaussianProcessRegressor
 
 np.random.seed(0)
@@ -463,3 +464,65 @@ def test_kernel_options():
 
     gpr.predict(Y, return_cov=True)
     kernel.assert_called_with(Y, **options)
+
+
+@pytest.mark.parametrize('normalize_y', [True, False])
+def test_gpr_save_load(normalize_y):
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                return f, np.stack((j, ), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.L = np.exp(t[0])
+
+        @property
+        def bounds(self):
+            return np.log([[1e-2, 10]])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0)
+            k.theta = theta
+            return k
+    X = np.linspace(-1, 1, 6, endpoint=False)
+    y = np.sin(X * np.pi)
+    kernel = Kernel(0.1)
+    gpr = GaussianProcessRegressor(
+        kernel=kernel,
+        alpha=1e-10,
+        normalize_y=normalize_y,
+        optimizer=True
+    )
+    gpr.fit_loocv(X, y, verbose=True)
+    CWD = os.path.dirname(os.path.abspath(__file__))
+    gpr.save(CWD)
+    gpr_load = GaussianProcessRegressor(
+        kernel=kernel,
+    )
+    gpr_load.load(CWD)
+    assert (gpr.alpha == pytest.approx(gpr_load.alpha))
+    assert (gpr.y_mean == pytest.approx(gpr_load.y_mean))
+    assert (gpr.y_std == pytest.approx(gpr_load.y_std))
+    assert (gpr._y == pytest.approx(gpr_load._y))
+    assert (gpr.K == pytest.approx(gpr_load.K))
+    assert (gpr.Ky == pytest.approx(gpr_load.Ky))
+    assert (os.path.exists(os.path.join(CWD, 'model.pkl')))
+    os.remove(os.path.join(CWD, 'model.pkl'))
