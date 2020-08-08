@@ -3,12 +3,11 @@
 import numpy as np
 import pytest
 import pycuda.autoinit
-from graphdot.kernel.marginalized._scratch import PCGScratch, JacobianScratch
+from graphdot.kernel.marginalized._scratch import PCGScratch
 
 
 @pytest.mark.parametrize('cls', [
     lambda n: PCGScratch(n),
-    lambda n: JacobianScratch(n, 4)
 ])
 def test_scratch(cls):
     assert(cls(1).dtype.isalignedstruct)
@@ -20,17 +19,15 @@ def test_scratch(cls):
         cls(-1)
 
 
-sizes = [1, 11, 16, 17, 25, 31, 32, 217, 8195, 91924]
-
-
 @pytest.mark.parametrize('cls', [
-    lambda n: PCGScratch(n),
-    lambda n: JacobianScratch(n, 4)
+    PCGScratch,
 ])
-@pytest.mark.parametrize('size', sizes)
-def test_scratch_allocation(cls, size):
-    scratch = cls(size)
+@pytest.mark.parametrize('size', [1, 11, 16, 17, 25, 31, 32, 217, 8195, 91924])
+@pytest.mark.parametrize('ntemp', [1, 5, 6, 10])
+def test_scratch_allocation(cls, size, ntemp):
+    scratch = cls(size, ntemp)
     assert(scratch.nmax >= size)
+    assert(scratch.nmax * scratch.ncol >= size * ntemp)
     assert(scratch.ptr != 0)
     assert(scratch.state)
     with pytest.raises(AttributeError):

@@ -15,7 +15,7 @@ from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
 from ._backend import Backend
-from ._scratch import PCGScratch, JacobianScratch
+from ._scratch import PCGScratch
 from ._octilegraph import OctileGraph
 
 
@@ -49,7 +49,7 @@ class CUDABackend(Backend):
         self.uuid = uuid.uuid4()
         self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
         self.device = self.ctx.get_device()
-        self.scratch = None
+        self.scratch_pcg = None
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -73,14 +73,17 @@ class CUDABackend(Backend):
                 'try to normalize automatically with `Graph.normalize_types`.'
             )
 
-    def _allocate_scratch(self, count, nmax):
-        if (self.scratch is None or len(self.scratch) < count or
-                self.scratch[0].nmax < nmax):
+    @functools.lru_cache(1)
+    def _allocate_pcg_scratch(self, count, nmax):
+        if (self.scratch_pcg is None or len(self.scratch_pcg) < count or
+                self.scratch_pcg[0].nmax < nmax):
             self.ctx.synchronize()
-            self.scratch = [PCGScratch(nmax) for _ in range(count)]
-            self.scratch_d = umarray(np.array([s.state for s in self.scratch],
-                                              PCGScratch.dtype))
+            self.scratch_pcg = [PCGScratch(nmax) for _ in range(count)]
+            self.scratch_pcg_d = umarray(
+                np.array([s.state for s in self.scratch_pcg], PCGScratch.dtype)
+            )
             self.ctx.synchronize()
+        return self.scratch_pcg_d
 
     def _register_graph(self, graph):
         if self.uuid not in graph.cookie:
@@ -250,13 +253,26 @@ class CUDABackend(Backend):
         timer.tic('calculating launch configuration')
         launch_block_count = (self.device.MULTIPROCESSOR_COUNT
                               * self.block_per_sm)
-        shmem_bytes_per_warp = self.module.get_global('shmem_bytes_per_warp')[1]
+        shmem_bytes_per_warp = self.module.get_global(
+            'shmem_bytes_per_warp'
+        )[1]
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
+        ''' allocate scratch buffers '''
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        self._allocate_scratch(launch_block_count, 2 * max_graph_size**2)
+        if traits.eval_gradient is True:
+            scratch_pcg = self._allocate_pcg_scratch(
+                launch_block_count,
+                2 * max_graph_size**2
+            )
+        else:
+            scratch_pcg = self._allocate_pcg_scratch(
+                launch_block_count,
+                max_graph_size**2
+            )
 
+        ''' copy micro kernel parameters to GPU '''
         p_node_kernel, _ = self.module.get_global('node_kernel')
         cuda.memcpy_htod(p_node_kernel, np.array([node_kernel.state],
                                                  dtype=node_kernel.dtype))
@@ -274,7 +290,7 @@ class CUDABackend(Backend):
         timer.tic('GPU kernel execution')
         kernel(
             graphs_d,
-            self.scratch_d,
+            scratch_pcg,
             jobs,
             starts,
             gramian,

@@ -20,25 +20,8 @@ class Scratch:
 @cpptype(ptr=np.uintp, nmax=np.int64)
 class PCGScratch(Scratch):
 
-    n_temporaries = 5
-
-    def __init__(self, capacity):
-        super().__init__(capacity, self.n_temporaries, 16, 1, np.float32)
-
-    @property
-    def nmax(self):
-        return self.nrow
-
-    @property
-    def ptr(self):
-        return self.data.ptr
-
-
-@cpptype(ptr=np.uintp, nmax=np.int64)
-class JacobianScratch(Scratch):
-
-    def __init__(self, capacity, n_dims):
-        super().__init__(capacity, n_dims, 16, 1, np.float32)
+    def __init__(self, capacity, n_temporaries=5):
+        super().__init__(capacity, n_temporaries, 16, 1, np.float32)
 
     @property
     def nmax(self):
