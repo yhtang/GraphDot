@@ -15,7 +15,7 @@ from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
 from ._backend import Backend
-from ._scratch import PCGScratch
+from ._scratch import PCGScratch, JacobianScratch
 from ._octilegraph import OctileGraph
 
 
@@ -50,7 +50,6 @@ class CUDABackend(Backend):
         self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
         self.device = self.ctx.get_device()
         self.scratch = None
-        self.scratch_capacity = 0
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -74,14 +73,13 @@ class CUDABackend(Backend):
                 'try to normalize automatically with `Graph.normalize_types`.'
             )
 
-    def _allocate_scratch(self, count, capacity):
+    def _allocate_scratch(self, count, nmax):
         if (self.scratch is None or len(self.scratch) < count or
-                self.scratch[0].capacity < capacity):
+                self.scratch[0].nmax < nmax):
             self.ctx.synchronize()
-            self.scratch = [PCGScratch(capacity) for _ in range(count)]
+            self.scratch = [PCGScratch(nmax) for _ in range(count)]
             self.scratch_d = umarray(np.array([s.state for s in self.scratch],
                                               PCGScratch.dtype))
-            self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
     def _register_graph(self, graph):
