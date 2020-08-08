@@ -129,7 +129,7 @@ extern "C" {
                 }
             #elif ?{traits.nodal is True}
                 #if ?{traits.diagonal is True}
-                    for (int i1 = threadIdx.x; i1 < g1.n_node; i1 += blockDim.x) {
+                    for (int i1 = threadIdx.x; i1 < n1; i1 += blockDim.x) {
                         K(I1 + i1) = scratch.x(i1 + i1 * n1) * graphdot::ipow<2>(p_start(g1.node[i1]));
                     }
                 #else
@@ -182,30 +182,46 @@ extern "C" {
             // optionally evaluate the gradient
             #if ?{traits.eval_gradient is True}
 
+                auto jacobian = solver_t::derivative(
+                    p_start,
+                    node_kernel,
+                    edge_kernel,
+                    g1, g2,
+                    scratch,
+                    shmem,
+                    q
+                );
+                __syncthreads();
+
                 #if ?{traits.nodal is True}
-                    // auto jacobian
+
+                    #if ?{traits.diagonal is True}
+                        for(int i1 = threadIdx.x; i < n1; i += blockDim.x) {
+                            #pragma unroll (jacobian.size)
+                            for(int j = 0; j < jacobian.size; ++j) {
+                                J(I1 + i1, j) = jacobian(i1, i1, j);
+                            }
+                        }
+                    #else
+                        for(int i = threadIdx.x; i < N; i += blockDim.x) {
+                            i1 = i / n2;
+                            i2 = i % n2;
+                            #pragma unroll (jacobian.size)
+                            for(int j = 0; j < jacobian.size; ++j) {
+                                const auto r = jacobian(i1, i2, j);
+                                J(I1 + i1, I2 + i2, j) = r;
+                                #if ?{traits.symmetric is True}
+                                    if (job.x != job.y) J(I2 + i2, I1 + i1, j) = r;
+                                #endif
+                            }
+                        }
+                    #endif
+
                 #elif ?{traits.nodal is False}
-                    auto jacobian = solver_t::derivative(
-                        p_start,
-                        node_kernel,
-                        edge_kernel,
-                        g1, g2,
-                        scratch,
-                        shmem,
-                        q
-                    );
 
                     #if ?{traits.diagonal is True}
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
                             J(I1, i) = 0;
-                        }
-                        __syncthreads();
-                        #pragma unroll (jacobian.size)
-                        for(int i = 0; i < jacobian.size; ++i) {
-                            auto j = graphdot::cuda::warp_sum(jacobian[i]);
-                            if (lane == 0) {
-                                atomicAdd(J.at(I1, i), j);
-                            };
                         }
                     #else
                         for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
@@ -214,7 +230,19 @@ extern "C" {
                                 if (job.x != job.y) J(I2, I1, i) = 0;
                             #endif
                         }
-                        __syncthreads();
+                    #endif
+
+                    __syncthreads();
+
+                    #if ?{traits.diagonal is True}
+                        #pragma unroll (jacobian.size)
+                        for(int i = 0; i < jacobian.size; ++i) {
+                            auto j = graphdot::cuda::warp_sum(jacobian[i]);
+                            if (lane == 0) {
+                                atomicAdd(J.at(I1, i), j);
+                            };
+                        }
+                    #else
                         #pragma unroll (jacobian.size)
                         for(int i = 0; i < jacobian.size; ++i) {
                             auto j = graphdot::cuda::warp_sum(jacobian[i]);
@@ -226,6 +254,7 @@ extern "C" {
                             };
                         }
                     #endif
+
                 #endif
                 __syncthreads();
             #endif
