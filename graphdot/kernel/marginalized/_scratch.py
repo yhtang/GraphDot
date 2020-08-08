@@ -6,12 +6,15 @@ from graphdot.codegen.cpptool import cpptype
 
 
 @cpptype(p_buffer=np.uintp, capacity=np.int64)
-class BlockScratch:
+class PCGScratch:
+
+    _ndim = 5
+
     def __init__(self, capacity):
         self.capacity = ((capacity + 15) // 16) * 16
         if capacity <= 0:
             raise ValueError('Scratch size must be greater than zero.')
-        self.buffer = gpuarray.empty(int(self.capacity) * 5, np.float32)
+        self.buffer = gpuarray.empty(self.capacity * self._ndim, np.float32)
 
     @property
     def p_buffer(self):

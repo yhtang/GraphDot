@@ -15,7 +15,7 @@ from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
 from ._backend import Backend
-from ._scratch import BlockScratch
+from ._scratch import PCGScratch
 from ._octilegraph import OctileGraph
 
 
@@ -78,9 +78,9 @@ class CUDABackend(Backend):
         if (self.scratch is None or len(self.scratch) < count or
                 self.scratch[0].capacity < capacity):
             self.ctx.synchronize()
-            self.scratch = [BlockScratch(capacity) for _ in range(count)]
+            self.scratch = [PCGScratch(capacity) for _ in range(count)]
             self.scratch_d = umarray(np.array([s.state for s in self.scratch],
-                                              BlockScratch.dtype))
+                                              PCGScratch.dtype))
             self.scratch_capacity = self.scratch[0].capacity
             self.ctx.synchronize()
 
