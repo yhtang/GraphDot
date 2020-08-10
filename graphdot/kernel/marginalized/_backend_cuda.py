@@ -139,14 +139,18 @@ class CUDABackend(Backend):
 
             constexpr static int jac_dims = ${jac_dims};
 
-            template<class X> __device__ __inline__
+            template<class X>
+            __device__ __inline__
             auto operator() (X const &x1, X const &x2) const {
                 return ${expr};
             }
 
-            template<class X> __device__ __inline__
-            void _j_a_c_o_b_i_a_n_(float j[], X const &x1, X const &x2) const {
+            template<class X>
+            __device__ __inline__
+            auto _j_a_c_o_b_i_a_n_(X const &x1, X const &x2) const {
+                graphdot::array<float, jac_dims> j;
                 ${jac;\n};
+                return j;
             }
         };
 
@@ -170,14 +174,18 @@ class CUDABackend(Backend):
 
             constexpr static int jac_dims = ${jac_dims};
 
-            template<class N> __device__ __inline__
+            template<class N>
+            __device__ __inline__
             auto operator() (N const &n) const {
                 return ${expr};
             }
 
-            template<class N> __device__ __inline__
-            void _j_a_c_o_b_i_a_n_(float j[], N const &n) const {
+            template<class N>
+            __device__ __inline__
+            auto _j_a_c_o_b_i_a_n_(N const &n) const {
+                graphdot::array<float, jac_dims> j;
                 ${jac;\n};
+                return j;
             }
         };
 
@@ -191,7 +199,7 @@ class CUDABackend(Backend):
         )
 
     def __call__(self, graphs, node_kernel, edge_kernel, p, q, jobs, starts,
-                 output, output_shape, traits, timer):
+                 gramian, gradient, nX, nY, nJ, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
         timer.tic('transferring graphs to GPU')
 
@@ -271,11 +279,13 @@ class CUDABackend(Backend):
             self.scratch_d,
             jobs,
             starts,
-            output,
+            gramian,
+            gradient if gradient is not None else np.uintp(0),
             i_job_global,
             np.uint32(len(jobs)),
-            np.uint32(output_shape[0]),
-            np.uint32(output_shape[1]),
+            np.uint32(nX),
+            np.uint32(nY),
+            np.uint32(nJ),
             np.float32(q),
             np.float32(q),  # placeholder for q0
             grid=(launch_block_count, 1, 1),

@@ -7,8 +7,8 @@ from contextlib import contextmanager
 
 
 class Template:
-    """A template string with placeholders in the format of ${...}, which
-    can be rendered on-demand. Helpful for code generation.
+    """A template string with placeholders in the format of ${...} or ?{...},
+    which can be rendered on-demand. Helpful for code generation.
 
     Parameters
     ----------
