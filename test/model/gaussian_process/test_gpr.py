@@ -4,6 +4,7 @@ import unittest.mock
 import pytest
 import numpy as np
 import os
+import tempfile
 from graphdot.model.gaussian_process import GaussianProcessRegressor
 
 np.random.seed(0)
@@ -502,6 +503,7 @@ def test_gpr_save_load(normalize_y):
             k = Kernel(1.0)
             k.theta = theta
             return k
+
     X = np.linspace(-1, 1, 6, endpoint=False)
     y = np.sin(X * np.pi)
     kernel = Kernel(0.1)
@@ -512,17 +514,19 @@ def test_gpr_save_load(normalize_y):
         optimizer=True
     )
     gpr.fit_loocv(X, y, verbose=True)
-    CWD = os.path.dirname(os.path.abspath(__file__))
-    gpr.save(CWD)
-    gpr_load = GaussianProcessRegressor(
-        kernel=kernel,
-    )
-    gpr_load.load(CWD)
-    assert (gpr.alpha == pytest.approx(gpr_load.alpha))
-    assert (gpr.y_mean == pytest.approx(gpr_load.y_mean))
-    assert (gpr.y_std == pytest.approx(gpr_load.y_std))
-    assert (gpr._y == pytest.approx(gpr_load._y))
-    assert (gpr.K == pytest.approx(gpr_load.K))
-    assert (gpr.Ky == pytest.approx(gpr_load.Ky))
-    assert (os.path.exists(os.path.join(CWD, 'model.pkl')))
-    os.remove(os.path.join(CWD, 'model.pkl'))
+
+    with tempfile.TemporaryDirectory() as cwd:
+        file = 'test-model.pkl'
+        target_path = os.path.join(cwd, file)
+        gpr.save(cwd, file)
+        assert(os.path.exists(target_path))
+
+        gpr_saved = GaussianProcessRegressor(kernel=kernel)
+        gpr_saved.load(cwd, file)
+
+        assert(gpr.alpha == pytest.approx(gpr_saved.alpha))
+        assert(gpr.y_mean == pytest.approx(gpr_saved.y_mean))
+        assert(gpr.y_std == pytest.approx(gpr_saved.y_std))
+        assert(gpr._y == pytest.approx(gpr_saved._y))
+        assert(gpr.K == pytest.approx(gpr_saved.K))
+        assert(gpr.Ky == pytest.approx(gpr_saved.Ky))
