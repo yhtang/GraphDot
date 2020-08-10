@@ -525,31 +525,43 @@ class GaussianProcessRegressor:
 
         return opt
 
-    def save(self, dir):
-        """Save the GaussianProcessRegressor: dir/model.pkl.
+    def save(self, path, filename='model.pkl', overwrite=False):
+        """Save the trained GaussianProcessRegressor with the associated data
+        as a pickle.
 
         Parameters
         ----------
-        dir: string
-            The directory of saved model.
-
+        path: str
+            The directory to store the saved model.
+        filename: str
+            The file name for the saved model.
+        overwrite: bool
+            If True, a pre-existing file will be overwritten. Otherwise, a
+            runtime error will be raised.
         """
-        f_model = os.path.join(dir, 'model.pkl')
-        store_dict = self.__dict__.copy()
-        store_dict['theta'] = self.kernel.theta
-        store_dict.pop('kernel', None)
-        pickle.dump(store_dict, open(f_model, 'wb'), protocol=4)
+        f_model = os.path.join(path, filename)
+        if os.path.isfile(f_model) and not overwrite:
+            raise RuntimeError(
+                f'Path {f_model} already exists. To overwrite, set '
+                '`overwrite=True`.'
+            )
+        store = self.__dict__.copy()
+        store['theta'] = self.kernel.theta
+        store.pop('kernel', None)
+        pickle.dump(store, open(f_model, 'wb'), protocol=4)
 
-    def load(self, dir):
-        """Load the GaussianProcessRegressor: dir/model.pkl.
+    def load(self, path, filename='model.pkl'):
+        """Load a stored GaussianProcessRegressor model from a pickle file.
 
         Parameters
         ----------
-        dir: string
-            The directory of saved model.
-
+        path: str
+            The directory where the model is saved.
+        filename: str
+            The file name for the saved model.
         """
-        f_model = os.path.join(dir, 'model.pkl')
-        store_dict = pickle.load(open(f_model, 'rb'))
-        self.kernel = self.kernel.clone_with_theta(store_dict.pop('theta'))
-        self.__dict__.update(**store_dict)
+        f_model = os.path.join(path, filename)
+        store = pickle.load(open(f_model, 'rb'))
+        theta = store.pop('theta')
+        self.__dict__.update(**store)
+        self.kernel.theta = theta
