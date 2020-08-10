@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.6.6 (2020-08-10)
+
+- Added `save` and `load` methods to the Gaussian process regressor models.
+
 ## 0.6.5 (2020-08-05)
 
 - Fixed a bug related to the `lmin=1` option of the marginalized graph kernel.
