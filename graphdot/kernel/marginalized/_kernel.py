@@ -24,13 +24,21 @@ class MarginalizedGraphKernel:
         A kernelet that computes the similarity between individual nodes
     edge_kernel: microkernel
         A kernelet that computes the similarity between individual edge
-    kwargs: optional arguments
-        p: positive number (default=1.0) or :py:class:`StartingProbability`
-            The starting probability of the random walk on each node. Must be
-            either a positive number or a concrete subclass instance of
-            :py:class:`StartingProbability`.
-        q: float in (0, 1)
-            The probability for the random walk to stop during each step.
+    p: positive number (default=1.0) or :py:class:`StartingProbability`
+        The starting probability of the random walk on each node. Must be
+        either a positive number or a concrete subclass instance of
+        :py:class:`StartingProbability`.
+    q: float in (0, 1)
+        The probability for the random walk to stop during each step.
+    q_bounds: pair of floats
+        The lower and upper bound that the stopping probability can vary during
+        hyperparameter optimization.
+    dtype: numpy dtype
+        The data type of the kernel matrix to be returned.
+    backend: 'auto' or 'cuda' or an instance of
+    :py:class:`graphdot.kernel.marginalized.Backend`.
+        The computing engine that solves the marginalized graph kernel's
+        generalized Laplacian equation.
     """
     trait_t = namedtuple(
         'Traits', 'diagonal, symmetric, nodal, lmin, eval_gradient'
@@ -42,11 +50,6 @@ class MarginalizedGraphKernel:
         traits = cls.trait_t(
             diagonal, symmetric, nodal, lmin, eval_gradient
         )
-        if traits.eval_gradient is True:
-            if nodal is not False:
-                raise ValueError(
-                    'Gradients can only be evaluated with nodal=False'
-                )
         return traits
 
     def __init__(self, node_kernel, edge_kernel, p=1.0, q=0.01,
@@ -178,9 +181,14 @@ class MarginalizedGraphKernel:
                 starts[:len(X)] = np.arange(len(X))
                 starts[len(X):] = np.arange(len(Y) + 1)
                 output_shape = (len(X), len(Y))
+        gramian = backend.empty(int(np.prod(output_shape)), np.float32)
         if traits.eval_gradient is True:
-            output_shape = (*output_shape, 1 + self.n_dims)
-        output = backend.empty(int(np.prod(output_shape)), np.float32)
+            gradient = backend.empty(
+                self.n_dims * int(np.prod(output_shape)), np.float32
+            )
+        else:
+            gradient = None
+
         timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
@@ -193,8 +201,11 @@ class MarginalizedGraphKernel:
             self.q,
             jobs,
             starts,
-            output,
-            output_shape,
+            gramian,
+            gradient,
+            output_shape[0],
+            output_shape[1] if len(output_shape) >= 2 else 1,
+            self.n_dims,
             traits,
             timer,
         )
@@ -202,7 +213,11 @@ class MarginalizedGraphKernel:
 
         ''' collect result '''
         timer.tic('collecting result')
-        output = output.reshape(*output_shape, order='F')
+        gramian = gramian.reshape(*output_shape, order='F')
+        if gradient is not None:
+            gradient = gradient.reshape(
+                (*output_shape, self.n_dims), order='F'
+            )
         timer.toc('collecting result')
 
         if timing:
@@ -211,11 +226,11 @@ class MarginalizedGraphKernel:
 
         if traits.eval_gradient is True:
             return (
-                output[:, :, 0].astype(self.element_dtype),
-                output[:, :, 1:].astype(self.element_dtype)
+                gramian.astype(self.element_dtype),
+                gradient.astype(self.element_dtype)
             )
         else:
-            return output.astype(self.element_dtype)
+            return gramian.astype(self.element_dtype)
 
     def diag(self, X, eval_gradient=False, nodal=False, lmin=0, timing=False):
         """Compute the self-similarities for a list of graphs
@@ -300,11 +315,12 @@ class MarginalizedGraphKernel:
             output_length = int(starts[-1])
         else:
             raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
+        gramian = backend.empty(output_length, np.float32)
         if traits.eval_gradient is True:
-            output_shape = (output_length, 1 + self.n_dims)
+            gradient = backend.empty(self.n_dims * output_length, np.float32)
         else:
-            output_shape = (output_length, 1)
-        output = backend.empty(int(np.prod(output_shape)), np.float32)
+            gradient = None
+
         timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
@@ -317,8 +333,11 @@ class MarginalizedGraphKernel:
             self.q,
             jobs,
             starts,
-            output,
-            output_shape,
+            gramian,
+            gradient,
+            output_length,
+            1,
+            self.n_dims,
             traits,
             timer,
         )
@@ -326,17 +345,20 @@ class MarginalizedGraphKernel:
 
         ''' post processing '''
         timer.tic('collecting result')
-        output = output.reshape(*output_shape, order='F')
+        if gradient is not None:
+            gradient = gradient.reshape(
+                (output_length, self.n_dims), order='F'
+            )
         if nodal == 'block':
-            retval = [output[s:s + n**2].reshape(n, n)
+            retval = [gramian[s:s + n**2].reshape(n, n)
                       for s, n in zip(starts[:-1], sizes)]
         elif traits.eval_gradient is True:
             retval = (
-                output[:, 0].ravel().astype(self.element_dtype),
-                output[:, 1:].astype(self.element_dtype)
+                gramian.astype(self.element_dtype),
+                gradient.astype(self.element_dtype)
             )
         else:
-            retval = output.ravel().astype(self.element_dtype)
+            retval = gramian.astype(self.element_dtype)
         timer.toc('collecting result')
 
         if timing:

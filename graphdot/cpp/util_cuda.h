@@ -48,6 +48,27 @@ template<class T> __inline__ __device__ T block_vdotv( T const * __restrict x, T
     return block_sum( wsum );
 }
 
+#define ATOMIC_OP(name, op) \
+__inline__ __device__ float atomic##name(float * ptr, float const value) {\
+    auto ptr_as_int = reinterpret_cast<int *>(ptr);\
+    auto old = *ptr_as_int;\
+    auto assumed = old;\
+    \
+    do {\
+        assumed = old;\
+        old = atomicCAS(\
+            ptr_as_int,\
+            assumed,\
+            __float_as_int(op(value, __int_as_float(assumed)))\
+        );\
+    } while (assumed != old);\
+    \
+    return __int_as_float(old);\
+}
+
+ATOMIC_OP(Min, min) // provides atomicMin
+ATOMIC_OP(Max, max) // provides atomicMax
+
 }
 
 }

@@ -758,180 +758,101 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         #endif
     }
 
-    template<class StartingProbability>
-    __inline__ __device__ static void derivative_p(
-        StartingProbability const p_start,
-        Graph const    g1,
-        Graph const    g2,
-        pcg_scratch_t  scratch,
-        char * const   cache,
-        float * const  dK) {
-    
-        using namespace graphdot::cuda;
-    
-        const int lane = laneid();
-        const int n1   = g1.n_node;
-        const int n2   = g2.n_node;
-        const int N    = n1 * n2;
-    
-        array_t<float, StartingProbability::jac_dims> dKdp_local;
-        #pragma unroll (StartingProbability::jac_dims)
-        for(int i = 0; i < StartingProbability::jac_dims; ++i) {
-            dKdp_local[i] = 0;
-        }
-    
-        for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            const int i1 = i / n2;
-            const int i2 = i % n2;
-            const auto n1 = g1.node[i1];
-            const auto n2 = g2.node[i2];
-            const float p1 = p_start(n1);
-            const float p2 = p_start(n2);
-            const float r = scratch.x(i);
-    
-            array_t<float, StartingProbability::jac_dims> jac1, jac2;
-            p_start._j_a_c_o_b_i_a_n_(jac1, n1);
-            p_start._j_a_c_o_b_i_a_n_(jac2, n2);
+    template<class StartingProbability, class NodeKernel, class EdgeKernel>
+    struct jacobian_t {
+        constexpr static int _offset_p = 0;
+        constexpr static int _offset_q = _offset_p + StartingProbability::jac_dims;
+        constexpr static int _offset_v = _offset_q + 1;
+        constexpr static int _offset_e = _offset_v + NodeKernel::jac_dims;
+        constexpr static int size      = _offset_e + EdgeKernel::jac_dims;
 
-            #pragma unroll (StartingProbability::jac_dims)
-            for(int j = 0; j < StartingProbability::jac_dims; ++j) {
-                dKdp_local[j] += (jac1[j] * p2 + p1 * jac2[j]) * r;
-            }
-        }
-    
-        #pragma unroll (StartingProbability::jac_dims)
-        for(int j = 0; j < StartingProbability::jac_dims; ++j) {
-            dKdp_local[j] = warp_sum(dKdp_local[j]);
-            if (lane == 0) atomicAdd(dK + j, dKdp_local[j]);
-        }
-    }
-    
-    template<class NodeKernel, class StartingProbability>
-    __inline__ __device__ static void derivative_q(
-        NodeKernel const node_kernel,
-        StartingProbability const p_start,
-        Graph const    g1,
-        Graph const    g2,
-        scratch_t      scratch,
-        char * const   cache,
-        float * const  dK,
-        const float    q) {
+        array<float, size> _data;
 
-        using namespace graphdot::cuda;
+        template<class T>
+        __host__ __device__ __inline__
+        jacobian_t(T const value) : _data(value) {}
 
-        const int lane = laneid();
-        const int n1   = g1.n_node;
-        const int n2   = g2.n_node;
-        const int N    = n1 * n2;
+        __device__ __inline__ auto & operator [] (int i) {return _data[i];}
+        __device__ __inline__ auto & d_p(int i) {return _data[_offset_p + i];}
+        __device__ __inline__ auto & d_q(int i) {return _data[_offset_q + i];}
+        __device__ __inline__ auto & d_e(int i) {return _data[_offset_e + i];}
+        __device__ __inline__ auto & d_v(int i) {return _data[_offset_v + i];}
+    };
 
-        float dq_local = 0;
-
-        float rrq = 1.0f / (1.0f - q);
-        float rrq3 = rrq * rrq * rrq;
-
-        for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            const int i1 = i / n2;
-            const int i2 = i % n2;
-            const auto n1 = g1.node[i1];
-            const auto n2 = g2.node[i2];
-            const float rd1 = g1.degree[i1];// / (1 - q);
-            const float rd2 = g2.degree[i2];// / (1 - q);
-            const float rdx = rd1 * rd2;        
-            const float YDq = scratch.x(i);
-            const float Yp  = scratch.x(i + N);
-            const float v = node_kernel(n1, n2);
-
-            dq_local += 2 * rrq * p_start(n1) * p_start(n2) * YDq - 2 * rrq3 * Yp * rdx / v * YDq;
-        }
-
-        dq_local = warp_sum(dq_local);
-        if (lane == 0) atomicAdd(dK, dq_local);
-    }
-
-    template<class NodeKernel>
-    __inline__ __device__ static void derivative_node(
-        NodeKernel const node_kernel,
-        Graph const    g1,
-        Graph const    g2,
-        scratch_t      scratch,
-        char * const   cache,
-        float * const  dK,
-        const float    q) {
-
-        using namespace graphdot::cuda;
-
-        const int lane = laneid();
-        const int n1   = g1.n_node;
-        const int n2   = g2.n_node;
-        const int N    = n1 * n2;
-
-        float dK_local[NodeKernel::jac_dims];
-        #pragma unroll (NodeKernel::jac_dims)
-        for(int i = 0; i < NodeKernel::jac_dims; ++i) {
-            dK_local[i] = 0;
-        }
-
-        for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            const int i1 = i / n2;
-            const int i2 = i % n2;
-            const auto n1 = g1.node[i1];
-            const auto n2 = g2.node[i2];
-            const float d1 = g1.degree[i1] / (1 - q);
-            const float d2 = g2.degree[i2] / (1 - q);
-            const float dx = d1 * d2;        
-            const float YDq = scratch.x(i);
-            const float Yp  = scratch.x(i + N);
-            const float dK_dZ = -dx * Yp * YDq;
-
-            const float v = node_kernel(n1, n2);
-            float jac[NodeKernel::jac_dims];
-            node_kernel._j_a_c_o_b_i_a_n_(jac, n1, n2);
-            #pragma unroll (NodeKernel::jac_dims)
-            for(int j = 0; j < NodeKernel::jac_dims; ++j) {
-                dK_local[j] += -dK_dZ / (v * v) * jac[j];
-            }
-        }
-
-        #pragma unroll (NodeKernel::jac_dims)
-        for(int j = 0; j < NodeKernel::jac_dims; ++j) {
-            dK_local[j] = warp_sum(dK_local[j]);
-            if (lane == 0) atomicAdd(dK + j, dK_local[j]);
-        }
-    }
-
-    template<class EdgeKernel>
-    __inline__ __device__ static void derivative_edge(
-        EdgeKernel const edge_kernel,
-        Graph const    g1,
-        Graph const    g2,
-        scratch_t      scratch,
-        char * const   cache,
-        float * const  dK) {
+    template<class StartingProbability, class NodeKernel, class EdgeKernel>
+    __inline__ __device__ static auto derivative(
+        StartingProbability const   p_start,
+        NodeKernel          const   node_kernel,
+        EdgeKernel          const   edge_kernel,
+        Graph               const   g1,
+        Graph               const   g2,
+        pcg_scratch_t               scratch,
+        char *              const   cache,
+        float               const   q
+    ) {
 
         using namespace graphdot::cuda;
 
         const int warp_id_local  = threadIdx.x / warp_size;
         const int warp_num_local = blockDim.x / warp_size;
         const int lane           = laneid();
-        const int n1             = g1.n_node;
-        const int n2             = g2.n_node;
-        const int N              = n1 * n2;
         const int i1_upper       =  lane              / octile_h;
         const int i1_lower       = (lane + warp_size) / octile_h;
         const int i2             =  lane              % octile_h;
 
-        octile octilex {cache
-                        + warp_id_local * shmem_bytes_per_warp
-                        + octile::size_bytes * 2
-                        + nzlist::size_bytes * 2};
+        const int n1             = g1.n_node;
+        const int n2             = g2.n_node;
+        const int N              = n1 * n2;
 
-        float dK_local[EdgeKernel::jac_dims];
-        #pragma unroll (EdgeKernel::jac_dims)
-        for(int i = 0; i < EdgeKernel::jac_dims; ++i) {
-            dK_local[i] = 0;
+        const float rrq          = 1.0f / (1.0f - q);
+        const float rrq3         = rrq * rrq * rrq;
+
+        jacobian_t<StartingProbability, NodeKernel, EdgeKernel> jacobian(0);
+
+        for (int i = threadIdx.x; i < N; i += blockDim.x) {
+            const int i1     = i / n2;
+            const int i2     = i % n2;
+            const auto n1    = g1.node[i1];
+            const auto n2    = g2.node[i2];
+            const auto p1    = p_start(n1);
+            const auto p2    = p_start(n2);
+            const auto r     = scratch.x(i);
+
+            const auto do1   = g1.degree[i1];
+            const auto do2   = g2.degree[i2];
+            const auto dox   = do1 * do2;
+            const auto d1    = do1 / (1 - q);
+            const auto d2    = do2 / (1 - q);
+            const auto dx    = d1 * d2;
+
+            const auto YDq   = scratch.x(i);
+            const auto Yp    = scratch.x(i + N);
+            const auto dK_dZ = -dx * Yp * YDq;
+
+            const auto v     = node_kernel(n1, n2);
+
+            auto dp1         = p_start._j_a_c_o_b_i_a_n_(n1);
+            auto dp2         = p_start._j_a_c_o_b_i_a_n_(n2);
+            auto dv          = node_kernel._j_a_c_o_b_i_a_n_(n1, n2);
+
+            #pragma unroll (dp1.size)
+            for(int j = 0; j < dp1.size; ++j) {
+                jacobian.d_p(j) += (dp1[j] * p2 + p1 * dp2[j]) * r;
+            }
+
+            jacobian.d_q(0) += 2 * rrq * p1 * p2 * YDq - 2 * rrq3 * Yp * dox / v * YDq;
+
+            #pragma unroll (dv.size)
+            for(int j = 0; j < dv.size; ++j) {
+                jacobian.d_v(j) += -dK_dZ / (v * v) * dv[j];
+            }
         }
 
-        #if 1
+        octile octilex {cache
+            + warp_id_local * shmem_bytes_per_warp
+            + octile::size_bytes * 2
+            + nzlist::size_bytes * 2};
+
         for (int O1 = 0; O1 < g1.n_octile; O1 += warp_num_local) {
 
             const int nt1 = min(g1.n_octile - O1, warp_num_local);
@@ -1006,21 +927,18 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                                     auto e2 = octile2(i2, j2);
                                     const float dK_dY_upper = -Yp[i1_upper * octile_h + i2] * YDq[j1 * octile_w + j2];
                                     const float dK_dY_lower = -Yp[i1_lower * octile_h + i2] * YDq[j1 * octile_w + j2];
-                                    float jac_upper[EdgeKernel::jac_dims];
-                                    float jac_lower[EdgeKernel::jac_dims];
-                                    if (m1_upper) edge_kernel._j_a_c_o_b_i_a_n_(jac_upper, e1_upper, e2);
-                                    if (m1_lower) edge_kernel._j_a_c_o_b_i_a_n_(jac_lower, e1_lower, e2);
+                                    array<float, EdgeKernel::jac_dims> de_upper(0), de_lower(0);
+                                    if (m1_upper) de_upper = edge_kernel._j_a_c_o_b_i_a_n_(e1_upper, e2);
+                                    if (m1_lower) de_lower = edge_kernel._j_a_c_o_b_i_a_n_(e1_lower, e2);
                                     #pragma unroll (EdgeKernel::jac_dims)
                                     for(int j = 0; j < EdgeKernel::jac_dims; ++j) {
-                                        dK_local[j] -=
-                                            dK_dY_upper * (m1_upper ? jac_upper[j] : 0.f) + 
-                                            dK_dY_lower * (m1_lower ? jac_lower[j] : 0.f);
+                                        jacobian.d_e(j) -= dK_dY_upper * de_upper[j] + dK_dY_lower * de_lower[j];
                                     }
                                 }
                             }
                         }
                     }
-                     else {
+                        else {
                         // sparse x sparse
                         nzlist nzlist1 {cache + p1 * shmem_bytes_per_warp + octile::size_bytes};
                         nzlist nzlist2 {cache + p2 * shmem_bytes_per_warp + octile::size_bytes + nzlist::size_bytes + octile::size_bytes};
@@ -1038,11 +956,10 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                             auto e2 = octile2(p2);
 
                             const float dK_dY = -Yp[i1 * octile_h + i2] * YDq[j1 * octile_w + j2];
-                            float jac[EdgeKernel::jac_dims];
-                            edge_kernel._j_a_c_o_b_i_a_n_(jac, e1, e2);
-                            #pragma unroll (EdgeKernel::jac_dims)
-                            for(int j = 0; j < EdgeKernel::jac_dims; ++j) {
-                                dK_local[j] -= dK_dY * jac[j];
+                            auto de = edge_kernel._j_a_c_o_b_i_a_n_(e1, e2);
+                            #pragma unroll (de.size)
+                            for(int j = 0; j < de.size; ++j) {
+                                jacobian.d_e(j) -= dK_dY * de[j];
                             }
                         }
                     }
@@ -1051,15 +968,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                 __syncthreads();
             }
         }
-        #endif
 
-        #pragma unroll (EdgeKernel::jac_dims)
-        for(int j = 0; j < EdgeKernel::jac_dims; ++j) {
-            dK_local[j] = warp_sum(dK_local[j]);
-            if (lane == 0) {
-                atomicAdd(dK + j, dK_local[j]);
-            }
-        }
+        return jacobian;
     }
 };
 
