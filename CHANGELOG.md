@@ -1,5 +1,11 @@
 # Change log of GraphDot
 
+## 0.7a (2020-08-10)
+
+- Improved the performance of gradient evaluation for the marginalized graph
+  kernel.
+- Introduced a new `MaxiMin` distance metric between graphs.
+
 ## 0.6.6 (2020-08-10)
 
 - Added `save` and `load` methods to the Gaussian process regressor models.
