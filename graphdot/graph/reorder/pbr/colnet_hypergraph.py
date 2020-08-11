@@ -11,26 +11,24 @@ class ColnetHygr(Hygr):
     Supports symmetric and non-symmetric matrices.
     '''
 
-    def __init__ (self, unitVertexWeights=False):
+    def __init__(self, unitVertexWeights=False):
         super(ColnetHygr, self).__init__(unitVertexWeights)
 
         return
 
-
-
-    def createFromPairs (self, row_ids, col_ids, nr, nc, is_sym=True):
+    def createFromPairs(self, row_ids, col_ids, nr, nc, is_sym=True):
 
         if (not is_sym):
             sys.exit(1)
 
         self._nverts = nr
         self._nnets = nc
-        self._xpins = [0] * (self._nnets+2) # final element is auxiliary
+        self._xpins = [0] * (self._nnets+2)  # final element is auxiliary
         self._nwghts = [1] * self._nnets
         self._cwghts = [0] * self._nverts
         self._nconst = 1
 
-        for (i,j) in zip(row_ids, col_ids):
+        for (i, j) in zip(row_ids, col_ids):
             if (i != j):
                 self._xpins[j+2] += 1
                 self._cwghts[i] += 1
@@ -49,7 +47,7 @@ class ColnetHygr(Hygr):
             self._pins[self._xpins[j+1]] = j
             self._xpins[j+1] += 1
 
-        for (i,j) in zip(row_ids, col_ids):
+        for (i, j) in zip(row_ids, col_ids):
             if (i != j):
                 self._pins[self._xpins[j+1]] = i
                 self._xpins[j+1] += 1
@@ -59,26 +57,3 @@ class ColnetHygr(Hygr):
                 self._cwghts[v] = 1
 
         return
-
-
-
-    def write (self, outfname):
-
-        f = open(outfname, 'w')
-        f.write('% colnet hypergraph\n')
-        super(ColnetHygr, self)._write(f)
-        f.close()
-
-        return
-
-
-
-    def print_hygr (self):
-
-        sys.stdout.write('printing colnet hypergraph\n')
-        super(ColnetHygr, self).print_hygr()
-
-        return
-    
-        
-    

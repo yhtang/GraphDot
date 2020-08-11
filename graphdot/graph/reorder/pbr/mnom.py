@@ -17,8 +17,7 @@ class PbrMnom:
     Uses kahypar for bipartitionings in the RB
     '''
 
-
-    def __init__ (self, contextFile, tilesize=8, mnc=100, addMsgNets=True):
+    def __init__(self, contextFile, tilesize=8, mnc=100, addMsgNets=True):
 
         self._tilesize = tilesize
         self._mnc = mnc
@@ -28,9 +27,7 @@ class PbrMnom:
 
         return
 
-    
-
-    def _bisect (self, curlvl, lpvec, nextlvl, idx):
+    def _bisect(self, curlvl, lpvec, nextlvl, idx):
 
         lidx = 2*idx
         ridx = 2*idx + 1
@@ -39,7 +36,7 @@ class PbrMnom:
         hl = Hygr()
         hl._nverts = hl._nnets = hl._npins = 0
         hr = Hygr()
-        hr._nverts = hr._nnets = hr._npins = 0        
+        hr._nverts = hr._nnets = hr._npins = 0
 
         # assign vertices
         for v in range(h._nverts):
@@ -50,13 +47,11 @@ class PbrMnom:
                 map[v] = hr._nverts
                 hr._nverts += 1
 
-        
         # unit vertex weights
         hl._cwghts = [1] * hl._nverts
         nextlvl[lidx][2] = [None] * hl._nverts
         hr._cwghts = [1] * hr._nverts
         nextlvl[ridx][2] = [None] * hr._nverts
-        
 
         # global vertex ids
         for v in range(h._nverts):
@@ -64,7 +59,6 @@ class PbrMnom:
                 nextlvl[lidx][2][map[v]] = curlvl[idx][2][v]
             else:
                 nextlvl[ridx][2][map[v]] = curlvl[idx][2][v]
-        
 
         # split nets and pins
         lpin = lnet = rpin = rnet = 0
@@ -117,15 +111,11 @@ class PbrMnom:
         nextlvl[lidx][4] = hl._npins
         nextlvl[ridx][3] = hr._nnets
         nextlvl[ridx][4] = hr._npins
-                
 
         return
 
-
-
-
-    def _add_send_msg_nets (self, horig, curpid, cur_nhygrs,
-                            gpvec, curlvl, idx):
+    def _add_send_msg_nets(self, horig, curpid, cur_nhygrs,
+                           gpvec, curlvl, idx):
 
         lb = curpid
         ub = curpid + 1
@@ -137,7 +127,7 @@ class PbrMnom:
         hcur = curlvl[idx][0]
 
         for v in range(hcur._nverts):
-            vorig = curlvl[idx][2][v] # also a net
+            vorig = curlvl[idx][2][v]  # also a net
             for u in horig._pins[horig._xpins[vorig]:horig._xpins[vorig+1]]:
                 p = gpvec[u]
                 if ((p < lb or p >= ub) and sends[p] == 0):
@@ -170,7 +160,7 @@ class PbrMnom:
             hcur._xpins[n] += hcur._xpins[n-1]
 
         for v in range(hcur._nverts):
-            vorig = curlvl[idx][2][v] # also a net
+            vorig = curlvl[idx][2][v]  # also a net
             for u in horig._pins[horig._xpins[vorig]:horig._xpins[vorig+1]]:
                 p = gpvec[u]
                 if ((p < lb or p >= ub) and sends[p] == 0):
@@ -180,7 +170,6 @@ class PbrMnom:
 
             for i in range(cur_nhygrs):
                 sends[i] = 0
-
 
         ncost = 2*self._mnc*10
         for n in range(ne, ne+nsendnets):
@@ -193,11 +182,8 @@ class PbrMnom:
         hcur._xpins[curlvl[idx][3]+1] = 0
 
         return
-    
 
-
-
-    def partition_hygr (self, h):
+    def partition_hygr(self, h):
 
         if (h._nverts <= self._tilesize):
             return range(h._nverts)
@@ -206,7 +192,6 @@ class PbrMnom:
         nparts = int((h._nverts + tilesize - 1) / tilesize)
         curnhygr = 1
         kway_bound = nparts
-        rbheight = int(math.log2(nparts)) - 1
         totalcut = 0
         gpvec = [0] * h._nverts
 
@@ -222,7 +207,7 @@ class PbrMnom:
         # ne and pe include supernets
         curlvl = [None]
         nextlvl = [[None] * 5, [None] * 5]
-        
+
         curlvl[0] = [h, nparts, [x for x in range(h._nverts)],
                      h._nnets, h._npins]
 
@@ -236,7 +221,7 @@ class PbrMnom:
                     lastid += 1
                     continue
 
-                if (curlvl[i][0] == None):
+                if (curlvl[i][0] is None):
                     continue
 
                 if (curnhygr > 1 and self._addMsgNets):
@@ -261,22 +246,19 @@ class PbrMnom:
                 tpw[0] = int(tpw[0])
                 tpw[1] = int(tpw[1])
 
-
                 # form kahypar hypergraph
                 hk = kahypar.Hypergraph(
-                    curlvl[i][0]._nverts, curlvl[i][3], # with msg nets
+                    curlvl[i][0]._nverts, curlvl[i][3],  # with msg nets
                     curlvl[i][0]._xpins, curlvl[i][0]._pins,
                     2, curlvl[i][0]._nwghts, curlvl[i][0]._cwghts)
                 context.setCustomTargetBlockWeights(tpw)
                 context.suppressOutput(True)
-                
-                
+
                 # partition and get part vector
                 kahypar.partition(hk, context)
                 lpvec = [None] * curlvl[i][0]._nverts
                 for v in range(curlvl[i][0]._nverts):
                     lpvec[v] = hk.blockID(v)
-    
 
                 # @TODO if tpw is not achieved, return id perm
                 curcut = kahypar.cut(hk)
@@ -284,46 +266,39 @@ class PbrMnom:
                 assert(hk.blockWeight(0) == tpw[0] and
                        hk.blockWeight(1) == tpw[1])
 
-                
                 # update global partvec
-                for v in range(h._nverts): # orig hygr
+                for v in range(h._nverts):  # orig hygr
                     if (gpvec[v] > lastid):
                         gpvec[v] += 1
                 for v in range(curlvl[i][0]._nverts):
                     if (lpvec[v] == 1):
                         gpvec[curlvl[i][2][v]] += 1
-                
+
                 lastid += 2
                 left = 2*i
                 right = 2*i + 1
                 nextlvl[right][1] = int(curk / 2)
                 nextlvl[left][1] = nextlvl[right][1] + (curk % 2)
 
-                
                 # bisect
                 self._bisect(curlvl, lpvec, nextlvl, i)
 
-
             curnhygr = curnhygr * 2
-            
+
             # update curlvl and nextlvl
             if (curnhygr != nparts):
                 curlvl = nextlvl
                 nextlvl = [[None] * 5 for i in range(2*curnhygr)]
-            
 
         return gpvec
-    
 
-
-
-    def partition (self, row_ids, col_ids, nr, nc, is_sym=True):
+    def partition(self, row_ids, col_ids, nr, nc, is_sym=True):
 
         h = ColnetHygr(True)
         h.createFromPairs(row_ids, col_ids, nr, nc, is_sym)
         pvec = self.partition_hygr(h)
         perm = [(v, pvec[v]) for v in range(nr)]
-        perm = sorted(perm, key=lambda x:x[1])
+        perm = sorted(perm, key=lambda x: x[1])
         perm = [x[0] for x in perm]
 
         return perm
