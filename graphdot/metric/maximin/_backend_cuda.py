@@ -12,7 +12,7 @@ from graphdot.kernel.marginalized._backend_cuda import CUDABackend
 from graphdot.kernel.marginalized._octilegraph import OctileGraph
 
 
-class HausdorffBackend(CUDABackend):
+class MaxiMinBackend(CUDABackend):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -20,7 +20,7 @@ class HausdorffBackend(CUDABackend):
     @property
     @functools.lru_cache(maxsize=1)
     def template(self):
-        return Template(os.path.join(os.path.dirname(__file__), 'maximin.cu'))
+        return Template(os.path.join(os.path.dirname(__file__), '_backend.cu'))
 
     def __call__(self, graphs, diags, node_kernel, edge_kernel, p, q, jobs,
                  starts, gramian, gradient, nX, nY, nJ, traits, timer):

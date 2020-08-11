@@ -5,7 +5,7 @@ import numpy as np
 from graphdot.graph import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
 from graphdot.util import Timer
-from ._backend_hausdorff import HausdorffBackend
+from ._backend_cuda import MaxiMinBackend
 
 
 class MaxiMin(MarginalizedGraphKernel):
@@ -29,7 +29,7 @@ class MaxiMin(MarginalizedGraphKernel):
     def __init__(self, *args, **kwargs):
         kwargs['dtype'] = np.float32
         super().__init__(*args, **kwargs)
-        self.maximin_backend = HausdorffBackend()
+        self.maximin_backend = MaxiMinBackend()
 
     def __call__(self, X, Y=None, eval_gradient=False, lmin=0, timing=False):
         '''Computes the distance matrix and optionally its gradient with respect

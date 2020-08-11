@@ -9,7 +9,7 @@ from graphdot.microkernel import (
 )
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
 from graphdot.kernel.fix import Normalization
-from graphdot.experimental.metric import MaxiMin
+from graphdot.metric.maximin import MaxiMin
 from ase.build import molecule
 
 
