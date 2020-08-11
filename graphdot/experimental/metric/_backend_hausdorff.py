@@ -23,7 +23,7 @@ class HausdorffBackend(CUDABackend):
         return Template(os.path.join(os.path.dirname(__file__), 'maximin.cu'))
 
     def __call__(self, graphs, diags, node_kernel, edge_kernel, p, q, jobs,
-                 starts, output, output_shape, traits, timer):
+                 starts, gramian, gradient, nX, nY, nJ, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
         timer.tic('transferring graphs to GPU')
 
@@ -105,11 +105,13 @@ class HausdorffBackend(CUDABackend):
             self.scratch_d,
             jobs,
             starts,
-            output,
+            gramian,
+            gradient if gradient is not None else np.uintp(0),
             i_job_global,
             np.uint32(len(jobs)),
-            np.uint32(output_shape[0]),
-            np.uint32(output_shape[1]),
+            np.uint32(nX),
+            np.uint32(nY),
+            np.uint32(nJ),
             np.float32(q),
             np.float32(q),  # placeholder for q0
             grid=(launch_block_count, 1, 1),

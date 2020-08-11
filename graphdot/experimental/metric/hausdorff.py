@@ -118,14 +118,20 @@ class MaxiMin(MarginalizedGraphKernel):
             diag = backend.array(
                 self.diag(XY, eval_gradient=False, nodal=True, lmin=lmin)
             )
+
+        gramian = backend.empty(int(np.prod(output_shape)), np.float32)
+        if traits.eval_gradient is True:
+            gradient = backend.empty(
+                self.n_dims * int(np.prod(output_shape)), np.float32
+            )
+        else:
+            gradient = None
+
         diags = [backend.array(diag[b:e])
                  for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
         diags_d = backend.empty(len(diags), dtype=np.uintp)
         diags_d[:] = [int(d.base) for d in diags]
 
-        if traits.eval_gradient is True:
-            output_shape = (*output_shape, 1 + self.n_dims)
-        output = backend.empty(int(np.prod(output_shape)), np.float32)
         timer.toc('creating output buffer')
 
         ''' call GPU kernel '''
@@ -139,8 +145,11 @@ class MaxiMin(MarginalizedGraphKernel):
             self.q,
             jobs,
             starts,
-            output,
-            output_shape,
+            gramian,
+            gradient,
+            output_shape[0],
+            output_shape[1] if len(output_shape) >= 2 else 1,
+            self.n_dims,
             traits,
             timer,
         )
@@ -148,7 +157,11 @@ class MaxiMin(MarginalizedGraphKernel):
 
         ''' collect result '''
         timer.tic('collecting result')
-        output = output.reshape(*output_shape, order='F')
+        gramian = gramian.reshape(*output_shape, order='F')
+        if gradient is not None:
+            gradient = gradient.reshape(
+                (*output_shape, self.n_dims), order='F'
+            )
         timer.toc('collecting result')
 
         if timing:
@@ -158,8 +171,8 @@ class MaxiMin(MarginalizedGraphKernel):
         if traits.eval_gradient is True:
             raise
             return (
-                output[:, :, 0].astype(self.element_dtype),
-                output[:, :, 1:].astype(self.element_dtype)
+                gramian.astype(self.element_dtype),
+                gradient.astype(self.element_dtype)
             )
         else:
-            return output.astype(self.element_dtype)
+            return gramian.astype(self.element_dtype)
