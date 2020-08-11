@@ -1,6 +1,7 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import sys
-
-from Hygr import Hygr
+from .hypergraph import Hygr
 
 
 class ColnetHygr(Hygr):
@@ -9,7 +10,6 @@ class ColnetHygr(Hygr):
     Standard colnet hypergraph from matrix market file, or any other means.
     Supports symmetric and non-symmetric matrices.
     '''
-
 
     def __init__ (self, unitVertexWeights=False):
         super(ColnetHygr, self).__init__(unitVertexWeights)

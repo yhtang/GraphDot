@@ -1,8 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import math
 import kahypar as kahypar
 
-from Hygr import Hygr
-from ColnetHygr import ColnetHygr
+from .hypergraph import Hygr
+from .colnet_hypergraph import ColnetHygr
 
 
 class PbrMnom:
@@ -198,7 +200,7 @@ class PbrMnom:
     def partition_hygr (self, h):
 
         if (h._nverts <= self._tilesize):
-            return range(h_.nverts)
+            return range(h._nverts)
 
         tilesize = self._tilesize
         nparts = int((h._nverts + tilesize - 1) / tilesize)
@@ -325,5 +327,3 @@ class PbrMnom:
         perm = [x[0] for x in perm]
 
         return perm
-
-    
