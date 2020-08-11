@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sys
 from .hypergraph import Hygr
 
 
@@ -16,10 +15,7 @@ class ColnetHygr(Hygr):
 
         return
 
-    def createFromPairs(self, row_ids, col_ids, nr, nc, is_sym=True):
-
-        if (not is_sym):
-            sys.exit(1)
+    def createFromPairs(self, row_ids, col_ids, nr, nc):
 
         self._nverts = nr
         self._nnets = nc

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import sys
 import math
 import kahypar as kahypar
 
@@ -294,8 +295,12 @@ class PbrMnom:
 
     def partition(self, row_ids, col_ids, nr, nc, is_sym=True):
 
+        if (not is_sym):
+            sys.stderr.write('Will not reorder, the matrix is not symmetric!\n')
+            return range(nr)
+
         h = ColnetHygr(True)
-        h.createFromPairs(row_ids, col_ids, nr, nc, is_sym)
+        h.createFromPairs(row_ids, col_ids, nr, nc)
         pvec = self.partition_hygr(h)
         perm = [(v, pvec[v]) for v in range(nr)]
         perm = sorted(perm, key=lambda x: x[1])
