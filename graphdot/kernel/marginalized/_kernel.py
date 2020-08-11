@@ -24,13 +24,21 @@ class MarginalizedGraphKernel:
         A kernelet that computes the similarity between individual nodes
     edge_kernel: microkernel
         A kernelet that computes the similarity between individual edge
-    kwargs: optional arguments
-        p: positive number (default=1.0) or :py:class:`StartingProbability`
-            The starting probability of the random walk on each node. Must be
-            either a positive number or a concrete subclass instance of
-            :py:class:`StartingProbability`.
-        q: float in (0, 1)
-            The probability for the random walk to stop during each step.
+    p: positive number (default=1.0) or :py:class:`StartingProbability`
+        The starting probability of the random walk on each node. Must be
+        either a positive number or a concrete subclass instance of
+        :py:class:`StartingProbability`.
+    q: float in (0, 1)
+        The probability for the random walk to stop during each step.
+    q_bounds: pair of floats
+        The lower and upper bound that the stopping probability can vary during
+        hyperparameter optimization.
+    dtype: numpy dtype
+        The data type of the kernel matrix to be returned.
+    backend: 'auto' or 'cuda' or an instance of
+    :py:class:`graphdot.kernel.marginalized.Backend`.
+        The computing engine that solves the marginalized graph kernel's
+        generalized Laplacian equation.
     """
     trait_t = namedtuple(
         'Traits', 'diagonal, symmetric, nodal, lmin, eval_gradient'
