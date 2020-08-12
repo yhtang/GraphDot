@@ -1,5 +1,12 @@
 # Change log of GraphDot
 
+## 0.7a1 (2020-08-12)
+
+- The PBR graph reordering algorithm as proposed in
+  [10.1109/IPDPS47924.2020.00080][ipdps] is now aviable.
+
+[ipdps]: https://ieeexplore.ieee.org/abstract/document/9139866
+
 ## 0.7a (2020-08-10)
 
 - Improved the performance of gradient evaluation for the marginalized graph

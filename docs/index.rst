@@ -51,8 +51,8 @@ Citation
 
 Like the package? Please cite:
 
-Tang, Y. H., & de Jong, W. A. (2019). Prediction of atomization energy using graph kernel and active learning. *The Journal of chemical physics*, 150(4), 044107. https://doi.org/10.1063/1.5078640
-
+- Tang, Yu-Hang, and Wibe A. de Jong. "Prediction of atomization energy using graph kernel and active learning." The Journal of chemical physics 150, no. 4 (2019): 044107.
+- Tang, Yu-Hang, Oguz Selvitopi, Doru Thom Popovici, and Aydın Buluç. "A High-Throughput Solver for Marginalized Graph Kernels on GPU." In 2020 IEEE International Parallel and Distributed Processing Symposium (IPDPS), pp. 728-738. IEEE, 2020.
 
 Indices and tables
 ------------------

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import math
-import kahypar as kahypar
+import kahypar
 import numpy as np
 from .config import to_ini
 from .colnet_hypergraph import ColnetHygr
