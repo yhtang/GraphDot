@@ -1,32 +1,36 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sys
 import math
 import kahypar as kahypar
-
-from .hypergraph import Hygr
+import numpy as np
+from .config import to_ini
 from .colnet_hypergraph import ColnetHygr
+from .hypergraph import Hygr
 
 
 class PbrMnom:
-
     '''Partitioning-based reordering.
 
-    The basic algorithm for minimizing latency and bandwidth costs in a
-    single-phase using hypergraphs with message nets.
-
-    Uses kahypar for bipartitionings in the RB
+    Parameters
+    ----------
+    tilesize: int, default=8
+        Size of the tile to be used for partitioning
+    mnc: int, default=100
+        Message net cost. The higher the value,  the more aggressive the
+        will try to minimize the number of nonempty tiles.
+    addMsgNets: bool, default=True
+        Whether to add message nets to minimize the number of nonempty tiles.
+        Should be True in most cases.
     '''
 
-    def __init__(self, contextFile, tilesize=8, mnc=100, addMsgNets=True):
+    def __init__(self, tilesize=8, mnc=100, addMsgNets=True, config=None):
 
         self._tilesize = tilesize
         self._mnc = mnc
         self._addMsgNets = addMsgNets
         self._context = kahypar.Context()
-        self._context.loadINIconfiguration(contextFile)
-
-        return
+        with to_ini(config) as ini:
+            self._context.loadINIconfiguration(ini)
 
     def _bisect(self, curlvl, lpvec, nextlvl, idx):
 
@@ -113,8 +117,6 @@ class PbrMnom:
         nextlvl[ridx][3] = hr._nnets
         nextlvl[ridx][4] = hr._npins
 
-        return
-
     def _add_send_msg_nets(self, horig, curpid, cur_nhygrs,
                            gpvec, curlvl, idx):
 
@@ -172,7 +174,7 @@ class PbrMnom:
             for i in range(cur_nhygrs):
                 sends[i] = 0
 
-        ncost = 2*self._mnc*10
+        ncost = 2 * self._mnc * 10
         for n in range(ne, ne+nsendnets):
             hcur._nwghts[n] = ncost
         for n in range(hcur._nnets):
@@ -181,8 +183,6 @@ class PbrMnom:
         curlvl[idx][3] = ne + nsendnets
         curlvl[idx][4] = hcur._xpins[curlvl[idx][3]]
         hcur._xpins[curlvl[idx][3]+1] = 0
-
-        return
 
     def partition_hygr(self, h):
 
@@ -293,17 +293,31 @@ class PbrMnom:
 
         return gpvec
 
-    def partition(self, row_ids, col_ids, nr, nc, is_sym=True):
+    def __call__(self, row_ids, col_ids, nrow, ncol):
+        '''Reorder a graph (as represented by a symmetric sparse matrix) using
+        PBR and return the permutation array.
 
-        if (not is_sym):
-            sys.stderr.write('Will not reorder, the matrix is not symmetric!\n')
-            return range(nr)
+        Parameters
+        ----------
+        row_ids: sequence
+            Row indices of the non-zero elements.
+        col_ids: sequence
+            Column indices of the non-zero elements.
+        nrow: int
+            Number of rows
+        ncol: int
+            Number of columns
 
+        Returns
+        -------
+        perm: ndarray
+            Array of permuted row/column indices.
+        '''
         h = ColnetHygr(True)
-        h.createFromPairs(row_ids, col_ids, nr, nc)
+        h.createFromPairs(row_ids, col_ids, nrow, ncol)
         pvec = self.partition_hygr(h)
-        perm = [(v, pvec[v]) for v in range(nr)]
+        perm = [(v, pvec[v]) for v in range(nrow)]
         perm = sorted(perm, key=lambda x: x[1])
         perm = [x[0] for x in perm]
 
-        return perm
+        return np.array(perm)

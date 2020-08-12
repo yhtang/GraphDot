@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
 from .mnom import PbrMnom
 
 
-_context = PbrMnom(os.path.join(os.path.dirname(__file__), 'mnom-base.ini'))
+_partitioner = PbrMnom()
 
 
-def pbr(g):
+def pbr(g, partitioner=None):
     '''Compute a partition-based permutation of a graph that minimizes the
     number of cross-tile messages. Note that the method does NOT modify the
     graph, but rather just returns a permutation vector that can be used by
@@ -23,6 +22,8 @@ def pbr(g):
     perm: numpy.ndarray
         Array of permuted node indices.
     '''
+    if partitioner is None:
+        partitioner = _partitioner
     A = g.adjacency_matrix.tocoo()
-    perm = _context.partition(A.row, A.col, *A.shape)
+    perm = partitioner(A.row, A.col, *A.shape)
     return perm

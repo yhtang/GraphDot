@@ -4,7 +4,6 @@ from .hypergraph import Hygr
 
 
 class ColnetHygr(Hygr):
-
     '''
     Standard colnet hypergraph from matrix market file, or any other means.
     Supports symmetric and non-symmetric matrices.
@@ -12,8 +11,6 @@ class ColnetHygr(Hygr):
 
     def __init__(self, unitVertexWeights=False):
         super(ColnetHygr, self).__init__(unitVertexWeights)
-
-        return
 
     def createFromPairs(self, row_ids, col_ids, nr, nc):
 
@@ -51,5 +48,3 @@ class ColnetHygr(Hygr):
         if (self._unitVertexWeights):
             for v in range(self._nverts):
                 self._cwghts[v] = 1
-
-        return
