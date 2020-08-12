@@ -11,6 +11,8 @@ setup:
 	eval ". $(VENV)/bin/activate && pip install -r requirements/common.txt"
 	eval ". $(VENV)/bin/activate && pip install -r requirements/docs.txt"
 	eval ". $(VENV)/bin/activate && pip install -r requirements/tests.txt"
+	eval ". $(VENV)/bin/activate && pip install tox flake8"
+	eval ". $(VENV)/bin/activate && python setup.py develop"
 
 lint:
 	flake8 --max-line-length=80 graphdot/ --exclude=basekernel.py

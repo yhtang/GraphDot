@@ -9,3 +9,4 @@ mendeleev
 sphinx
 sphinx-rtd-theme
 treelib
+kahypar
