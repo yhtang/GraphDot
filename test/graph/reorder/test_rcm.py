@@ -28,7 +28,7 @@ def test_rcm_complete_graph(n):
     lambda n: nx.wheel_graph(n),
     lambda n: nx.star_graph(n - 1),
     lambda n: nx.newman_watts_strogatz_graph(n, 3, 0.1),
-    lambda n: nx.erdos_renyi_graph(n, 0.1),
+    lambda n: nx.erdos_renyi_graph(n, 0.2),
 ])
 def test_rcm_fancy_graphs(n, gen):
     g = Graph.from_networkx(gen(n))
