@@ -31,8 +31,10 @@ def test_rcm_complete_graph(n):
     lambda n: nx.erdos_renyi_graph(n, 0.2),
 ])
 def test_rcm_fancy_graphs(n, gen):
-    g = Graph.from_networkx(gen(n))
-    p = rcm(g)
-    assert(np.min(p) == 0)
-    assert(np.max(p) == n - 1)
-    assert(len(np.unique(p)) == n)
+    nxg = gen(n)
+    if nxg.number_of_edges() > 0:
+        g = Graph.from_networkx(nxg)
+        p = rcm(g)
+        assert(np.min(p) == 0)
+        assert(np.max(p) == n - 1)
+        assert(len(np.unique(p)) == n)
