@@ -3,7 +3,7 @@
 ## 0.7a1 (2020-08-12)
 
 - The PBR graph reordering algorithm as proposed in
-  [10.1109/IPDPS47924.2020.00080][ipdps] is now aviable.
+  [10.1109/IPDPS47924.2020.00080][ipdps] is now available.
 
 [ipdps]: https://ieeexplore.ieee.org/abstract/document/9139866
 
