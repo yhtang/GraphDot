@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.7a2 (2020-08-14)
+
+- Fixed a memory layout issue that slowed down computations using normalized
+  kernels.
+
 ## 0.7a1 (2020-08-12)
 
 - The PBR graph reordering algorithm as proposed in
