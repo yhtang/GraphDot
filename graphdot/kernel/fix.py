@@ -57,7 +57,7 @@ class Normalization:
                     )
                 )
                 dK.append(dk)
-            dK = np.stack(dK, axis=2)
+            dK = np.asfortranarray(np.stack(dK, axis=2))
             return K, dK
         else:
             R = self.graph_kernel(X, Y, **options)
@@ -73,7 +73,7 @@ class Normalization:
             K = ldiag_rsqrt[:, None] * R * rdiag_rsqrt[None, :]
             return K
 
-    def diag(self, X, **options):
+    def diag(self, X, eval_gradient=False, **options):
         """Normalized outcome of :py:`self.graph_kernel.diag(X, **options)`.
 
         Parameters
@@ -84,7 +84,10 @@ class Normalization:
         -------
         Inherits that of the graph kernel object.
         """
-        return np.ones_like(self.graph_kernel.diag(X, **options))
+        if eval_gradient is True:
+            return np.ones(len(X)), np.ones((len(X), len(self.kernel.theta)))
+        else:
+            return np.ones(len(X))
 
     """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
 
