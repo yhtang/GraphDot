@@ -12,15 +12,15 @@ class Normalization:
 
     Parameters
     ----------
-    graph_kernel: object
-        The graph kernel to be normalized.
+    kernel: object
+        The kernel to be normalized.
     """
-    def __init__(self, graph_kernel):
-        self.graph_kernel = graph_kernel
+    def __init__(self, kernel):
+        self.kernel = kernel
 
     def __call__(self, X, Y=None, eval_gradient=False, **options):
         """Normalized outcome of
-        :py:`self.graph_kernel(X, Y, eval_gradient, **options)`.
+        :py:`self.kernel(X, Y, eval_gradient, **options)`.
 
         Parameters
         ----------
@@ -31,12 +31,12 @@ class Normalization:
         Inherits that of the graph kernel object.
         """
         if eval_gradient is True:
-            R, dR = self.graph_kernel(X, Y, eval_gradient=True, **options)
+            R, dR = self.kernel(X, Y, eval_gradient=True, **options)
             if Y is None:
                 ldiag = rdiag = R.diagonal()
             else:
-                ldiag, ldDiag = self.graph_kernel.diag(X, True, **options)
-                rdiag, rdDiag = self.graph_kernel.diag(Y, True, **options)
+                ldiag, ldDiag = self.kernel.diag(X, True, **options)
+                rdiag, rdDiag = self.kernel.diag(Y, True, **options)
             ldiag_inv = 1 / ldiag
             rdiag_inv = 1 / rdiag
             ldiag_rsqrt = np.sqrt(ldiag_inv)
@@ -57,15 +57,15 @@ class Normalization:
                     )
                 )
                 dK.append(dk)
-            dK = np.stack(dK, axis=2)
+            dK = np.asfortranarray(np.stack(dK, axis=2))
             return K, dK
         else:
-            R = self.graph_kernel(X, Y, **options)
+            R = self.kernel(X, Y, **options)
             if Y is None:
                 ldiag = rdiag = R.diagonal()
             else:
-                ldiag = self.graph_kernel.diag(X, **options)
-                rdiag = self.graph_kernel.diag(Y, **options)
+                ldiag = self.kernel.diag(X, **options)
+                rdiag = self.kernel.diag(Y, **options)
             ldiag_inv = 1 / ldiag
             rdiag_inv = 1 / rdiag
             ldiag_rsqrt = np.sqrt(ldiag_inv)
@@ -73,8 +73,8 @@ class Normalization:
             K = ldiag_rsqrt[:, None] * R * rdiag_rsqrt[None, :]
             return K
 
-    def diag(self, X, **options):
-        """Normalized outcome of :py:`self.graph_kernel.diag(X, **options)`.
+    def diag(self, X, eval_gradient=False, **options):
+        """Normalized outcome of :py:`self.kernel.diag(X, **options)`.
 
         Parameters
         ----------
@@ -84,29 +84,32 @@ class Normalization:
         -------
         Inherits that of the graph kernel object.
         """
-        return np.ones_like(self.graph_kernel.diag(X, **options))
+        if eval_gradient is True:
+            return np.ones(len(X)), np.ones((len(X), len(self.kernel.theta)))
+        else:
+            return np.ones(len(X))
 
     """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
 
     @property
     def hyperparameters(self):
-        return self.graph_kernel.hyperparameters
+        return self.kernel.hyperparameters
 
     @property
     def theta(self):
-        return self.graph_kernel.theta
+        return self.kernel.theta
 
     @theta.setter
     def theta(self, value):
-        self.graph_kernel.theta = value
+        self.kernel.theta = value
 
     @property
     def hyperparameter_bounds(self):
-        return self.graph_kernel.hyperparameter_bounds
+        return self.kernel.hyperparameter_bounds
 
     @property
     def bounds(self):
-        return self.graph_kernel.bounds
+        return self.kernel.bounds
 
     def clone_with_theta(self, theta):
         clone = copy.deepcopy(self)
@@ -120,7 +123,7 @@ class Exponentiation:
 
     Parameters
     ----------
-    graph_kernel: object
+    kernel: object
         The graph kernel to be exponentiated.
     xi: float
         The exponent to be raises.
@@ -128,14 +131,14 @@ class Exponentiation:
         The range of the exponents to be searched during hyperparameter
         optimization.
     """
-    def __init__(self, graph_kernel, xi=1.0, xi_bounds=(0.1, 20.0)):
-        self.graph_kernel = graph_kernel
+    def __init__(self, kernel, xi=1.0, xi_bounds=(0.1, 20.0)):
+        self.kernel = kernel
         self.xi = xi
         self.xi_bounds = xi_bounds
 
     def __call__(self, X, Y=None, eval_gradient=False, **options):
         """Normalized outcome of
-        :py:`self.graph_kernel(X, Y, eval_gradient, **options)`.
+        :py:`self.kernel(X, Y, eval_gradient, **options)`.
 
         Parameters
         ----------
@@ -146,7 +149,7 @@ class Exponentiation:
         Inherits that of the graph kernel object.
         """
         if eval_gradient is True:
-            R, dR = self.graph_kernel(X, Y, eval_gradient=True, **options)
+            R, dR = self.kernel(X, Y, eval_gradient=True, **options)
             K = R**self.xi
             dK = []
             dK.append(K * np.log(R))  # \frac{d R^\xi}{d \xi} = R^\xi \log R
@@ -157,11 +160,11 @@ class Exponentiation:
             dK = np.stack(dK, axis=2)
             return K, dK
         else:
-            R = self.graph_kernel(X, Y, **options)
+            R = self.kernel(X, Y, **options)
             return R**self.xi
 
     def diag(self, X, **options):
-        """Normalized outcome of :py:`self.graph_kernel.diag(X, **options)`.
+        """Normalized outcome of :py:`self.kernel.diag(X, **options)`.
 
         Parameters
         ----------
@@ -171,24 +174,24 @@ class Exponentiation:
         -------
         Inherits that of the graph kernel object.
         """
-        return self.graph_kernel.diag(X, **options)**self.xi
+        return self.kernel.diag(X, **options)**self.xi
 
     """⭣⭣⭣⭣⭣ scikit-learn interoperability methods ⭣⭣⭣⭣⭣"""
 
     @property
     def hyperparameters(self):
         return namedtuple('ExponentiationHyperparameters', ['xi', 'kernel'])(
-            self.xi, self.graph_kernel.hyperparameters
+            self.xi, self.kernel.hyperparameters
         )
 
     @property
     def theta(self):
-        return np.concatenate((np.log([self.xi]), self.graph_kernel.theta))
+        return np.concatenate((np.log([self.xi]), self.kernel.theta))
 
     @theta.setter
     def theta(self, value):
         self.xi = np.exp(value[0])
-        self.graph_kernel.theta = value[1:]
+        self.kernel.theta = value[1:]
 
     @property
     def hyperparameter_bounds(self):
@@ -196,14 +199,14 @@ class Exponentiation:
             'ExponentiationHyperparameterBounds',
             ['xi', 'kernel']
         )(
-            self.xi_bounds, self.graph_kernel.hyperparameter_bounds
+            self.xi_bounds, self.kernel.hyperparameter_bounds
         )
 
     @property
     def bounds(self):
         return np.vstack((
             np.log([self.xi_bounds]),
-            self.graph_kernel.bounds
+            self.kernel.bounds
         ))
 
     def clone_with_theta(self, theta):
