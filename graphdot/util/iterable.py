@@ -6,7 +6,7 @@ def flatten(iterable):
     '''Iterate through a tree of iterables in depth-first order. E.g.
     :py:`flatten(((1, 2), 3))` yields the sequence of :py:`1, 2, 3`.'''
     for item in iterable:
-        if hasattr(item, '__iter__'):
+        if isinstance(item, (list, tuple)):
             yield from flatten(item)
         else:
             yield item
