@@ -73,6 +73,7 @@ def test_constant_kernel():
         if n != 2:
             with pytest.raises(ValueError):
                 Constant(1.0, c_bounds=tuple([1] * n))
+    Constant(1.0, c_bounds='fixed')
 
 
 def test_kronecker_delta_kernel():
@@ -99,6 +100,7 @@ def test_kronecker_delta_kernel():
         if n != 2:
             with pytest.raises(ValueError):
                 KroneckerDelta(1.0, h_bounds=tuple([1] * n))
+    KroneckerDelta(1.0, h_bounds='fixed')
 
 
 def test_square_exponential_kernel():
@@ -118,6 +120,7 @@ def test_square_exponential_kernel():
         if n != 2:
             with pytest.raises(ValueError):
                 SquareExponential(1.0, length_scale_bounds=tuple([1] * n))
+    SquareExponential(1.0, length_scale_bounds='fixed')
 
 
 def test_product_quasikernel():
