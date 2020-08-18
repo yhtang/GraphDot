@@ -26,3 +26,12 @@ def fold_like(flat, example):
             folded.append(flat[0])
             flat = flat[1:]
     return tuple(folded)
+
+
+def replace(iterable, old, new):
+    '''Replace all occurrences of `old` to `new`.'''
+    for item in iterable:
+        if item == old:
+            yield new
+        else:
+            yield item
