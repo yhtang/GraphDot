@@ -410,7 +410,7 @@ class MarginalizedGraphKernel:
     def active_theta_mask(self):
         lower, upper = np.reshape(
             np.fromiter(
-                flatten(  # flatten the newly introduces (nan, nan) tuples
+                flatten(  # flatten the newly introduced (nan, nan) tuples
                     replace(  # 'fixed' -> (nan, nan)
                         flatten(self.hyperparameter_bounds),  # tree -> list
                         'fixed',
