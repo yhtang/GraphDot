@@ -15,6 +15,10 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
     ----------
     h: float in (0, 1)
         The value of the microkernel when two features do not compare equal.
+    h_bounds: tuple or "fixed"
+        If tuple, contains the lower and upper bounds that `h` is allowed to
+        vary during hyperparameter optimization. If "fixed", the hyperparameter
+        will not be optimized during training.
     """
 
     @cpptype(h=np.float32)

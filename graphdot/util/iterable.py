@@ -6,7 +6,7 @@ def flatten(iterable):
     '''Iterate through a tree of iterables in depth-first order. E.g.
     :py:`flatten(((1, 2), 3))` yields the sequence of :py:`1, 2, 3`.'''
     for item in iterable:
-        if hasattr(item, '__iter__'):
+        if isinstance(item, (list, tuple)):
             yield from flatten(item)
         else:
             yield item
@@ -26,3 +26,12 @@ def fold_like(flat, example):
             folded.append(flat[0])
             flat = flat[1:]
     return tuple(folded)
+
+
+def replace(iterable, old, new):
+    '''Replace all occurrences of `old` to `new`.'''
+    for item in iterable:
+        if item == old:
+            yield new
+        else:
+            yield item

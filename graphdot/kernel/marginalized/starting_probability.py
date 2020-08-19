@@ -59,42 +59,6 @@ class StartingProbability(ABC):
         pass
 
 
-@cpptype(null=np.int8)
-class Fixed(StartingProbability):
-    '''Assigned all nodes the same starting probability that will remain
-    the same during training.
-
-    Parameters
-    ----------
-    p: float
-        The starting probability value.
-    '''
-    null = 0
-
-    def __init__(self, p):
-        self.p = p
-
-    def __call__(self, nodes):
-        return self.p * np.ones(len(nodes)), np.empty((0, 0))
-
-    def gen_expr(self):
-        return '%f' % self.p, []
-
-    @property
-    def theta(self):
-        return namedtuple('StartingProbability', ['p'])(
-            self.p
-        )
-
-    @theta.setter
-    def theta(self, t):
-        self.p = t[0]
-
-    @property
-    def bounds(self):
-        return ((self.p, self.p),)
-
-
 @cpptype(p=np.float32)
 class Uniform(StartingProbability):
     '''Assigned all nodes the same starting probability.
@@ -103,12 +67,13 @@ class Uniform(StartingProbability):
     ----------
     p: float
         The starting probability value.
-    p_bounds: (float, float)
+    p_bounds: (float, float) or "fixed"
         The range within which the starting probability can vary during
         training.
     '''
     def __init__(self, p, p_bounds=(1e-3, 1e3)):
-        assert(isinstance(p_bounds, tuple) and len(p_bounds) == 2)
+        assert((isinstance(p_bounds, tuple) and len(p_bounds) == 2) or
+               p_bounds == 'fixed')
         self.p = p
         self.p_bounds = p_bounds
 
