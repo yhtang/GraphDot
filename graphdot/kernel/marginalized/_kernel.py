@@ -7,7 +7,7 @@ from collections import namedtuple
 import numpy as np
 from graphdot.graph import Graph
 from graphdot.util import Timer
-from graphdot.util.iterable import fold_like, flatten
+from graphdot.util.iterable import fold_like, flatten, replace
 from ._backend_factory import backend_factory
 from .starting_probability import StartingProbability, Uniform, Adhoc
 
@@ -204,7 +204,7 @@ class MarginalizedGraphKernel:
             gramian,
             gradient,
             output_shape[0],
-            output_shape[1] if len(output_shape) >= 2 else 1,
+            output_shape[1],
             self.n_dims,
             traits,
             timer,
@@ -217,7 +217,7 @@ class MarginalizedGraphKernel:
         if gradient is not None:
             gradient = gradient.reshape(
                 (*output_shape, self.n_dims), order='F'
-            )
+            )[:, :, self.active_theta_mask]
         timer.toc('collecting result')
 
         if timing:
@@ -348,7 +348,7 @@ class MarginalizedGraphKernel:
         if gradient is not None:
             gradient = gradient.reshape(
                 (output_length, self.n_dims), order='F'
-            )
+            )[:, self.active_theta_mask]
         if nodal == 'block':
             retval = [gramian[s:s + n**2].reshape(n, n)
                       for s, n in zip(starts[:-1], sizes)]
@@ -377,12 +377,8 @@ class MarginalizedGraphKernel:
         return False
 
     @property
-    def n_dims(self):
-        '''p.theta + q + node_kernel.theta + edge_kernel.theta'''
-        return len(self.theta)
-
-    @property
     def hyperparameters(self):
+        '''A hierarchical representation of all the kernel hyperparameters.'''
         return namedtuple(
             'GraphKernelHyperparameters',
             ['p', 'q', 'node', 'edge']
@@ -392,16 +388,8 @@ class MarginalizedGraphKernel:
           self.edge_kernel.theta)
 
     @property
-    def theta(self):
-        return np.log(np.fromiter(flatten(self.hyperparameters), np.float))
-
-    @theta.setter
-    def theta(self, value):
-        (self.p.theta,
-         self.q,
-         self.node_kernel.theta,
-         self.edge_kernel.theta
-         ) = fold_like(np.exp(value), self.hyperparameters)
+    def flat_hyperparameters(self):
+        return np.fromiter(flatten(self.hyperparameters), np.float)
 
     @property
     def hyperparameter_bounds(self):
@@ -414,21 +402,59 @@ class MarginalizedGraphKernel:
           self.edge_kernel.bounds)
 
     @property
+    def n_dims(self):
+        'Number of hyperparameters including both optimizable and fixed ones.'
+        return len(self.flat_hyperparameters)
+
+    @property
+    def active_theta_mask(self):
+        lower, upper = np.reshape(
+            np.fromiter(
+                flatten(  # flatten the newly introduced (nan, nan) tuples
+                    replace(  # 'fixed' -> (nan, nan)
+                        flatten(self.hyperparameter_bounds),  # tree -> list
+                        'fixed',
+                        (np.nan, np.nan)
+                    )
+                ),
+                dtype=np.float
+            ),
+            (2, -1),
+            order='F'
+        )
+        inactive = np.isnan(lower) | np.isnan(upper) | (lower == upper)
+        return ~inactive
+
+    @property
+    def theta(self):
+        '''The logarithms of a flattened array of kernel hyperparameters,
+        excluing those declared as 'fixed' or those with equal lower and upper
+        bounds.'''
+        return np.log(self.flat_hyperparameters[self.active_theta_mask])
+
+    @theta.setter
+    def theta(self, value):
+        hypers = np.log(self.flat_hyperparameters)
+        hypers[self.active_theta_mask] = value
+        (self.p.theta,
+         self.q,
+         self.node_kernel.theta,
+         self.edge_kernel.theta
+         ) = fold_like(np.exp(hypers), self.hyperparameters)
+
+    @property
     def bounds(self):
-        return np.log(np.fromiter(flatten(self.hyperparameter_bounds),
-                                  np.float)).reshape(-1, 2, order='C')
+        '''The logarithms of a reshaped X-by-2 array of kernel hyperparameter
+        bounds, excluing those declared as 'fixed' or those with equal lower
+        and upper bounds.'''
+        return np.log(
+            np.fromiter(
+                flatten(self.hyperparameter_bounds),
+                np.float
+            ).reshape(-1, 2, order='C')[self.active_theta_mask, :]
+        )
 
     def clone_with_theta(self, theta):
         clone = copy.deepcopy(self)
         clone.theta = theta
         return clone
-
-    def get_params(self, deep=False):
-        return dict(
-            node_kernel=self.node_kernel,
-            edge_kernel=self.edge_kernel,
-            p=self.p,
-            q=self.q,
-            q_bounds=self.q_bounds,
-            backend=self.backend
-        )

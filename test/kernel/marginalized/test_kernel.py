@@ -512,7 +512,6 @@ def test_mlgk_self_loops():
         n = np.random.randint(4, 20)
         A = np.random.randn(n, n)
         A = A + A.T
-        # A.flat[::len(A) + 1] = 0
 
         G = [Graph.from_networkx(nx.from_numpy_array(A), weight='weight')]
 
@@ -520,3 +519,40 @@ def test_mlgk_self_loops():
         K0 = MLGK(G[0], knode, kedge, q, q, nodal=False)
 
         assert(K == pytest.approx(K0, 5e-4))
+
+
+def test_mlgk_fixed_hyperparameters():
+
+    g = nx.Graph()
+    g.add_node(0, feature=0)
+    g.add_node(1, feature=1)
+    g.add_node(2, feature=0)
+    g.add_edge(0, 1, attribute=1.0)
+    g.add_edge(0, 2, attribute=2.0)
+
+    G = [Graph.from_networkx(g)]
+    knodeV = TensorProduct(feature=KroneckerDelta(0.5))
+    knodeF = TensorProduct(feature=KroneckerDelta(0.5, h_bounds='fixed'))
+    kedgeV = TensorProduct(attribute=SquareExponential(1.0))
+    kedgeF = TensorProduct(
+        attribute=SquareExponential(1.0, length_scale_bounds='fixed')
+    )
+
+    kernelVV = MarginalizedGraphKernel(knodeV, kedgeV)
+    kernelVF = MarginalizedGraphKernel(knodeV, kedgeF)
+    kernelFV = MarginalizedGraphKernel(knodeF, kedgeV)
+    kernelFF = MarginalizedGraphKernel(knodeF, kedgeF)
+    Rvv, dRvv = kernelVV(G, eval_gradient=True)
+    Rvf, dRvf = kernelVF(G, eval_gradient=True)
+    Rfv, dRfv = kernelFV(G, eval_gradient=True)
+    Rff, dRff = kernelFF(G, eval_gradient=True)
+
+    assert(Rvv == pytest.approx(Rvf))
+    assert(Rvv == pytest.approx(Rfv))
+    assert(Rvv == pytest.approx(Rff))
+    assert(dRvv.shape[2] == dRvf.shape[2] + 1)
+    assert(dRvv.shape[2] == dRfv.shape[2] + 1)
+    assert(dRvv.shape[2] == dRff.shape[2] + 2)
+    assert(dRvv[:, :, kernelVF.active_theta_mask] == pytest.approx(dRvf))
+    assert(dRvv[:, :, kernelFV.active_theta_mask] == pytest.approx(dRfv))
+    assert(dRvv[:, :, kernelFF.active_theta_mask] == pytest.approx(dRff))

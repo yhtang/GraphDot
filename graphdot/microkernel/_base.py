@@ -87,10 +87,11 @@ class MicroKernel(ABC):
         pass
 
     def _assert_bounds(self, hyp, bounds):
-        if not isinstance(bounds, tuple) or len(bounds) != 2:
+        if not ((isinstance(bounds, tuple) and len(bounds) == 2)
+                or bounds == 'fixed'):
             raise ValueError(
                 f'Bounds for hyperparameter {hyp} of kernel {self.name} must '
-                f'be a 2-tuple: {bounds} provided.'
+                f'be a 2-tuple or "fixed": {bounds} provided.'
             )
 
     @staticmethod
@@ -576,8 +577,10 @@ def _from_sympy(name, desc, expr, vars, *hyperparameter_specs):
         Template(
             '${name}: ${type}\n'
             '    ${desc\n    }\n'
-            '${name}_bounds: pair of ${type}\n'
-            '    Lower and upper bounds of `${name}`.'
+            '${name}_bounds: tuple or "fixed"\n'
+            '    Lower and upper bounds of `${name}` with respect to '
+            'hyperparameter optimization. If "fixed", the hyperparameter will '
+            'not be optimized during training.'
         ).render(
             name=name,
             type=hdef['dtype'],
