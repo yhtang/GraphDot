@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.7a4 (2020-08-18)
+
+- Fixed a bug related to bounds of kernels contains fixed hyperparameters.
+
 ## 0.7a3 (2020-08-18)
 
 - Allow kernel/microkernel hyperparameters to be declared as 'fixed' via the
