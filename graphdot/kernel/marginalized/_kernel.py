@@ -449,7 +449,13 @@ class MarginalizedGraphKernel:
         and upper bounds.'''
         return np.log(
             np.fromiter(
-                flatten(self.hyperparameter_bounds),
+                flatten(
+                    replace(
+                        flatten(self.hyperparameter_bounds),
+                        'fixed',
+                        (np.nan, np.nan)
+                    )
+                ),
                 np.float
             ).reshape(-1, 2, order='C')[self.active_theta_mask, :]
         )

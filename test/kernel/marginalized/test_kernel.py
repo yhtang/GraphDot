@@ -542,6 +542,13 @@ def test_mlgk_fixed_hyperparameters():
     kernelVF = MarginalizedGraphKernel(knodeV, kedgeF)
     kernelFV = MarginalizedGraphKernel(knodeF, kedgeV)
     kernelFF = MarginalizedGraphKernel(knodeF, kedgeF)
+    assert(len(kernelVV.theta) == len(kernelVF.theta) + 1)
+    assert(len(kernelVV.theta) == len(kernelFV.theta) + 1)
+    assert(len(kernelVV.theta) == len(kernelFF.theta) + 2)
+    assert(len(kernelVV.bounds) == len(kernelVF.bounds) + 1)
+    assert(len(kernelVV.bounds) == len(kernelFV.bounds) + 1)
+    assert(len(kernelVV.bounds) == len(kernelFF.bounds) + 2)
+
     Rvv, dRvv = kernelVV(G, eval_gradient=True)
     Rvf, dRvf = kernelVF(G, eval_gradient=True)
     Rfv, dRfv = kernelFV(G, eval_gradient=True)
