@@ -424,8 +424,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         yKy = y @ Ky
         logP = yKy + logdet
 
-        t_linalg = time.perf_counter() - t_linalg
-
         if eval_gradient is True:
             D_theta = np.zeros_like(theta)
             K_inv2 = K_inv**2
@@ -443,6 +441,8 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             retval = (logP, D_theta)
         else:
             retval = logP
+
+        t_linalg = time.perf_counter() - t_linalg
 
         if verbose:
             mprint.table(
