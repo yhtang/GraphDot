@@ -180,7 +180,11 @@ def test_gpr_predict_periodic():
     assert(z == pytest.approx(y[~mask], 1e-6))
 
 
-def test_gpr_predict_loocv():
+@pytest.mark.parametrize('f', [
+    lambda x: np.cos(x * np.pi),
+    lambda x: np.sin(x * np.pi) + 0.5 * x + 1.0 * x**2
+])
+def test_gpr_predict_loocv(f):
 
     class Kernel:
         def __call__(self, X, Y=None):
@@ -192,7 +196,7 @@ def test_gpr_predict_loocv():
     kernel = Kernel()
     gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
     X = np.linspace(-1, 1, 6)
-    y = np.cos(X * np.pi)
+    y = f(X)
     y_loocv, std_loocv = gpr.predict_loocv(X, y, return_std=True)
     assert(y_loocv == pytest.approx(gpr.predict_loocv(X, y, return_std=False)))
     for i, _ in enumerate(X):
@@ -303,7 +307,11 @@ def test_gpr_log_marginal_likelihood():
         assert(dL.item() == pytest.approx(dL_diff, 1e-3, 1e-3))
 
 
-def test_gpr_squared_loocv_error():
+@pytest.mark.parametrize('f', [
+    lambda x: np.cos(x * np.pi),
+    lambda x: np.sin(x * np.pi) + 0.5 * x + 1.0 * x**2
+])
+def test_gpr_squared_loocv_error(f):
 
     class Kernel:
         def __init__(self, L):
@@ -336,7 +344,7 @@ def test_gpr_squared_loocv_error():
             return k
 
     X = np.linspace(-1, 1, 6, endpoint=False)
-    y = np.sin(X * np.pi)
+    y = f(X)
     eps = 1e-4
     for L in np.logspace(-2, 1, 20):
         kernel = Kernel(L)
@@ -352,7 +360,7 @@ def test_gpr_squared_loocv_error():
         ).item()
 
         de_diff = (e_pos - e_neg) / (2 * eps)
-        assert(de.item() == pytest.approx(de_diff, 1e-3, 1e-3))
+        assert(de.item() == pytest.approx(de_diff, 1e-2, 1e-2))
 
 
 @pytest.mark.parametrize('normalize_y', [True, False])
