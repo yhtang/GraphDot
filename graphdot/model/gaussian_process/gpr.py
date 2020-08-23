@@ -107,7 +107,8 @@ class GaussianProcessRegressor:
                 else:
                     return kernel(X, Y, **self.kernel_options)
 
-    def fit(self, X, y, tol=1e-4, repeat=1, theta_jitter=1.0, verbose=False):
+    def fit(self, X, y, loss='likelihood', tol=1e-4, repeat=1,
+            theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
         optimized using maximum likelihood estimation.
@@ -118,6 +119,10 @@ class GaussianProcessRegressor:
             Input values of the training data.
         y: 1D array
             Output/target values of the training data.
+        loss: 'likelihood' or 'loocv'
+            The loss function to be minimzed during training. Could be either
+            'likelihood' (negative log-likelihood) or 'loocv' (mean-square
+            leave-one-out cross validation error).
         tol: float
             Tolerance for termination.
         repeat: int
@@ -139,8 +144,14 @@ class GaussianProcessRegressor:
 
         '''hyperparameter optimization'''
         if self.optimizer:
+
+            if loss == 'likelihood':
+                objective = self.log_marginal_likelihood
+            elif loss == 'loocv':
+                objective = self.squared_loocv_error
+
             opt = self._hyper_opt(
-                lambda theta, self=self: self.log_marginal_likelihood(
+                lambda theta, objective=objective: objective(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
@@ -154,7 +165,7 @@ class GaussianProcessRegressor:
                 self.kernel.theta = opt.x
             else:
                 raise RuntimeError(
-                    f'Maximum likelihood estimation did not converge, got:\n'
+                    f'Training using the {loss} loss did not converge, got:\n'
                     f'{opt}'
                 )
 
@@ -164,85 +175,9 @@ class GaussianProcessRegressor:
         self.Ky = self.Kinv @ self.y
         return self
 
-    def fit_loocv(self, X, y, return_mean=False, return_std=False,
-                  tol=1e-4, repeat=1, theta_jitter=1.0, verbose=False):
-        """Train a GPR model and return the leave-one-out cross validation
-        results on the dataset. If the `optimizer` argument was set while
-        initializing the GPR object, the hyperparameters of the kernel will be
-        optimized with regard to the LOOCV RMSE.
-
-        Parameters
-        ----------
-        X: list of objects or feature vectors.
-            Input values of the training data.
-        y: 1D array
-            Output/target values of the training data.
-        return_mean: boolean
-            If True, the leave-one-out predictive mean of the model on the
-            training data are returned along with the model.
-        return_std: boolean
-            If True, the leave-one-out predictive standard deviations of the
-            model on the training data are returned along with the model.
-        tol: float
-            Tolerance for termination.
-        repeat: int
-            Repeat the hyperparameter optimization by the specified number of
-            times and return the best result.
-        theta_jitter: float
-            Standard deviation of the random noise added to the initial
-            logscale hyperparameters across repeated optimization runs.
-        verbose: bool
-            Whether or not to print out the optimization progress and outcome.
-
-        Returns
-        -------
-        self: GaussianProcessRegressor
-            returns an instance of self.
-        ymean: 1D array, only if return_mean is True
-            Mean of the leave-one-out predictive distribution at query points.
-        std: 1D array, only if return_std is True
-            Standard deviation of the leave-one-out predictive distribution.
-        """
-        self.X = X
-        self.y = y
-
-        '''hyperparameter optimization'''
-        if self.optimizer:
-            opt = self._hyper_opt(
-                lambda theta, self=self: self.squared_loocv_error(
-                    theta, eval_gradient=True, clone_kernel=False,
-                    verbose=verbose
-                ),
-                self.kernel.theta.copy(),
-                tol, repeat, theta_jitter, verbose
-            )
-            if verbose:
-                print(f'Optimization result:\n{opt}')
-
-            if opt.success:
-                self.kernel.theta = opt.x
-            else:
-                raise RuntimeError(
-                    f'Minimum LOOCV optimization did not converge, got:\n'
-                    f'{opt}'
-                )
-
-        '''build and store GPR model'''
-        self.K = self._gramian(X)
-        self.Kinv = CholSolver(self.K)
-        self.Ky = self.Kinv @ self.y
-        if return_mean is False and return_std is False:
-            return self
-        else:
-            retvals = []
-            Kinv_diag = (self.Kinv @ np.eye(len(self.X))).diagonal()
-            if return_mean is True:
-                ymean = self.y - self.Kinv @ self.y / Kinv_diag
-                retvals.append(ymean * self.y_std + self.y_mean)
-            if return_std is True:
-                ystd = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
-                retvals.append(ystd * self.y_std)
-            return (self, *retvals)
+    def fit_loocv(self, X, y, **options):
+        """Alias of :py:`fit_loocv(X, y, loss='loocv', **options)`."""
+        return self.fit(X, y, loss='loocv', **options)
 
     def predict(self, Z, return_std=False, return_cov=False):
         """Predict using the trained GPR model.

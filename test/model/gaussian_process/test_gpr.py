@@ -385,14 +385,9 @@ def test_gpr_fit_loocv_no_opt(normalize_y):
         normalize_y=normalize_y,
         optimizer=False,
     )
-    _, m1, s1 = gpr.fit_loocv(X[mask], y[mask], return_mean=True,
-                              return_std=True)
-    z = gpr.predict(X[~mask])
-    assert(z == pytest.approx(y[~mask], 1e-6))
-
-    m2, s2 = gpr.predict_loocv(X[mask], y[mask], return_std=True)
-    assert(m1 == pytest.approx(m2))
-    assert(s1 == pytest.approx(s2))
+    gpr.fit_loocv(X[mask], y[mask])
+    z1 = gpr.predict(X[~mask])
+    assert(z1 == pytest.approx(y[~mask], 1e-6))
 
 
 @pytest.mark.parametrize('normalize_y', [True, False])
