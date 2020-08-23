@@ -1,5 +1,11 @@
 # Change log of GraphDot
 
+## 0.7a6 (2020-08-23)
+
+- Optimized GPU gradient evaluation performance
+- `predict_loocv` now available for the LowRankApproximateGPR model.
+- Unified the `fit` and `fit_loocv` method of GaussianProcessRegressor.
+
 ## 0.7a4 (2020-08-18)
 
 - Fixed a bug related to bounds of kernels contains fixed hyperparameters.
