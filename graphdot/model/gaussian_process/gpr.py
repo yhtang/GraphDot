@@ -387,23 +387,23 @@ class GaussianProcessRegressor:
         Ky = Kinv @ y
         yKy = y @ Ky
         logdet = np.prod(np.linalg.slogdet(K))
-        t_linalg = time.perf_counter() - t_linalg
 
         if eval_gradient is True:
-            D_theta = np.zeros_like(theta)
-            for i, t in enumerate(theta):
-                dk = dK[:, :, i]
-                D_theta[i] = ((Kinv @ dk).trace() - Ky @ dk @ Ky) * np.exp(t)
-            retval = (yKy + logdet, D_theta)
+            d_theta = (
+                np.einsum('ij,ijk->k', Kinv @ np.eye(len(K)), dK) -
+                np.einsum('i,ijk,j', Ky, dK, Ky)
+            )
+            retval = (yKy + logdet, d_theta * np.exp(theta))
         else:
             retval = yKy + logdet
+        t_linalg = time.perf_counter() - t_linalg
 
         if verbose:
             mprint.table(
-                ('log(P)', '%12.5g', yKy + logdet),
-                ('yKy', '%12.5g', yKy),
-                ('logdet(K)', '%12.5g', logdet),
-                ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
+                ('logP', '%12.5g', yKy + logdet),
+                ('dlogP', '%12.5g', np.linalg.norm(d_theta)),
+                ('y^T.K.y', '%12.5g', yKy),
+                ('log|K|', '%12.5g', logdet),
                 ('Cond(K)', '%12.5g', np.linalg.cond(K)),
                 ('t_GPU (s)', '%10.2g', t_kernel),
                 ('t_CPU (s)', '%10.2g', t_linalg),
@@ -471,7 +471,6 @@ class GaussianProcessRegressor:
         Ky = Kinv @ y
         e = Ky / Kinv_diag
         squared_error = 0.5 * np.sum(e**2)
-        t_linalg = time.perf_counter() - t_linalg
 
         if eval_gradient is True:
             D_theta = np.zeros_like(theta)
@@ -485,6 +484,7 @@ class GaussianProcessRegressor:
             retval = (squared_error, D_theta)
         else:
             retval = squared_error
+        t_linalg = time.perf_counter() - t_linalg
 
         if verbose:
             mprint.table(
