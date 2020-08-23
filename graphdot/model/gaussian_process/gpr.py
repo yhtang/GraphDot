@@ -85,7 +85,7 @@ class GaussianProcessRegressor:
         kernel = kernel or self.kernel
         if Y is None:
             if diag is True:
-                return kernel.diag(X, **self.kernel_options)
+                return kernel.diag(X, **self.kernel_options) + self.alpha
             else:
                 if jac is True:
                     K, J = kernel(X, eval_gradient=True, **self.kernel_options)
