@@ -111,7 +111,7 @@ class GaussianProcessRegressor:
             theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
-        optimized using maximum likelihood estimation.
+        optimized using the specified loss function.
 
         Parameters
         ----------
