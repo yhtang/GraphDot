@@ -4,6 +4,7 @@ import time
 import numpy as np
 from graphdot.util.printer import markdown as mprint
 import graphdot.linalg.low_rank as lr
+from graphdot.linalg.spectral import powerh
 from .gpr import GaussianProcessRegressor
 
 
@@ -90,22 +91,13 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     def C(self, C):
         self._C = C
 
-    def _set_corespace(self, C, inplace=False):
-        r'''
-        Given the eigendecomposition $K_{cc} = U_{cc} W_{cc} U_{cc}^T$,
-        we have $K_{cc}^{-1} = U_{cc} W_{cc}^{-1} U_{cc}^T$.
-        '''
-        Kcc = self._gramian(C)
-        Kcc.flat[::len(Kcc) + 1] += self.alpha
-        a, Q = np.linalg.eigh(Kcc)
-        if np.any(a <= 0):
+    def _corespace(self, C):
+        try:
+            return powerh(self._gramian(C), -0.5, symmetric=False)
+        except np.linalg.LinAlgError:
             raise np.linalg.LinAlgError(
                 'Core matrix singular, try to increase `alpha`.\n'
             )
-        Kcc_rsqrt = Q * a**-0.5
-        if inplace is True:
-            self.Kcc_rsqrt = Kcc_rsqrt
-        return Kcc_rsqrt
 
     def fit(self, C, X, y, tol=1e-4, repeat=1, theta_jitter=1.0,
             verbose=False):
@@ -163,7 +155,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 )
 
         '''build and store GPR model'''
-        self._set_corespace(self.C, inplace=True)
+        self.Kcc_rsqrt = self._corespace(self.C)
         self.Kxc = self._gramian(self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
         self.Kinv = lr.dot(self.Fxc, rcut=self.beta).inverse()
@@ -297,52 +289,83 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         else:
             return ymean
 
-    # def predict_loocv(self, Z, z, return_std=False):
-    #     """Compute the leave-one-out cross validation prediction of the given
-    #     data.
+    def predict_loocv(self, Z, z, return_std=False, method='auto'):
+        """Compute the leave-one-out cross validation prediction of the given
+        data.
 
-    #     Parameters
-    #     ----------
-    #     Z: list of objects or feature vectors.
-    #         Input values of the unknown data.
-    #     z: 1D array
-    #         Target values of the training data.
-    #     return_std: boolean
-    #         If True, the standard-deviations of the predictions at the query
-    #         points are returned along with the mean.
+        Parameters
+        ----------
+        Z: list of objects or feature vectors.
+            Input values of the unknown data.
+        z: 1D array
+            Target values of the training data.
+        return_std: boolean
+            If True, the standard-deviations of the predictions at the query
+            points are returned along with the mean.
+        method: 'auto' or 'ridge-like' or 'gpr-like'
+            Selects the algorithm used for fast evaluation of the leave-one-out
+            cross validation without expliciting training one model per sample.
+            'ridge-like' seems to be more stable with a smaller core size (that
+            is not rank-deficit), while 'gpr-like' seems to be more stable with
+            a larger core size. By default, the option is 'auto' and the
+            function will choose a method based on an analysis on the
+            eigenspectrum of the dataset.
 
-    #     Returns
-    #     -------
-    #     ymean: 1D array
-    #         Leave-one-out mean of the predictive distribution at query points.
-    #     std: 1D array
-    #         Leave-one-out standard deviation of the predictive distribution at
-    #         query points.
-    #     """
-    #     assert(len(Z) == len(z))
-    #     z = np.asarray(z)
-    #     if self.normalize_y is True:
-    #         z_mean, z_std = np.mean(z), np.std(z)
-    #         z = (z - z_mean) / z_std
-    #     else:
-    #         z_mean, z_std = 0, 1
+        Returns
+        -------
+        ymean: 1D array
+            Leave-one-out mean of the predictive distribution at query points.
+        std: 1D array
+            Leave-one-out standard deviation of the predictive distribution at
+            query points.
+        """
+        assert(len(Z) == len(z))
+        z = np.asarray(z)
+        if self.normalize_y is True:
+            z_mean, z_std = np.mean(z), np.std(z)
+            z = (z - z_mean) / z_std
+        else:
+            z_mean, z_std = 0, 1
 
-    #     if not hasattr(self, 'Kcc_rsqrt'):
-    #         self._compute_low_rank_subspace(inplace=True)
-    #     Kzc = self._gramian(Z, self.C)
+        if not hasattr(self, 'Kcc_rsqrt'):
+            raise RuntimeError('Model not trained.')
+        Kzc = self._gramian(Z, self.C)
 
-    #     Fzc = Kzc @ self.Kcc_rsqrt
+        Cov = Kzc.T @ Kzc
+        Cov.flat[::len(self.C) + 1] += self.alpha
+        Cov_rsqrt, eigvals = powerh(
+            Cov, -0.5, symmetric=False, return_eigvals=True
+        )
 
-    #     Kinv = LowRankApproximateInverse(Fzc, self.beta)
+        # if an eigenvalue is smaller than alpha, it would have been negative
+        # in the unregularized Cov matrix
+        if method == 'auto':
+            if eigvals.min() > self.alpha:
+                method = 'ridge-like'
+            else:
+                method = 'gpr-like'
 
-    #     Kinv_diag = Kinv.diagonal()
+        if method == 'ridge-like':
+            P = Kzc @ Cov_rsqrt
+            L = lr.dot(P, P.T)
+            zstar = z - (z - L @ z) / (1 - L.diagonal())
+            if return_std is True:
+                raise NotImplementedError(
+                    'LOOCV std using the ridge-like method is not ready yet.'
+                )
+        elif method == 'gpr-like':
+            F = Kzc @ self.Kcc_rsqrt
+            Kinv = lr.dot(F, rcut=self.beta).inverse()
+            zstar = z - (Kinv @ z) / Kinv.diagonal()
+            if return_std is True:
+                std = np.sqrt(1 / np.maximum(Kinv.diagonal(), 1e-14))
+        else:
+            raise RuntimeError(f'Unknown method {method} for predict_loocv.')
 
-    #     mean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
-    #     if return_std is True:
-    #         std = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
-    #         return (mean, std * z_std)
-    #     else:
-    #         return mean
+        if return_std is True:
+            return (zstar * z_std + z_mean, std * z_std)
+        else:
+            return zstar * z_std + z_mean
 
     def log_marginal_likelihood(self, theta=None, C=None, X=None, y=None,
                                 eval_gradient=False, clone_kernel=True,
@@ -406,14 +429,13 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         t_linalg = time.perf_counter()
 
-        Kcc.flat[::len(C) + 1] += self.alpha
-        Acc, Qcc = np.linalg.eigh(Kcc)
-        if np.any(Acc <= 0):
+        try:
+            Kcc_rsqrt = powerh(Kcc, -0.5, symmetric=False)
+        except np.linalg.LinAlgError:
             raise np.linalg.LinAlgError(
                 'Core matrix singular, try to increase `alpha`.\n'
                 f'{Kcc}'
             )
-        Kcc_rsqrt = Qcc * Acc**-0.5
 
         F = Kxc @ Kcc_rsqrt
         K = lr.dot(F, rcut=self.beta)
@@ -423,8 +445,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         Ky = K_inv @ y
         yKy = y @ Ky
         logP = yKy + logdet
-
-        t_linalg = time.perf_counter() - t_linalg
 
         if eval_gradient is True:
             D_theta = np.zeros_like(theta)
@@ -443,6 +463,8 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             retval = (logP, D_theta)
         else:
             retval = logP
+
+        t_linalg = time.perf_counter() - t_linalg
 
         if verbose:
             mprint.table(

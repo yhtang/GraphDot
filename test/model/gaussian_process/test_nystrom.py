@@ -179,35 +179,47 @@ def test_nystrom_fit_mle(repeat, verbose):
     # assert(kernel.p == pytest.approx(0.5, 1e-2))
 
 
-# @pytest.mark.parametrize('cstride', [2])
-# def test_nystrom_predict_loocv(cstride):
+@pytest.mark.parametrize('cstride', [
+    2, 3, 4, 6, 8])
+@pytest.mark.parametrize('f', [
+    lambda x: np.cos(x * np.pi),
+    lambda x: np.sin(x * np.pi) + 0.5 * x + 1.0 * x**2
+])
+def test_nystrom_predict_loocv(cstride, f):
 
-#     class Kernel:
-#         def __call__(self, X, Y=None):
-#             return np.exp(
-#                 -np.subtract.outer(X, Y if Y is not None else X)**2
-#             )
+    class Kernel:
+        def __call__(self, X, Y=None):
+            return np.exp(
+                -np.subtract.outer(X, Y if Y is not None else X)**2
+            )
 
-#         def diag(self, X):
-#             return np.ones_like(X)
+        def diag(self, X):
+            return np.ones_like(X)
 
-#     kernel = Kernel()
-#     X = np.linspace(-1, 1, 6)
-#     C = X[::cstride]
-#     gpr = LowRankApproximateGPR(kernel=kernel, alpha=1e-7)
-#     y = np.cos(X * np.pi)
-#     y_loocv, std_loocv = gpr.predict_loocv(C, X, y, return_std=True)
-#     assert(y_loocv == pytest.approx(
-#         gpr.predict_loocv(C, X, y, return_std=False)
-#     ))
-#     for i, _ in enumerate(X):
-#         Xi = np.delete(X, i)
-#         yi = np.delete(y, i)
-#         gpr_loocv = LowRankApproximateGPR(kernel=kernel, alpha=1e-7)
-#         gpr_loocv.fit(C, Xi, yi)
-#         y_loocv_i, std_loocv_i = gpr_loocv.predict(X[[i]], return_std=True)
-#         assert(y_loocv_i.item() == pytest.approx(y_loocv[i], abs=1e-5))
-#         assert(std_loocv_i.item() == pytest.approx(std_loocv[i], abs=1e-5))
+    alpha = 1e-14
+    beta = 1e-14
+    kernel = Kernel()
+    X = np.linspace(0, 1, 24)
+    C = X[::cstride]
+    gpr = LowRankApproximateGPR(kernel=kernel, alpha=alpha, beta=beta)
+    y = f(X)
+    # y_loocv, std_loocv = gpr.predict_loocv(C, X, y, return_std=True)
+    # assert(y_loocv == pytest.approx(
+    #     gpr.predict_loocv(C, X, y, return_std=False)
+    # ))
+    gpr.fit(C, X, y)
+    y_loocv = gpr.predict_loocv(X, y)
+    for i, _ in enumerate(X):
+        Xi = np.delete(X, i)
+        yi = np.delete(y, i)
+        gpr_loocv = LowRankApproximateGPR(
+            kernel=kernel, alpha=alpha, beta=beta
+        )
+        gpr_loocv.fit(C, Xi, yi)
+        # y_loocv_i, std_loocv_i = gpr_loocv.predict(X[[i]], return_std=True)
+        y_loocv_i = gpr_loocv.predict(X[[i]])
+        assert(y_loocv_i.item() == pytest.approx(y_loocv[i], abs=1e-2))
+        # assert(std_loocv_i.item() == pytest.approx(std_loocv[i], abs=1e-5))
 
 
 # @pytest.mark.parametrize('normalize_y', [True, False])
