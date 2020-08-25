@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.7a7 (2020-08-25)
+
+- Graph representation string can now be directly deserialized using `eval`.
+
 ## 0.7a6 (2020-08-23)
 
 - Optimized GPU gradient evaluation performance
