@@ -99,11 +99,11 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 'Core matrix singular, try to increase `alpha`.\n'
             )
 
-    def fit(self, C, X, y, tol=1e-4, repeat=1, theta_jitter=1.0,
-            verbose=False):
-        """Train a GPR model. If the `optimizer` argument was set while
-        initializing the GPR object, the hyperparameters of the kernel will be
-        optimized using maximum likelihood estimation.
+    def fit(self, C, X, y, loss='likelihood', tol=1e-4, repeat=1,
+            theta_jitter=1.0, verbose=False):
+        """Train a low-rank approximate GPR model. If the `optimizer` argument
+        was set while initializing the GPR object, the hyperparameters of the
+        kernel will be optimized using the specified loss function.
 
         Parameters
         ----------
@@ -113,6 +113,10 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             Input values of the training data.
         y: 1D array
             Output/target values of the training data.
+        loss: 'likelihood' or 'loocv'
+            The loss function to be minimzed during training. Could be either
+            'likelihood' (negative log-likelihood) or 'loocv' (mean-square
+            leave-one-out cross validation error).
         tol: float
             Tolerance for termination.
         repeat: int
@@ -135,8 +139,16 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         '''hyperparameter optimization'''
         if self.optimizer:
+
+            if loss == 'likelihood':
+                objective = self.log_marginal_likelihood
+            elif loss == 'loocv':
+                raise NotImplementedError(
+                    '(ง๑ •̀_•́)ง LOOCV training not ready yet.'
+                )
+
             opt = self._hyper_opt(
-                lambda theta, self=self: self.log_marginal_likelihood(
+                lambda theta, objective=objective: objective(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
@@ -150,7 +162,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 self.kernel.theta = opt.x
             else:
                 raise RuntimeError(
-                    f'Maximum likelihood estimation did not converge, got:\n'
+                    f'Training using the {loss} loss did not converge, got:\n'
                     f'{opt}'
                 )
 

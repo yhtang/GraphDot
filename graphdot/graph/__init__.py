@@ -58,7 +58,7 @@ class Graph:
         assert('!i' in self.edges and '!j' in self.edges)
 
     def __repr__(self):
-        return '<{}(nodes={}, edges={}, title={})>'.\
+        return '{}(nodes={}, edges={}, title={})'.\
             format(type(self).__name__,
                    repr(self.nodes),
                    repr(self.edges),
