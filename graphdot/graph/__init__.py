@@ -267,8 +267,8 @@ class Graph:
         return _from_networkx(cls, graph, weight)
 
     @classmethod
-    def from_ase(cls, atoms, use_charge=False, use_pbc=True,
-                 adjacency='default'):
+    def from_ase(cls, atoms, adjacency='default', use_charge=False,
+                 use_pbc=True):
         """Convert from ASE atoms to molecular graph
 
         Parameters
@@ -287,7 +287,7 @@ class Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
-        return _from_ase(cls, atoms, use_charge, use_pbc, adjacency)
+        return _from_ase(cls, atoms, adjacency, use_charge, use_pbc)
 
     @classmethod
     def from_pymatgen(cls, molecule, use_pbc=True, adjacency='default'):
