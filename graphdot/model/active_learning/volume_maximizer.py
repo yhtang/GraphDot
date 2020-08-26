@@ -5,7 +5,6 @@ import numba as nb
 import numba.core.types as nbtypes
 
 
-# TODO: name: k-way stochastic mini-batch greedy volumn maximizer?
 class StochasticVolumeMaximizer:
     '''Select a subset of a dataset such that the samples are as linearly
     independent as possible in a reproducible kernel Hilbert space (RKHS).
@@ -63,7 +62,6 @@ class StochasticVolumeMaximizer:
         else:
             rng = np.random.default_rng()
 
-        # return self._pick(X, rng.permutation(len(X)), n)
         return _pick(
             lambda X: self.kernel(X, **self.kernel_options),
             X,
