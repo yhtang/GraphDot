@@ -23,6 +23,7 @@ except ImportError:
     warnings.warn(
         'Cannot import RDKit, `graph.from_rdkit()` will be unavailable.\n'
     )
+from ._to_networkx import _to_networkx
 
 
 __all__ = ['Graph']
@@ -350,14 +351,8 @@ class Graph:
                            set_ring_list=set_ring_list,
                            set_ring_stereo=set_ring_stereo)
 
-    # @classmethod
-    # def from_graphviz(cls, molecule):
-    #     pass
-    #
-    # @classmethod
-    # def from_dot(cls, molecule):
-    #     """
-    #     From the DOT graph description language
-    #     https://en.wikipedia.org/wiki/DOT_(graph_description_language)
-    #     """
-    #     pass
+    def to_networkx(self):
+        """Convert the graph to a NetworkX ``Graph`` and copy the node and edge
+        attributes."""
+
+        return _to_networkx(self)
