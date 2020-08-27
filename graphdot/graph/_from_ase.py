@@ -9,8 +9,7 @@ from graphdot.graph.adjacency.atomic import AtomicAdjacency
 from graphdot.minipandas import DataFrame
 
 
-def _from_ase(cls, atoms, use_charge=False, use_pbc=True,
-              adjacency='default'):
+def _from_ase(cls, atoms, adjacency='default', use_charge=False, use_pbc=True):
     """Convert from ASE atoms to molecular graph
 
     Parameters

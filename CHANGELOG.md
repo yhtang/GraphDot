@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.7a8 (2020-08-27)
+
+- Added a `to_networkx()` method to `graphdot.Graph`.
+
 ## 0.7a7 (2020-08-25)
 
 - Graph representation string can now be directly deserialized using `eval`.

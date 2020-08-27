@@ -23,6 +23,7 @@ except ImportError:
     warnings.warn(
         'Cannot import RDKit, `graph.from_rdkit()` will be unavailable.\n'
     )
+from ._to_networkx import _to_networkx
 
 
 __all__ = ['Graph']
@@ -267,8 +268,8 @@ class Graph:
         return _from_networkx(cls, graph, weight)
 
     @classmethod
-    def from_ase(cls, atoms, use_charge=False, use_pbc=True,
-                 adjacency='default'):
+    def from_ase(cls, atoms, adjacency='default', use_charge=False,
+                 use_pbc=True):
         """Convert from ASE atoms to molecular graph
 
         Parameters
@@ -287,7 +288,7 @@ class Graph:
             a molecular graph where atoms become nodes while edges resemble
             short-range interatomic interactions.
         """
-        return _from_ase(cls, atoms, use_charge, use_pbc, adjacency)
+        return _from_ase(cls, atoms, adjacency, use_charge, use_pbc)
 
     @classmethod
     def from_pymatgen(cls, molecule, use_pbc=True, adjacency='default'):
@@ -350,14 +351,8 @@ class Graph:
                            set_ring_list=set_ring_list,
                            set_ring_stereo=set_ring_stereo)
 
-    # @classmethod
-    # def from_graphviz(cls, molecule):
-    #     pass
-    #
-    # @classmethod
-    # def from_dot(cls, molecule):
-    #     """
-    #     From the DOT graph description language
-    #     https://en.wikipedia.org/wiki/DOT_(graph_description_language)
-    #     """
-    #     pass
+    def to_networkx(self):
+        """Convert the graph to a NetworkX ``Graph`` and copy the node and edge
+        attributes."""
+
+        return _to_networkx(self)
