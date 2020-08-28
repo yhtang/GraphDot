@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 from scipy.optimize import minimize
 from graphdot.util.printer import markdown as mprint
-from ._chol_solver import CholSolver
+from graphdot.linalg.cholesky import CholSolver
 
 
 class GaussianProcessRegressor:
