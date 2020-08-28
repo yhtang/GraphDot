@@ -74,7 +74,7 @@ def test_gpr_gramian():
         gpr._gramian(X, Y, diag=True)
 
 
-def test_gpr_check_matrix():
+def test_gpr_singular_kernel_matrix():
 
     class Kernel:
         def __init__(self, L):
@@ -106,11 +106,12 @@ def test_gpr_check_matrix():
             k.theta = theta
             return k
 
-    with pytest.raises(np.linalg.LinAlgError):
-        X = np.ones(3)
-        y = np.ones(3)
-        gpr = GaussianProcessRegressor(kernel=Kernel(1.0), alpha=0)
-        gpr.fit(X, y)
+    X = np.ones(3)
+    y = np.random.rand(3)
+    gpr = GaussianProcessRegressor(kernel=Kernel(1.0), alpha=0)
+    gpr.fit(X, y)
+    z = gpr.predict(X)
+    assert(z == pytest.approx(np.mean(y)))
 
 
 @pytest.mark.parametrize('X', [
