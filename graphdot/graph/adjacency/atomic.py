@@ -28,8 +28,7 @@ def get_ptable():
 def get_length_scales(name):
     ptable = get_ptable()
     length = np.zeros(ptable.atomic_number.max() + 1)
-    for n, r in ptable[['atomic_number', name]].itertuples(False):
-        length[n] = r * 0.01  # pm to A
+    length[ptable.atomic_number] = ptable[name] * 0.01  # pm to A
     return length
 
 
@@ -40,11 +39,10 @@ class AtomicAdjacency:
     ----------
     shape: str or function
         A 1D weight real-valued function that converts distance to weight.
+    length_scale: str
+
     zoom: float
         A zooming factor to be multiplied with inferred length scales.
-    images: None or list of 3D vectors
-        Displacement vector of periodic images to be checked for finding
-        the closest neighbors in a crystal.
     """
 
     def __init__(self, shape='tent1', length_scale='vdw_radius', zoom=1.0):
@@ -53,8 +51,7 @@ class AtomicAdjacency:
             if m:
                 self.shape = Tent(ord=int(m.group(1)))
             else:
-                # raise ValueError(f'Invalid shape: {shape}')
-                raise ValueError('Invalid shape: {}'.format(shape))
+                raise ValueError(f'Invalid adjacency shape: {shape}')
         else:
             self.shape = shape
         if isinstance(length_scale, str):
