@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.7a9 (2020-08-28)
+
+- Improved numerical stability tolerance of the GPR and Low-rank GPR models.
+
 ## 0.7a8 (2020-08-27)
 
 - Added a `to_networkx()` method to `graphdot.Graph`.
