@@ -41,7 +41,7 @@ setup(
     author='Yu-Hang Tang',
     tests_require=['tox'],
     install_requires=[
-        'numpy>=1.16',
+        'numpy>=1.17',
         'scipy>=1.3.0',
         'sympy>=1.3',
         'pandas>=0.24',
