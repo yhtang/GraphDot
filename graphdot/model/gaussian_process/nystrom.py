@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import time
+import warnings
 import numpy as np
 from graphdot.util.printer import markdown as mprint
 import graphdot.linalg.low_rank as lr
@@ -91,13 +92,25 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     def C(self, C):
         self._C = C
 
-    def _corespace(self, C):
+    def _corespace(self, C=None, Kcc=None):
+        assert(C is None or Kcc is None)
+        if Kcc is None:
+            Kcc = self._gramian(C)
         try:
-            return powerh(self._gramian(C), -0.5, symmetric=False)
+            return powerh(Kcc, -0.5, return_symmetric=False)
         except np.linalg.LinAlgError:
-            raise np.linalg.LinAlgError(
+            warnings.warn(
                 'Core matrix singular, try to increase `alpha`.\n'
+                'Now falling back to use a pseudoinverse.'
             )
+            try:
+                return powerh(Kcc, -0.5, rcond=self.beta,
+                              return_symmetric=False)
+            except np.linalg.LinAlgError:
+                raise np.linalg.LinAlgError(
+                    'The core matrix is likely corrupted with NaNs and Infs '
+                    'because a pseudoinverse could not be computed.'
+                )
 
     def fit(self, C, X, y, loss='likelihood', tol=1e-4, repeat=1,
             theta_jitter=1.0, verbose=False):
@@ -167,7 +180,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 )
 
         '''build and store GPR model'''
-        self.Kcc_rsqrt = self._corespace(self.C)
+        self.Kcc_rsqrt = self._corespace(C=self.C)
         self.Kxc = self._gramian(self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
         self.Kinv = lr.dot(self.Fxc, rcut=self.beta).inverse()
@@ -346,7 +359,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         Cov = Kzc.T @ Kzc
         Cov.flat[::len(self.C) + 1] += self.alpha
         Cov_rsqrt, eigvals = powerh(
-            Cov, -0.5, symmetric=False, return_eigvals=True
+            Cov, -0.5, return_symmetric=False, return_eigvals=True
         )
 
         # if an eigenvalue is smaller than alpha, it would have been negative
@@ -441,14 +454,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         t_linalg = time.perf_counter()
 
-        try:
-            Kcc_rsqrt = powerh(Kcc, -0.5, symmetric=False)
-        except np.linalg.LinAlgError:
-            raise np.linalg.LinAlgError(
-                'Core matrix singular, try to increase `alpha`.\n'
-                f'{Kcc}'
-            )
-
+        Kcc_rsqrt = self._corespace(Kcc=Kcc)
         F = Kxc @ Kcc_rsqrt
         K = lr.dot(F, rcut=self.beta)
         K_inv = K.inverse()

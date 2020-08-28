@@ -3,6 +3,7 @@
 import os
 import pickle
 import time
+import warnings
 import numpy as np
 from scipy.optimize import minimize
 from graphdot.util.printer import markdown as mprint
@@ -23,6 +24,10 @@ class GaussianProcessRegressor:
         stability issues during fitting, and ensures that the kernel matrix is
         always positive definite in the precense of duplicate entries and/or
         round-off error.
+    beta: float > 0, default = 1e-10
+        Cutoff value on the singular values for the spectral pseudoinverse
+        computation, which serves as a backup mechanism to invert the kernel
+        matrix in case if it is singular.
     optimizer: one of (str, True, None, callable)
         A string or callable that represents one of the optimizers usable in
         the scipy.optimize.minimize method.
@@ -38,10 +43,11 @@ class GaussianProcessRegressor:
         kernel to data.
     """
 
-    def __init__(self, kernel, alpha=1e-10, optimizer=None, normalize_y=False,
-                 kernel_options={}):
+    def __init__(self, kernel, alpha=1e-10, beta=1e-10, optimizer=None,
+                 normalize_y=False, kernel_options={}):
         self.kernel = kernel
         self.alpha = alpha
+        self.beta = beta
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
@@ -107,6 +113,21 @@ class GaussianProcessRegressor:
                 else:
                     return kernel(X, Y, **self.kernel_options)
 
+    def _invert(self, K):
+        try:
+            return CholSolver(K)
+        except np.linalg.LinAlgError:
+            try:
+                warnings.warn(
+                    'Kernel matrix singular, falling back to pseudoinverse'
+                )
+                return np.linalg.pinv(K, rcond=self.beta, hermitian=True)
+            except np.linalg.LinAlgError:
+                raise np.linalg.LinAlgError(
+                    'The kernel matrix is likely corrupted with NaNs and Infs '
+                    'because a pseudoinverse could not be computed.'
+                )
+
     def fit(self, X, y, loss='likelihood', tol=1e-4, repeat=1,
             theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
@@ -171,7 +192,7 @@ class GaussianProcessRegressor:
 
         '''build and store GPR model'''
         self.K = K = self._gramian(self.X)
-        self.Kinv = CholSolver(K)
+        self.Kinv = self._invert(K)
         self.Ky = self.Kinv @ self.y
         return self
 
@@ -248,7 +269,7 @@ class GaussianProcessRegressor:
             z = (z - z_mean) / z_std
         else:
             z_mean, z_std = 0, 1
-        Kinv = CholSolver(self._gramian(Z))
+        Kinv = self._invert(self._gramian(Z))
         Kinv_diag = (Kinv @ np.eye(len(Z))).diagonal()
         ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
         if return_std is True:
@@ -305,20 +326,17 @@ class GaussianProcessRegressor:
             kernel.theta = theta
 
         t_kernel = time.perf_counter()
+
         if eval_gradient is True:
             K, dK = self._gramian(X, kernel=kernel, jac=True)
         else:
             K = self._gramian(X, kernel=kernel)
+
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
-        try:
-            Kinv = CholSolver(K)
-        except np.linalg.LinAlgError as e:
-            raise np.linalg.LinAlgError(
-                'Kernel matrix is singular, try a larger `alpha` value.\n'
-                f'NumPy error information: {e}'
-            )
+
+        Kinv = self._invert(K)
         Ky = Kinv @ y
         yKy = y @ Ky
         logdet = np.prod(np.linalg.slogdet(K))
@@ -331,6 +349,7 @@ class GaussianProcessRegressor:
             retval = (yKy + logdet, d_theta * np.exp(theta))
         else:
             retval = yKy + logdet
+
         t_linalg = time.perf_counter() - t_linalg
 
         if verbose:
@@ -401,7 +420,10 @@ class GaussianProcessRegressor:
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
-        Kinv = CholSolver(K) @ np.eye(len(X))
+
+        Kinv = self._invert(K)
+        if not isinstance(Kinv, np.ndarray):
+            Kinv = Kinv @ np.eye(len(X))
         Kinv_diag = Kinv.diagonal()
         Ky = Kinv @ y
         e = Ky / Kinv_diag
@@ -419,6 +441,7 @@ class GaussianProcessRegressor:
             retval = (squared_error, D_theta)
         else:
             retval = squared_error
+
         t_linalg = time.perf_counter() - t_linalg
 
         if verbose:
