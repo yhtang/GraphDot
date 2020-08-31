@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from abc import ABC, abstractmethod
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict
 import numpy as np
 import sympy as sy
 from sympy.utilities.lambdify import lambdify
 from graphdot.codegen import Template
 from graphdot.codegen.sympy_printer import cudacxxcode
 from graphdot.codegen.cpptool import cpptype
+from graphdot.util.pretty_tuple import pretty_tuple
+
 
 
 class MicroKernel(ABC):
@@ -170,7 +172,9 @@ class MicroKernelExpr(MicroKernel):
 
     @property
     def theta(self):
-        return (self.k1.theta, self.k2.theta)
+        return pretty_tuple(self.name, ['lhs', 'rhs'])(
+            self.k1.theta, self.k2.theta
+        )
 
     @theta.setter
     def theta(self, seq):
@@ -341,8 +345,8 @@ def Constant(c, c_bounds=None):
 
         @property
         def theta(self):
-            return namedtuple(
-                f'{self.name}Hyperparameters',
+            return pretty_tuple(
+                self.name,
                 ['c']
             )(self.c)
 
@@ -557,8 +561,8 @@ def _from_sympy(name, desc, expr, vars, *hyperparameter_specs):
 
         @property
         def theta(self):
-            return namedtuple(
-                f'{self.name}Hyperparameters',
+            return pretty_tuple(
+                self.name,
                 self._theta_values.keys()
             )(**self._theta_values)
 

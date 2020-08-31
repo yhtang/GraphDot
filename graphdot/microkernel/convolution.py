@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from collections import namedtuple
 import numpy as np
 from graphdot.codegen.cpptool import cpptype
 from graphdot.codegen.template import Template
+from graphdot.util.pretty_tuple import pretty_tuple
 from ._base import MicroKernel
 from .normalize import Normalize
 
@@ -63,9 +63,9 @@ def Convolution(kernel: MicroKernel, normalize=True):
 
         @property
         def theta(self):
-            return namedtuple(
-                f'{self.name}Hyperparameters',
-                ['kernel']
+            return pretty_tuple(
+                self.name,
+                ['base']
             )(self.kernel.theta)
 
         @theta.setter
