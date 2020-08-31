@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from collections import namedtuple
 import numpy as np
 from graphdot.codegen.cpptool import cpptype
 from graphdot.codegen.template import Template
@@ -73,17 +72,14 @@ def Normalize(kernel: MicroKernel):
 
         @property
         def theta(self):
-            return namedtuple(
-                f'{self.name}Hyperparameters',
-                ['kernel']
-            )(self.kernel.theta)
+            return self.kernel.theta
 
         @theta.setter
         def theta(self, seq):
-            self.kernel.theta = seq[0]
+            self.kernel.theta = seq
 
         @property
         def bounds(self):
-            return (self.kernel.bounds,)
+            return self.kernel.bounds
 
     return Normalized(kernel)

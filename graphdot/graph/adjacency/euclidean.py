@@ -4,16 +4,14 @@
 Convert spatial distances between nodes to edge adjacencies
 """
 import numpy as np
-# import numba as nb
 
 
-# @nb.jitclass([('half_inv_sigma2', nb.float32)])
 class Gaussian:
-    def __init__(self, h):
-        self.half_inv_h2 = 0.5 / h**2
+    def __call__(self, d, length_scale):
+        return np.exp(-0.5 * d**2 / length_scale**2)
 
-    def compute(self, d):
-        return np.exp(d**2 * self.half_inv_h2)
+    def cutoff(self, length_scale):
+        return np.inf
 
 
 class Tent:
@@ -26,11 +24,3 @@ class Tent:
 
     def cutoff(self, length_scale):
         return length_scale * 3
-
-
-if __name__ == '__main__':
-
-    g = Gaussian(1.0)
-    print(g(1.0))
-    print(g(2.0))
-    print(g(3.0))

@@ -167,7 +167,7 @@ def test_normalization(kernel):
     ''' C++ counterpart and hyperparameter retrieval '''
     assert(k.dtype.isalignedstruct)
     assert(kernel.state in k.state)
-    assert(kernel.theta in k.theta)
+    assert(kernel.theta == k.theta)
     another = copy.copy(k)
     for t1, t2 in zip(k.theta, another.theta):
         assert(t1 == t2)

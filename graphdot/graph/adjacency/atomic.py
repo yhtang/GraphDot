@@ -5,7 +5,7 @@ import copy
 import functools
 import numpy as np
 from mendeleev import get_table
-from graphdot.graph.adjacency.euclidean import Tent
+from graphdot.graph.adjacency.euclidean import Tent, Gaussian
 
 
 def copying_lru_cache(*args, **kwargs):
@@ -28,23 +28,52 @@ def get_ptable():
 def get_length_scales(name):
     ptable = get_ptable()
     length = np.zeros(ptable.atomic_number.max() + 1)
-    for n, r in ptable[['atomic_number', name]].itertuples(False):
-        length[n] = r * 0.01  # pm to A
+    length[ptable.atomic_number] = ptable[name] * 0.01  # pm to A
     return length
 
 
 class AtomicAdjacency:
-    """Converts interatomic distances into edge weights
+    r"""Converts interatomic distances into edge weights using the equation
+    :math:`a(i, j) = w(\frac{\lVert\mathbf{r}_{ij}\rVert}{\sigma_{ij}})`,
+    where :math:`w` is a weight function that generally decays with distance,
+    and :math:`\sigma_{ij}` is a length scale parameter betweens atom :math:`i`
+    and :math:`j` and loosely corresponds to the typically distance of
+    interatomic interactions between the atoms.
 
     Parameters
     ----------
-    shape: str or function
-        A 1D weight real-valued function that converts distance to weight.
+    shape: str or callable
+        If string, must match one of the following patterns:
+
+        - ``tent[n]``: :py:class:`Tent`.
+        - ``gaussian``: :py:class:`Gaussian`.
+    length_scale: str
+        The atomic property to be used to determine the range and strength of
+        edges to be constructed between pairs of atoms. The strength will
+        generally fall to zero at roughly a distance 3 times the length scale.
+        Possible values are:
+
+        - **atomic_radius**
+        - atomic_radius_rahm
+        - **vdw_radius** (default)
+        - vdw_radius_bondi
+        - vdw_radius_truhlar
+        - vdw_radius_rt
+        - vdw_radius_batsanov
+        - vdw_radius_dreiding
+        - vdw_radius_uff
+        - vdw_radius_mm3
+        - vdw_radius_alvarez
+        - covalent_radius_cordero
+        - covalent_radius_pyykko
+        - covalent_radius_bragg
+        - covalent_radius_pyykko_double
+        - covalent_radius_pyykko_triple
+        - metallic_radius
+        - metallic_radius_c12
     zoom: float
-        A zooming factor to be multiplied with inferred length scales.
-    images: None or list of 3D vectors
-        Displacement vector of periodic images to be checked for finding
-        the closest neighbors in a crystal.
+        A zooming factor to be multiplied with the length scales to extend the
+        range of interactions.
     """
 
     def __init__(self, shape='tent1', length_scale='vdw_radius', zoom=1.0):
@@ -53,15 +82,17 @@ class AtomicAdjacency:
             if m:
                 self.shape = Tent(ord=int(m.group(1)))
             else:
-                # raise ValueError(f'Invalid shape: {shape}')
-                raise ValueError('Invalid shape: {}'.format(shape))
-        else:
-            self.shape = shape
+                if shape == 'gaussian':
+                    self.shape = Gaussian()
+                else:
+                    raise ValueError(f'Invalid adjacency shape: {shape}')
+
         if isinstance(length_scale, str):
             self.ltable = get_length_scales(length_scale)
         else:
             ptbl = get_ptable()
             self.ltable = length_scale * np.ones(ptbl.atomic_number.max() + 1)
+
         self.ltable *= zoom
 
     def __call__(self, n1, n2, r):

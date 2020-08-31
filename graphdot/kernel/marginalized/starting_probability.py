@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from abc import ABC, abstractmethod
-from collections import namedtuple
 import numpy as np
 from graphdot.codegen.cpptool import cpptype
+from graphdot.util.pretty_tuple import pretty_tuple
 
 
 class StartingProbability(ABC):
@@ -85,7 +85,7 @@ class Uniform(StartingProbability):
 
     @property
     def theta(self):
-        return namedtuple('StartingProbability', ['p'])(
+        return pretty_tuple('Uniform', ['p'])(
             self.p
         )
 
