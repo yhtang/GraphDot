@@ -1,5 +1,11 @@
 # Change log of GraphDot
 
+## 0.7a9 (2020-08-30)
+
+- Enhanced the readability of the string representations of kernel
+  hyperparameters.
+- New atomic adjacency options.
+
 ## 0.7a9 (2020-08-28)
 
 - Improved numerical stability tolerance of the GPR and Low-rank GPR models.
