@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from collections import namedtuple
 import numpy as np
 from graphdot.codegen.cpptool import cpptype
 from graphdot.codegen.template import Template
+from graphdot.util.pretty_tuple import pretty_tuple
 from ._base import MicroKernel
 
 
@@ -29,13 +29,15 @@ def Composite(oper, **kw_kernels):
             ufunc=np.add,                           # associated numpy ufunc
             jfunc=lambda F, f, j: j,                # Jacobian evaluator
             jgen=lambda F_expr, j_expr, i: j_expr,  # Jacobian code generator
+            opname='Addtive',
         ),
         '*': dict(
             ufunc=np.multiply,
             jfunc=lambda F, f, j: F / f * j,
             jgen=lambda F_expr, j_expr, i: Template('(${X * })').render(
                 X=F_expr[:i] + (j_expr,) + F_expr[i + 1:]
-            )
+            ),
+            opname='Product'
         ),
     }
 
@@ -48,11 +50,16 @@ def Composite(oper, **kw_kernels):
         def name(self):
             return 'Composite'
 
-        def __init__(self, opstr, ufunc, jfunc, jgen, **kw_kernels):
+        @property
+        def opname(self):
+            return self._opname
+
+        def __init__(self, opstr, ufunc, jfunc, jgen, opname, **kw_kernels):
             self.opstr = opstr
             self.ufunc = ufunc
             self.jfunc = jfunc
             self.jgen = jgen
+            self._opname = opname
             self.kw_kernels = kw_kernels
 
         def __repr__(self):
@@ -92,8 +99,8 @@ def Composite(oper, **kw_kernels):
 
         @property
         def theta(self):
-            return namedtuple(
-                f'{self.name}Hyperparameters',
+            return pretty_tuple(
+                self.name,
                 self.kw_kernels.keys()
             )(*[k.theta for k in self.kw_kernels.values()])
 
@@ -104,7 +111,10 @@ def Composite(oper, **kw_kernels):
 
         @property
         def bounds(self):
-            return tuple(k.bounds for k in self.kw_kernels.values())
+            return pretty_tuple(
+                self.name,
+                self.kw_kernels.keys()
+            )(*[k.bounds for k in self.kw_kernels.values()])
 
     # for the .state property of cpptype
     for key in kw_kernels:

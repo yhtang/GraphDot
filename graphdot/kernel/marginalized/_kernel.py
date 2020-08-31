@@ -8,6 +8,7 @@ import numpy as np
 from graphdot.graph import Graph
 from graphdot.util import Timer
 from graphdot.util.iterable import fold_like, flatten, replace
+from graphdot.util.pretty_tuple import pretty_tuple
 from ._backend_factory import backend_factory
 from .starting_probability import StartingProbability, Uniform, Adhoc
 
@@ -379,9 +380,10 @@ class MarginalizedGraphKernel:
     @property
     def hyperparameters(self):
         '''A hierarchical representation of all the kernel hyperparameters.'''
-        return namedtuple(
-            'GraphKernelHyperparameters',
-            ['p', 'q', 'node', 'edge']
+        return pretty_tuple(
+            'MarginalizedGraphKernel',
+            ['starting_probability', 'stopping_probability', 'node_kernel',
+             'edge_kernel']
         )(self.p.theta,
           self.q,
           self.node_kernel.theta,
@@ -393,9 +395,10 @@ class MarginalizedGraphKernel:
 
     @property
     def hyperparameter_bounds(self):
-        return namedtuple(
+        return pretty_tuple(
             'GraphKernelHyperparameterBounds',
-            ['p', 'q', 'node', 'edge']
+            ['starting_probability', 'stopping_probability', 'node_kernel',
+             'edge_kernel']
         )(self.p.bounds,
           self.q_bounds,
           self.node_kernel.bounds,

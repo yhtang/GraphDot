@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from collections import namedtuple
 import numpy as np
 from graphdot.codegen.cpptool import cpptype
+from graphdot.util.pretty_tuple import pretty_tuple
 from ._base import MicroKernel
 
 
@@ -52,8 +52,8 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
 
         @property
         def theta(self):
-            return namedtuple(
-                f'{self.name}Hyperparameters',
+            return pretty_tuple(
+                self.name,
                 ['h']
             )(self.h)
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from collections import namedtuple
 import numpy as np
 import copy
+from graphdot.util.pretty_tuple import pretty_tuple
 
 
 class Normalization:
@@ -180,7 +180,7 @@ class Exponentiation:
 
     @property
     def hyperparameters(self):
-        return namedtuple('ExponentiationHyperparameters', ['xi', 'kernel'])(
+        return pretty_tuple('Exponentiation', ['xi', 'kernel'])(
             self.xi, self.kernel.hyperparameters
         )
 
@@ -195,8 +195,8 @@ class Exponentiation:
 
     @property
     def hyperparameter_bounds(self):
-        return namedtuple(
-            'ExponentiationHyperparameterBounds',
+        return pretty_tuple(
+            'Exponentiation',
             ['xi', 'kernel']
         )(
             self.xi_bounds, self.kernel.hyperparameter_bounds
