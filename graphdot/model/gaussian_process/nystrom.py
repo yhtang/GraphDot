@@ -41,29 +41,6 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     kernel_options: dict, optional
         A dictionary of additional options to be passed along when applying the
         kernel to data.
-
-    In the Nystrom method, the low-rank approximation to $K_{xx}$ is
-    \begin{equation}
-    \hat{K}_{xx} = K_{xc} K_{cc}^{-1} K_{xc}^T.
-    \end{equation}
-    However, due to the shear size of $\hat{K}_{xx}$, it is much more
-    efficient to compute and store $\hat{K}_{xx}^{-1}$ by
-    \begin{equation}
-    \begin{aligned}
-    \hat{K}_{xx}^{-1}
-    &= U_{xx} \Lambda_{xx}^{-1} U_{xx}^T \\
-    &= U_{xx} \Lambda_{xx}^{-\frac{1}{2}}
-        (U_{xx} \Lambda_{xx}^{-\frac{1}{2}})^T,
-    \end{aligned}
-    \end{equation}
-    where $U_{xx}$ and $\Lambda_{xx}$ are the eigenvectors and eigenvalues
-    of $\hat{K}_{xx}$ such that
-    $\hat{K}_{xx} = U_{xx} \Lambda_{xx} U_{xx}^T$.
-    $U_{xx}$ are also the left singular vectors of
-    $\hat{K}_{xx}^\frac{1}{2} \doteq K_{xc} U_{cc} S_{cc}^{-\frac{1}{2}}$,
-    while $\Lambda_{xx}^{1/2}$ equal to the singular values $S_{xx}$
-    such that
-    $\hat{K}_{xx}^\frac{1}{2} = U_{xx} S_{xx} V_{xx}^T$.
     """
 
     def __init__(self, kernel, alpha=1e-7, beta=1e-7,
