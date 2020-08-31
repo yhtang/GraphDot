@@ -11,7 +11,6 @@ from graphdot.codegen.cpptool import cpptype
 from graphdot.util.pretty_tuple import pretty_tuple
 
 
-
 class MicroKernel(ABC):
     '''The abstract base class for all microkernels.'''
 

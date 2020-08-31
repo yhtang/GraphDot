@@ -3,7 +3,6 @@
 import numpy as np
 from graphdot.codegen.cpptool import cpptype
 from graphdot.codegen.template import Template
-from graphdot.util.pretty_tuple import pretty_tuple
 from ._base import MicroKernel
 
 
