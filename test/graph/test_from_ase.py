@@ -7,7 +7,14 @@ from graphdot.graph import Graph
 from graphdot.graph.adjacency import AtomicAdjacency
 
 
-simple_adj = AtomicAdjacency(shape='tent1', length_scale=1.0, zoom=1)
+adjacencies = [
+    AtomicAdjacency(shape='tent1', length_scale=1.0, zoom=1),
+    AtomicAdjacency(shape='tent2', length_scale='vdw_radius', zoom=1),
+    AtomicAdjacency(
+        shape='gaussian', length_scale='covalent_radius_pyykko', zoom=1.5
+    ),
+    AtomicAdjacency(shape='compactbell3,2'),
+]
 
 
 def test_ase_one():
@@ -17,18 +24,19 @@ def test_ase_one():
     assert(len(graph.edges) == 1)
 
 
-@pytest.mark.parametrize("atoms", [
+@pytest.mark.parametrize('atoms', [
     SimpleCubic(latticeconstant=2, size=(2, 1, 1), symbol='Cu', pbc=(1, 0, 0)),
     SimpleCubic(latticeconstant=2, size=(1, 2, 1), symbol='Cu', pbc=(0, 1, 0)),
     SimpleCubic(latticeconstant=2, size=(1, 1, 2), symbol='Cu', pbc=(0, 0, 1)),
 ])
-def test_ase_pbc1(atoms):
-    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=simple_adj)
-    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=simple_adj)
+@pytest.mark.parametrize('adj', adjacencies)
+def test_ase_pbc1(atoms, adj):
+    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=adj)
+    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=adj)
     assert(len(graph_pbc.edges) == len(graph_nopbc.edges))
 
 
-@pytest.mark.parametrize("atoms", [
+@pytest.mark.parametrize('atoms', [
     SimpleCubic(latticeconstant=2, size=(3, 1, 1), symbol='Cu', pbc=(1, 0, 0)),
     SimpleCubic(latticeconstant=2, size=(4, 1, 1), symbol='Cu', pbc=(1, 0, 0)),
     SimpleCubic(latticeconstant=2, size=(7, 1, 1), symbol='Cu', pbc=(1, 0, 0)),
@@ -40,12 +48,13 @@ def test_ase_pbc1(atoms):
     SimpleCubic(latticeconstant=2, size=(1, 1, 7), symbol='Cu', pbc=(0, 0, 1)),
 ])
 def test_ase_pbc2(atoms):
-    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=simple_adj)
-    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=simple_adj)
+    adj = AtomicAdjacency(shape='tent1', length_scale=1.0, zoom=1)
+    graph_pbc = Graph.from_ase(atoms, use_pbc=True, adjacency=adj)
+    graph_nopbc = Graph.from_ase(atoms, use_pbc=False, adjacency=adj)
     assert(len(graph_pbc.edges) > len(graph_nopbc.edges))
 
 
-@pytest.mark.parametrize("atoms", [
+@pytest.mark.parametrize('atoms', [
     molecule('H2'),
     molecule('CH4'),
     molecule('CH3COOH'),
