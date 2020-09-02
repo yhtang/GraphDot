@@ -36,7 +36,9 @@ class CompactBell:
     def __call__(self, d, length_scale):
         s = 1 - d / self.cutoff(length_scale)
         if s >= 0:
-            return (-self.b * s**self.a + self.a * s**self.b) / (self.a - self.b)
+            return (
+                -self.b * s**self.a + self.a * s**self.b
+            ) / (self.a - self.b)
         else:
             return 0
 
