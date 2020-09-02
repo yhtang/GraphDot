@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from graphdot.model.gaussian_process import GaussianProcessRegressor
 from graphdot.model.active_learning import  (
     DeterminantMaximizer,
+    VarianceMinimizer,
     HierarchicalDrafter
 )
 
@@ -33,9 +34,8 @@ kernel = Kernel(s=2.0)
 X = np.sort(np.random.randn(300) * 10)
 y = f(X)
 n = 40  # training set budget
-drafter = HierarchicalDrafter(
-    DeterminantMaximizer(kernel)
-)
+# drafter = HierarchicalDrafter(DeterminantMaximizer(kernel))
+drafter = HierarchicalDrafter(VarianceMinimizer(kernel))
 active_set = drafter(X, n)
 random_set = np.random.choice(len(X), n, False)
 
@@ -50,7 +50,7 @@ def test(chosen, label, color):
 
 plt.figure()
 grid = np.linspace(X.min(), X.max(), 500)
-plt.plot(grid, f(grid), lw=0.5, color='k', label='ground_truth')
+plt.plot(grid, f(grid), lw=2, ls='dashed', color='k', alpha=0.5, label='ground_truth')
 test(active_set, 'active', (0.0, 0.2, 0.7))
 test(random_set, 'random', (0.9, 0.4, 0.0))
 plt.legend()
