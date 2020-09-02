@@ -5,7 +5,7 @@ import copy
 import functools
 import numpy as np
 from mendeleev import get_table
-from graphdot.graph.adjacency.euclidean import Tent, Gaussian
+from graphdot.graph.adjacency.euclidean import Tent, Gaussian, CompactBell
 
 
 def copying_lru_cache(*args, **kwargs):
@@ -45,8 +45,10 @@ class AtomicAdjacency:
     shape: str or callable
         If string, must match one of the following patterns:
 
-        - ``tent[n]``: :py:class:`Tent`.
+        - ``tent[n]``: e.g. ``tent1``, ``teng2``, etc. :py:class:`Tent`.
         - ``gaussian``: :py:class:`Gaussian`.
+        - ``compactbell[a,b]``: e.g. ``compactbell4,2``,
+          :py:class:`CompactBell`.
     length_scale: str
         The atomic property to be used to determine the range and strength of
         edges to be constructed between pairs of atoms. The strength will
@@ -75,17 +77,9 @@ class AtomicAdjacency:
         A zooming factor to be multiplied with the length scales to extend the
         range of interactions.
     """
-
     def __init__(self, shape='tent1', length_scale='vdw_radius', zoom=1.0):
         if isinstance(shape, str):
-            m = re.match(r'tent([1-9]\d*)', shape)
-            if m:
-                self.shape = Tent(ord=int(m.group(1)))
-            else:
-                if shape == 'gaussian':
-                    self.shape = Gaussian()
-                else:
-                    raise ValueError(f'Invalid adjacency shape: {shape}')
+            self.shape = self._parse_shape(shape)
 
         if isinstance(length_scale, str):
             self.ltable = get_length_scales(length_scale)
@@ -94,6 +88,21 @@ class AtomicAdjacency:
             self.ltable = length_scale * np.ones(ptbl.atomic_number.max() + 1)
 
         self.ltable *= zoom
+
+    @staticmethod
+    def _parse_shape(shape):
+        if shape == 'gaussian':
+            return Gaussian()
+
+        m = re.match(r'tent(\d+)', shape)
+        if m:
+            return Tent(ord=int(m.group(1)))
+
+        m = re.match(r'compactbell(\d+),(\d+)', shape)
+        if m:
+            return CompactBell(a=int(m.group(1)), b=int(m.group(2)))
+
+        raise ValueError(f'Unrecognizable adjacency shape: {shape}')
 
     def __call__(self, n1, n2, r):
         """compute adjacency between atoms

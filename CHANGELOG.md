@@ -1,6 +1,11 @@
 # Change log of GraphDot
 
-## 0.7a9 (2020-08-30)
+## 0.7a11 (2020-09-02)
+
+- Added bell-shaped compact adjacency functions.
+- Redesigned the active learning module.
+
+## 0.7a10 (2020-08-30)
 
 - Enhanced the readability of the string representations of kernel
   hyperparameters.

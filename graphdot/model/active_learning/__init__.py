@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from .volume_maximizer import StochasticVolumeMaximizer
+from .hierarchical_drafter import HierarchicalDrafter
+from .determinant_maximizer import DeterminantMaximizer
+from .variance_minimizer import VarianceMinimizer
 
-__all__ = ['StochasticVolumeMaximizer']
+
+__all__ = ['HierarchicalDrafter', 'DeterminantMaximizer', 'VarianceMinimizer']
