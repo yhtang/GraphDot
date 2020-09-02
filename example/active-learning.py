@@ -3,7 +3,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from graphdot.model.gaussian_process import GaussianProcessRegressor
-from graphdot.model.active_learning import StochasticVolumeMaximizer
+from graphdot.model.active_learning import  (
+    DeterminantMaximizer,
+    HierarchicalDrafter
+)
 
 
 # Good old Gaussian/RBF kernel
@@ -30,8 +33,10 @@ kernel = Kernel(s=2.0)
 X = np.sort(np.random.randn(300) * 10)
 y = f(X)
 n = 40  # training set budget
-vm = StochasticVolumeMaximizer(kernel)
-active_set = vm(X, n)
+drafter = HierarchicalDrafter(
+    DeterminantMaximizer(kernel)
+)
+active_set = drafter(X, n)
 random_set = np.random.choice(len(X), n, False)
 
 
