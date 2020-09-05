@@ -8,6 +8,7 @@ import numpy as np
 from scipy.optimize import minimize
 from graphdot.util.printer import markdown as mprint
 from graphdot.linalg.cholesky import CholSolver
+from graphdot.linalg.spectral import pinvh
 
 
 class GaussianProcessRegressor:
@@ -115,20 +116,20 @@ class GaussianProcessRegressor:
 
     def _invert(self, K):
         try:
-            return CholSolver(K)
+            return CholSolver(K), np.prod(np.linalg.slogdet(K))
         except np.linalg.LinAlgError:
             try:
                 warnings.warn(
                     'Kernel matrix singular, falling back to pseudoinverse'
                 )
-                return np.linalg.pinv(K, rcond=self.beta, hermitian=True)
+                return pinvh(K, rcond=self.beta, estimate_logdet=True)
             except np.linalg.LinAlgError:
                 raise np.linalg.LinAlgError(
                     'The kernel matrix is likely corrupted with NaNs and Infs '
                     'because a pseudoinverse could not be computed.'
                 )
 
-    def fit(self, X, y, loss='likelihood', tol=1e-4, repeat=1,
+    def fit(self, X, y, loss='likelihood', tol=1e-5, repeat=1,
             theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
@@ -192,7 +193,7 @@ class GaussianProcessRegressor:
 
         '''build and store GPR model'''
         self.K = K = self._gramian(self.X)
-        self.Kinv = self._invert(K)
+        self.Kinv, _ = self._invert(K)
         self.Ky = self.Kinv @ self.y
         return self
 
@@ -269,7 +270,7 @@ class GaussianProcessRegressor:
             z = (z - z_mean) / z_std
         else:
             z_mean, z_std = 0, 1
-        Kinv = self._invert(self._gramian(Z))
+        Kinv, _ = self._invert(self._gramian(Z))
         Kinv_diag = (Kinv @ np.eye(len(Z))).diagonal()
         ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
         if return_std is True:
@@ -336,10 +337,9 @@ class GaussianProcessRegressor:
 
         t_linalg = time.perf_counter()
 
-        Kinv = self._invert(K)
+        Kinv, logdet = self._invert(K)
         Ky = Kinv @ y
         yKy = y @ Ky
-        logdet = np.prod(np.linalg.slogdet(K))
 
         if eval_gradient is True:
             d_theta = (
@@ -354,13 +354,13 @@ class GaussianProcessRegressor:
 
         if verbose:
             mprint.table(
-                ('logP', '%12.5g', yKy + logdet),
-                ('dlogP', '%12.5g', np.linalg.norm(d_theta)),
-                ('y^T.K.y', '%12.5g', yKy),
-                ('log|K|', '%12.5g', logdet),
-                ('Cond(K)', '%12.5g', np.linalg.cond(K)),
-                ('t_GPU (s)', '%10.2g', t_kernel),
-                ('t_CPU (s)', '%10.2g', t_linalg),
+                ('logP ', '%12.5g', yKy + logdet),
+                ('dlogP ', '%12.5g', np.linalg.norm(d_theta)),
+                ('y^T.K.y ', '%12.5g', yKy),
+                ('log|K| ', '%12.5g', logdet),
+                ('Cond(K) ', '%12.5g', np.linalg.cond(K)),
+                ('GPU time ', '%10.2g', t_kernel),
+                ('CPU time ', '%10.2g', t_linalg),
             )
 
         return retval
@@ -421,7 +421,7 @@ class GaussianProcessRegressor:
 
         t_linalg = time.perf_counter()
 
-        Kinv = self._invert(K)
+        Kinv, logdet = self._invert(K)
         if not isinstance(Kinv, np.ndarray):
             Kinv = Kinv @ np.eye(len(X))
         Kinv_diag = Kinv.diagonal()
@@ -447,7 +447,7 @@ class GaussianProcessRegressor:
         if verbose:
             mprint.table(
                 ('Sq.Err.', '%12.5g', squared_error),
-                ('logdet(K)', '%12.5g', np.prod(np.linalg.slogdet(K))),
+                ('logdet(K)', '%12.5g', logdet),
                 ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
                 ('Cond(K)', '%12.5g', np.linalg.cond(K)),
                 ('t_GPU (s)', '%10.2g', t_kernel),
