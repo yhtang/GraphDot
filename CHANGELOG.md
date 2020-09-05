@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.7a12 (2020-09-02)
+
+- Uses a more robust pseudoinverse algorithm for GPR when the kernel matrix is
+  nearly singular.
+
 ## 0.7a11 (2020-09-02)
 
 - Added bell-shaped compact adjacency functions.
