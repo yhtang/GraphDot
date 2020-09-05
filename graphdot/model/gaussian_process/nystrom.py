@@ -89,7 +89,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                     'because a pseudoinverse could not be computed.'
                 )
 
-    def fit(self, C, X, y, loss='likelihood', tol=1e-4, repeat=1,
+    def fit(self, C, X, y, loss='likelihood', tol=1e-5, repeat=1,
             theta_jitter=1.0, verbose=False):
         """Train a low-rank approximate GPR model. If the `optimizer` argument
         was set while initializing the GPR object, the hyperparameters of the
