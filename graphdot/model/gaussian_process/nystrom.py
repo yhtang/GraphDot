@@ -463,10 +463,10 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         if verbose:
             mprint.table(
-                ('log(P)', '%12.5g', yKy + logdet),
-                ('yKy', '%12.5g', yKy),
-                ('logdet(K)', '%12.5g', logdet),
-                ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
+                ('logP', '%12.5g', yKy + logdet),
+                ('dlogP', '%12.5g', np.linalg.norm(D_theta)),
+                ('y^T.K.y', '%12.5g', yKy),
+                ('log|K|', '%12.5g', logdet),
                 ('Cond(K)', '%12.5g', K.cond()),
                 ('t_GPU (s)', '%10.2g', t_kernel),
                 ('t_CPU (s)', '%10.2g', t_linalg),
