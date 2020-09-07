@@ -3,7 +3,8 @@
 import numpy as np
 
 
-def powerh(H, p, rcond=None, return_symmetric=True, return_eigvals=False):
+def powerh(H, p, rcond=None, mode='truncate', return_symmetric=True,
+           return_eigvals=False):
     r'''Compute the fractional power of a Hermitian matrix as defined through
     eigendecomposition.
 
@@ -16,6 +17,10 @@ def powerh(H, p, rcond=None, return_symmetric=True, return_eigvals=False):
     rcond: float
         Cutoff for small eigenvalues. Eigenvalues less than or equal to
         `rcond * largest_eigenvalue` are discarded.
+    mode: str
+        Determines how small eigenvalues of the original matrix are handled.
+        For 'truncate', small eigenvalues are discarded; for 'clamp', they are
+        fixed to be the product of the largest eigenvalue and rcond.
     return_symmetric: bool
         Whether or not to make the returned matrix symmetric by multiplying it
         with the transposed eigenvectors on the right hand side.
@@ -27,9 +32,15 @@ def powerh(H, p, rcond=None, return_symmetric=True, return_eigvals=False):
     '''
     a, Q = np.linalg.eigh(H)
     if rcond is not None:
-        mask = a > a.max() * rcond
-        a = a[mask]
-        Q = Q[:, mask]
+        beta = a.max() * rcond
+        if mode == 'truncate':
+            mask = a > beta
+            a = a[mask]
+            Q = Q[:, mask]
+        elif mode == 'clamp':
+            a = np.maximum(a, beta)
+        else:
+            raise RuntimeError(f"Unknown pseudoinverse mode '{mode}'.")
     if np.any(a <= 0) and p < 1 and p != 0:
         raise np.linalg.LinAlgError(
             f'Cannot raise a non-positive definite matrix to a power of {p}.'

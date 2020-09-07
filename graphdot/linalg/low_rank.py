@@ -128,12 +128,21 @@ class SpectralApprox(FactorApprox):
     positive-semidefinite. In this case, the matrix can be represented using a
     spectral decomposition.'''
 
-    def __init__(self, X, rcond=0):
+    def __init__(self, X, rcond=0, mode='truncate'):
         if isinstance(X, np.ndarray):
             U, S, _ = np.linalg.svd(X, full_matrices=False)
-            mask = S >= S.max() * rcond
-            self.U = U[:, mask]
-            self.S = S[mask]
+            beta = S.max() * rcond
+            if mode == 'truncate':
+                mask = S >= beta
+                self.U = U[:, mask]
+                self.S = S[mask]
+            elif mode == 'clamp':
+                self.U = U
+                self.S = np.maximum(S, beta)
+            else:
+                raise RuntimeError(
+                    f"Unknown spectral approximation mode '{mode}'."
+                )
         elif isinstance(X, tuple) and len(X) == 2:
             self.U, self.S = X
         self._lhs = self.U * self.S
@@ -162,9 +171,9 @@ class SpectralApprox(FactorApprox):
         return SpectralApprox((self.U, self.S**exp))
 
 
-def dot(X, Y=None, rcond=0):
+def dot(X, Y=None, rcond=0, mode='truncate'):
     '''A utility method that creates factor-approximated matrix objects.'''
     if Y is None:
-        return SpectralApprox(X, rcond=rcond)
+        return SpectralApprox(X, rcond=rcond, mode=mode)
     else:
         return FactorApprox(X, Y)
