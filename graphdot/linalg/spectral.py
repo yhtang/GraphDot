@@ -41,7 +41,7 @@ def powerh(H, p, rcond=None, return_symmetric=True, return_eigvals=False):
     return (Hp, a) if return_eigvals is True else Hp
 
 
-def pinvh(H, rcond=1e-10, estimate_logdet=False):
+def pinvh(H, rcond=1e-10, mode='truncate', return_nlogdet=False):
     r'''Compute the pseudoinverse of a Hermitian matrix.
 
     Parameters
@@ -52,23 +52,35 @@ def pinvh(H, rcond=1e-10, estimate_logdet=False):
         Cutoff for small eigenvalues. Eigenvalues less than or equal to
         `rcond * largest_eigenvalue` and associated eigenvators are discarded
         in forming the pseudoinverse.
-    estimate_logdet: bool
-        Whether or not to compute an estimate of the log determinant of the
-        matrix while correcting small negative eigenvalues.
+    mode: str
+        Determines how small eigenvalues of the original matrix are handled.
+        For 'truncate', small eigenvalues are discarded; for 'clamp', they are
+        fixed to be the product of the largest eigenvalue and rcond.
+    return_nlogdet: bool
+        Whether or not to return the negative log determinant of the
+        pseudoinverse.
 
     Returns
     -------
     H_inv: matrix
-        :py:math:`H^{-1}`.
-    logdet: float, optional if estimate_logdet is True
-        An estimate of the log-determinant of H.
+        :py:math:`H^{\dagger}`.
+    nlogdet: float, optional if estimate_logdet is True
+        Negative log-determinant of :py:math:`H^{\dagger}` while ignoring zero
+        eigenvalues.
     '''
     a, Q = np.linalg.eigh(H)
     beta = a.max() * rcond
     mask = a > beta
-    H_inv = (Q[:, mask] / a[mask]) @ Q.T[mask, :]
-    if estimate_logdet is True:
-        logdet = np.sum(np.log(np.maximum(a, beta)))
-        return H_inv, logdet
+    if mode == 'truncate':
+        a = a[mask]
+        Q = Q[:, mask]
+    elif mode == 'clamp':
+        a[~mask] = beta
+    else:
+        raise RuntimeError(f"Unknown pseudoinverse mode '{mode}'.")
+    H_inv = (Q / a) @ Q.T
+    if return_nlogdet is True:
+        nlogdet = np.sum(np.log(a))
+        return H_inv, nlogdet
     else:
         return H_inv
