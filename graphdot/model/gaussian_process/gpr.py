@@ -448,8 +448,8 @@ class GaussianProcessRegressor:
         if verbose:
             mprint.table(
                 ('Sq.Err.', '%12.5g', squared_error),
-                ('logdet(K)', '%12.5g', logdet),
-                ('Norm(dK)', '%12.5g', np.linalg.norm(D_theta)),
+                ('d(SqErr)', '%12.5g', squared_error),
+                ('log|K| ', '%12.5g', logdet),
                 ('Cond(K)', '%12.5g', np.linalg.cond(K)),
                 ('t_GPU (s)', '%10.2g', t_kernel),
                 ('t_CPU (s)', '%10.2g', t_linalg),
