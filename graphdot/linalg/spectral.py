@@ -53,7 +53,16 @@ def powerh(H, p, rcond=None, mode='truncate', return_symmetric=True,
 
 
 def pinvh(H, rcond=1e-10, mode='truncate', return_nlogdet=False):
-    r'''Compute the pseudoinverse of a Hermitian matrix.
+    r'''Compute the pseudoinverse of a Hermitian matrix using its eigenvalue
+    decomposition. Only eigenvalues larger than a certain threshold will be
+    included to construct the pseudoinverse. This method differs from
+    :py:method:`np.linalg.pinv` in that it uses *eigendecomposition* instead
+    singular decomposition. It also differs from
+    :py:method:`scipy.linalg.pinvh` in that it includes only *positive*
+    eigenvalues. This design choice was made to prevent some nearly singular
+    matrices, that contains elementwise error of relative magnitude 1e-7, to
+    give rise to large negative log-likelihood values in Gaussian
+    process regression.
 
     Parameters
     ----------
