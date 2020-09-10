@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.7a13 (2020-09-10)
+
+- Furture improvements to the robustness of the GPR training process.
+
 ## 0.7a12 (2020-09-02)
 
 - Uses a more robust pseudoinverse algorithm for GPR when the kernel matrix is
