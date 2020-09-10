@@ -18,14 +18,14 @@ class GaussianProcessRegressor:
     ----------
     kernel: kernel instance
         The covariance function of the GP.
-    alpha: float > 0, default = 1e-10
+    alpha: float > 0
         Value added to the diagonal of the kernel matrix during fitting. Larger
         values correspond to increased noise level in the observations. A
         practical usage of this parameter is to prevent potential numerical
         stability issues during fitting, and ensures that the kernel matrix is
         always positive definite in the precense of duplicate entries and/or
         round-off error.
-    beta: float > 0, default = 1e-10
+    beta: float > 0
         Cutoff value on the singular values for the spectral pseudoinverse
         computation, which serves as a backup mechanism to invert the kernel
         matrix in case if it is singular.
@@ -44,7 +44,7 @@ class GaussianProcessRegressor:
         kernel to data.
     """
 
-    def __init__(self, kernel, alpha=1e-10, beta=1e-10, optimizer=None,
+    def __init__(self, kernel, alpha=1e-8, beta=1e-8, optimizer=None,
                  normalize_y=False, kernel_options={}):
         self.kernel = kernel
         self.alpha = alpha
@@ -122,8 +122,7 @@ class GaussianProcessRegressor:
                 warnings.warn(
                     'Kernel matrix singular, falling back to pseudoinverse'
                 )
-                return pinvh(K, rcond=self.beta, mode='clamp',
-                             return_nlogdet=True)
+                return pinvh(K, rcond=self.beta, return_nlogdet=True)
             except np.linalg.LinAlgError:
                 raise np.linalg.LinAlgError(
                     'The kernel matrix is likely corrupted with NaNs and Infs '
