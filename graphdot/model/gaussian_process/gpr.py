@@ -122,7 +122,9 @@ class GaussianProcessRegressor:
                 warnings.warn(
                     'Kernel matrix singular, falling back to pseudoinverse'
                 )
-                return pinvh(K, rcond=self.beta, return_nlogdet=True)
+                return pinvh(
+                    K, rcond=self.beta, mode='clamp', return_nlogdet=True
+                )
             except np.linalg.LinAlgError:
                 raise np.linalg.LinAlgError(
                     'The kernel matrix is likely corrupted with NaNs and Infs '
