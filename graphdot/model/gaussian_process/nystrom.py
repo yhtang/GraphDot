@@ -81,7 +81,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 'Now falling back to use a pseudoinverse.'
             )
             try:
-                return powerh(Kcc, -0.5, rcond=self.beta,
+                return powerh(Kcc, -0.5, rcond=self.beta, mode='clamp',
                               return_symmetric=False)
             except np.linalg.LinAlgError:
                 raise np.linalg.LinAlgError(
@@ -160,7 +160,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         self.Kcc_rsqrt = self._corespace(C=self.C)
         self.Kxc = self._gramian(self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
-        self.Kinv = lr.dot(self.Fxc, rcut=self.beta).inverse()
+        self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').inverse()
         self.Ky = self.Kinv @ self.y
 
         return self
@@ -357,7 +357,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 )
         elif method == 'gpr-like':
             F = Kzc @ self.Kcc_rsqrt
-            Kinv = lr.dot(F, rcut=self.beta).inverse()
+            Kinv = lr.dot(F, rcond=self.beta, mode='clamp').inverse()
             zstar = z - (Kinv @ z) / Kinv.diagonal()
             if return_std is True:
                 std = np.sqrt(1 / np.maximum(Kinv.diagonal(), 1e-14))
@@ -433,7 +433,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         Kcc_rsqrt = self._corespace(Kcc=Kcc)
         F = Kxc @ Kcc_rsqrt
-        K = lr.dot(F, rcut=self.beta)
+        K = lr.dot(F, rcond=self.beta, mode='clamp')
         K_inv = K.inverse()
 
         logdet = K.logdet()
