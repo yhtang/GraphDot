@@ -356,13 +356,13 @@ class GaussianProcessRegressor:
 
         if verbose:
             mprint.table(
-                ('logP ', '%12.5g', yKy + logdet),
-                ('dlogP ', '%12.5g', np.linalg.norm(d_theta)),
-                ('y^T.K.y ', '%12.5g', yKy),
+                ('logP', '%12.5g', yKy + logdet),
+                ('dlogP', '%12.5g', np.linalg.norm(d_theta)),
+                ('y^T.K.y', '%12.5g', yKy),
                 ('log|K| ', '%12.5g', logdet),
-                ('Cond(K) ', '%12.5g', np.linalg.cond(K)),
-                ('GPU time ', '%10.2g', t_kernel),
-                ('CPU time ', '%10.2g', t_linalg),
+                ('Cond(K)', '%12.5g', np.linalg.cond(K)),
+                ('GPU time', '%10.2g', t_kernel),
+                ('CPU time', '%10.2g', t_linalg),
             )
 
         return retval

@@ -466,10 +466,10 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 ('logP', '%12.5g', yKy + logdet),
                 ('dlogP', '%12.5g', np.linalg.norm(D_theta)),
                 ('y^T.K.y', '%12.5g', yKy),
-                ('log|K|', '%12.5g', logdet),
+                ('log|K| ', '%12.5g', logdet),
                 ('Cond(K)', '%12.5g', K.cond()),
-                ('t_GPU (s)', '%10.2g', t_kernel),
-                ('t_CPU (s)', '%10.2g', t_linalg),
+                ('GPU time', '%10.2g', t_kernel),
+                ('CPU time', '%10.2g', t_linalg),
             )
 
         return retval
