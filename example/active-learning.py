@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from graphdot.model.gaussian_process import GaussianProcessRegressor
 from graphdot.model.active_learning import (
-    DeterminantMaximizer,
+    # DeterminantMaximizer,
     VarianceMinimizer,
     HierarchicalDrafter
 )
