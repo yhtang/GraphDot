@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-import numba as nb
-import numba.core.types as nbtypes
-from graphdot.linalg.cholesky import chol_solve
+from graphdot.linalg.block import binvh1
 
 
 class VarianceMinimizer:
@@ -28,7 +26,7 @@ class VarianceMinimizer:
         Additional arguments to be passed into the kernel.
     '''
 
-    def __init__(self, kernel, alpha=1e-7, kernel_options=None):
+    def __init__(self, kernel, alpha=1e-6, kernel_options=None):
         assert kernel == 'precomputed' or callable(kernel)
         self.kernel = kernel
         self.alpha = alpha
@@ -58,30 +56,26 @@ class VarianceMinimizer:
                 X.ndim == 2 and
                 X.shape[0] == X.shape[1]
             ), 'A precomputed kernel matrix must be square.'
-            K = X
+            K = np.copy(X).astype(np.float)
         else:
-            K = self.kernel(X, **self.kernel_options)
+            K = self.kernel(X, **self.kernel_options).astype(np.float)
 
         K.flat[::len(K) + 1] += self.alpha
 
-        return _choose(K.astype(np.float32), n)
+        return self._choose(K, n)
 
-
-@nb.jit(
-    nbtypes.intc[:](
-        nbtypes.float32[:, :],
-        nbtypes.intc
-    ),
-    forceobj=True
-)
-def _choose(K, n):
-    chosen = np.zeros(len(K), dtype=np.bool_)
-    chosen[np.argmax(np.sum(K, axis=1))] = True
-    for _ in range(n):
-        Ki = K[chosen, :][:, chosen]
-        Koi = K[~chosen, :][:, chosen]
-        Ko = K[~chosen, :][:, ~chosen]
-        var = np.maximum(0, Ko - Koi @ chol_solve(Ki, Koi.T))
-        i = np.argmax(np.sum(var, axis=1))
-        chosen[np.flatnonzero(~chosen)[i]] = True
-    return np.flatnonzero(chosen)
+    @staticmethod
+    def _choose(K, n):
+        chosen = []
+        index = np.arange(len(K))
+        inv = np.zeros((0, 0))
+        for i in range(n):
+            posterior = K[i:, i:] - K[i:, :i] @ inv @ K[:i, i:]
+            j = i + np.argmax(np.sum(posterior, axis=1))
+            chosen.append(index[j])
+            index[i], index[j] = index[j], index[i]
+            K[i, :], K[j, :] = K[j, :], K[i, :]
+            K[:, i], K[:, j] = K[:, j], K[:, i]
+            if i < n - 1:
+                inv = binvh1(inv, K[:i, i], K[i, i])
+        return chosen

@@ -7,6 +7,7 @@ def binvh1(A_inv, v, d):
     r'''Computes the inversion of the block matrix ``B = [[A, v], [v.T, d]]``,
     with :py:math:`v` being a vector and :py:math:`d` being a scalar, using
     :py:math:`\mathbf{D}^{-1}` and a fast rank-one update.'''
+    v = np.ascontiguousarray(v)
 
     w = A_inv @ v
     schur = d - v @ w
