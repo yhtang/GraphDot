@@ -34,11 +34,15 @@ kernel = Kernel(s=2.0)
 X = np.sort(np.random.randn(300) * 10)
 y = f(X)
 n = 40  # training set budget
-if False:
-    drafter = HierarchicalDrafter(DeterminantMaximizer(kernel))
-else:
-    drafter = HierarchicalDrafter(VarianceMinimizer(kernel))
-active_set = drafter(X, n)
+# drafter = HierarchicalDrafter(DeterminantMaximizer(kernel))
+drafter = HierarchicalDrafter(VarianceMinimizer(kernel))
+trials = [drafter(X, n) for _ in range(5)]
+for i, trial in enumerate(trials):
+    print(f'trial {i} det {np.prod(np.linalg.slogdet(kernel(X[trial])))}')
+active_set = sorted(
+    trials,
+    key=lambda I: np.prod(np.linalg.slogdet(kernel(X[I])))
+)[-1]
 random_set = np.random.choice(len(X), n, False)
 
 
@@ -48,6 +52,7 @@ def test(chosen, label, color):
     plt.scatter(X[chosen], y[chosen], label=label, color=color)
     plt.plot(grid, gpr.predict(grid), label=label, color=color)
     print(f"RMSE of '{label}' model:", np.std(gpr.predict(X) - y))
+    print(f"{label} det: {np.prod(np.linalg.slogdet(kernel(X[chosen])))}")
 
 
 plt.figure()
