@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.7b1 (2020-09-12)
+
+- Performance improvements to the variance minimizing active learner.
+
 ## 0.7a13 (2020-09-10)
 
 - Furture improvements to the robustness of the GPR training process.
