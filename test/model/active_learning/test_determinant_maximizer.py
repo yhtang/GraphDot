@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import numpy as np
-from graphdot.model.active_learning.determinant_maximizer import (
-    DeterminantMaximizer
-)
+from graphdot.model.active_learning import DeterminantMaximizer
 
 
 @pytest.mark.parametrize('N', [3, 5, 7, 9, 11, 13, 17, 33, 47, 85, 99])
@@ -87,7 +85,7 @@ def test_pick_no_duplicates():
     assert(len(np.unique(chosen)) == 3)
 
 
-@pytest.mark.parametrize('N', [285, 1025, 12513])
+@pytest.mark.parametrize('N', [96, 241, 1523])
 def test_pick_superiority(N):
 
     class Kernel:

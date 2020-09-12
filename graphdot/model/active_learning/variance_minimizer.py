@@ -66,16 +66,27 @@ class VarianceMinimizer:
 
     @staticmethod
     def _choose(K, n):
+
+        np.set_printoptions(precision=4, linewidth=999, suppress=True)
+
         chosen = []
         index = np.arange(len(K))
         inv = np.zeros((0, 0))
         for i in range(n):
             posterior = K[i:, i:] - K[i:, :i] @ inv @ K[:i, i:]
+            print(f'=======step {i}=======')
+            print(f'inv\n{inv}')
+            print(f'K\n{K}')
+            print(f'index\n{index}')
+            print(f'posterior (matrix)\n{posterior}')
+            print(f'={K[i:, i:]}\n-\n{K[i:, :i]}\n@\n{inv}\n@\n{K[:i, i:]}')
+            print(f'posterior\n{np.sum(posterior, axis=1)}')
             j = i + np.argmax(np.sum(posterior, axis=1))
+            print(f'chosen {index[j]} @ {i} + {np.argmax(np.sum(posterior, axis=1))}')
             chosen.append(index[j])
-            index[i], index[j] = index[j], index[i]
-            K[i, :], K[j, :] = K[j, :], K[i, :]
-            K[:, i], K[:, j] = K[:, j], K[:, i]
+            index[[i, j]] = index[[j, i]]
+            K[[i, j], :] = K[[j, i], :]
+            K[:, [i, j]] = K[:, [j, i]]
             if i < n - 1:
                 inv = binvh1(inv, K[:i, i], K[i, i])
         return chosen
