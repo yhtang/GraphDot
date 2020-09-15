@@ -563,3 +563,39 @@ def test_mlgk_fixed_hyperparameters():
     assert(dRvv[:, :, kernelVF.active_theta_mask] == pytest.approx(dRvf))
     assert(dRvv[:, :, kernelFV.active_theta_mask] == pytest.approx(dRfv))
     assert(dRvv[:, :, kernelFF.active_theta_mask] == pytest.approx(dRff))
+
+
+def test_mlgk_kernel_range_check():
+    MarginalizedGraphKernel(
+        node_kernel=KroneckerDelta(1e-7),
+        edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+    )
+    MarginalizedGraphKernel(
+        node_kernel=TensorProduct(feature=KroneckerDelta(0.5)),
+        edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+    )
+    with pytest.raises(RuntimeError):
+        MarginalizedGraphKernel(
+            node_kernel=KroneckerDelta(0),
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+        )
+    with pytest.raises(RuntimeError):
+        MarginalizedGraphKernel(
+            node_kernel=TensorProduct(feature=KroneckerDelta(0.5)) + 1,
+            edge_kernel=SquareExponential(1.0)
+        )
+    with pytest.raises(RuntimeError):
+        MarginalizedGraphKernel(
+            node_kernel=TensorProduct(feature=KroneckerDelta(0.5)),
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0)) + 1
+        )
+    with pytest.raises(RuntimeError):
+        MarginalizedGraphKernel(
+            node_kernel=KroneckerDelta(0.5) * 2,
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+        )
+    with pytest.raises(RuntimeError):
+        MarginalizedGraphKernel(
+            node_kernel=TensorProduct(feature=KroneckerDelta(0.5)),
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0)) * 2
+        )
