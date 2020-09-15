@@ -68,14 +68,18 @@ class MarginalizedGraphKernel:
         if self.node_kernel.minmax[0] <= 0 or self.node_kernel.minmax[1] > 1:
             warnings.warn(
                 "Node kernel value range should be within (0, 1], "
-                f"got {self.node_kernel.minmax} for {self.node_kernel}.\n"
-                "Hint: use the .normalized attribute of the kernel instead."
+                f"got {self.node_kernel.minmax} for {self.node_kernel}."
+                "This will not be allowed in a future version.\n"
+                "Hint: use the .normalized attribute of the kernel instead.",
+                DeprecationWarning
             )
         if self.edge_kernel.minmax[0] < 0 or self.edge_kernel.minmax[1] > 1:
             warnings.warn(
                 "Edge kernel value range must be within [0, 1], "
-                f"got {self.edge_kernel.minmax} for {self.edge_kernel}.\n"
-                "Hint: use the .normalized attribute of the kernel instead."
+                f"got {self.edge_kernel.minmax} for {self.edge_kernel}."
+                "This will not be allowed in a future version.\n"
+                "Hint: use the .normalized attribute of the kernel instead.",
+                DeprecationWarning
             )
 
     def _get_starting_probability(self, p):
