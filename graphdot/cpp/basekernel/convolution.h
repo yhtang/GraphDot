@@ -20,13 +20,13 @@ inline __host__ __device__ float convolution(
         }
     }
     if (mean) {
-        return k / (x.size() * y.size());
+        return k / (x.size * y.size);
     } else {
         return k;
     }
 }
 
-template<class J, class X, class Y>
+template<bool mean, class J, class X, class Y>
 inline __host__ __device__ float convolution_jacobian(
     J const j,
     X const x,
@@ -39,7 +39,7 @@ inline __host__ __device__ float convolution_jacobian(
         }
     }
     if (mean) {
-        return dk / (x.size() * y.size());
+        return dk / (x.size * y.size);
     } else {
         return dk;
     }

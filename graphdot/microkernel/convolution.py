@@ -71,7 +71,7 @@ def Convolution(kernel: MicroKernel, mean=True):
                 )'''
             )
             mean = 'true' if self.mean else 'false'
-            jacobian = [template.render(mea=mean, x=x, y=y, j=j) for j in J]
+            jacobian = [template.render(mean=mean, x=x, y=y, j=j) for j in J]
             return f, jacobian
 
         @property
