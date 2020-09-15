@@ -5,7 +5,6 @@ from graphdot.codegen.cpptool import cpptype
 from graphdot.codegen.template import Template
 from graphdot.util.pretty_tuple import pretty_tuple
 from ._base import MicroKernel
-from .normalize import Normalize
 
 
 def Convolution(kernel: MicroKernel, mean=True):

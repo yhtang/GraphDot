@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from graphdot.microkernel import (
+    MicroKernel,
     Constant,
     KroneckerDelta,
     SquareExponential,
@@ -57,7 +58,6 @@ def test_simple_kernel(kernel):
     assert(len(kernel.minmax) == 2)
     assert(kernel.minmax[0] >= 0)
     assert(kernel.minmax[1] >= kernel.minmax[0])
-
 
 def test_constant_kernel():
     kernel = Constant(1.0)
@@ -582,3 +582,25 @@ def test_kernel_exp_kernel(k1, k2):
     else:
         with pytest.raises(ValueError):
             kexp = k1**k2
+
+
+@pytest.mark.parametrize('kernel', simple_kernels + [
+    simple_kernels[0] + simple_kernels[1],
+    simple_kernels[-1] * simple_kernels[-2],
+    simple_kernels[-1]**3,
+    simple_kernels[0] + np.pi,
+    TensorProduct(
+        a=simple_kernels[0],
+        b=simple_kernels[-1]
+    ),
+    Additive(
+        x=simple_kernels[0],
+        y=simple_kernels[-1]
+    )
+])
+def test_normliazed_property(kernel):
+    assert(hasattr(kernel, 'normalized'))
+    assert(isinstance(kernel.normalized, MicroKernel))
+    assert(kernel.normalized.name == 'Normalize')
+    assert(kernel.normalized.minmax[0] >= 0)
+    assert(kernel.normalized.minmax[1] == 1)
