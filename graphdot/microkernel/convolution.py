@@ -45,7 +45,7 @@ def Convolution(kernel: MicroKernel, mean=True):
                 if self.mean:
                     return np.mean(Fxy), np.mean(Jxy, axis=0)
                 else:
-                    return np.sum(Fxy), np.sum(Jxy, axis=0)   
+                    return np.sum(Fxy), np.sum(Jxy, axis=0)
             else:
                 if self.mean:
                     return np.mean([self.kernel(x, y) for x in X for y in Y])

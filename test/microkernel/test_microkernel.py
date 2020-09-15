@@ -59,6 +59,7 @@ def test_simple_kernel(kernel):
     assert(kernel.minmax[0] >= 0)
     assert(kernel.minmax[1] >= kernel.minmax[0])
 
+
 def test_constant_kernel():
     kernel = Constant(1.0)
     ''' default behavior '''
@@ -157,7 +158,7 @@ def test_product_quasikernel():
     ''' range check '''
     assert(len(kernel.minmax) == 2)
     assert(kernel.minmax[0] is None)
-    assert(kernel.minmax[1] is None)    
+    assert(kernel.minmax[1] is None)
 
 
 @pytest.mark.parametrize('kernel', [
