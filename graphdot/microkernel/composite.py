@@ -116,6 +116,13 @@ def Composite(oper, **kw_kernels):
                 self.kw_kernels.keys()
             )(*[k.bounds for k in self.kw_kernels.values()])
 
+        @property
+        def minmax(self):
+            return self.ufunc.reduce(
+                [k.minmax for k in self.kw_kernels.values()],
+                axis=0
+            )
+
     # for the .state property of cpptype
     for key in kw_kernels:
         setattr(CompositeKernel, key,

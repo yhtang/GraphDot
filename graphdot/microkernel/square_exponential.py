@@ -19,5 +19,7 @@ SquareExponential = MicroKernel.from_sympy(
     ('length_scale', np.float32, 1e-6, np.inf,
      r"""Determines how quickly should the kernel decay to zero. The kernel has
      a value of approx. 0.606 at one length scale, 0.135 at two length
-     scales, and 0.011 at three length scales.""")
+     scales, and 0.011 at three length scales."""),
+
+    minmax=(0, 1)
 )

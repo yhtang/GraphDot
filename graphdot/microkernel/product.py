@@ -36,3 +36,7 @@ class Product(MicroKernel):
     @property
     def bounds(self):
         return tuple()
+
+    @property
+    def minmax(self):
+        return (None, None)

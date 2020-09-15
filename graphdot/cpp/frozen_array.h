@@ -39,6 +39,10 @@ struct frozen_array {
     __host__ __device__ const_iterator end() const {
         return const_iterator {_data + size};
     }
+
+    __host__ __device__ size_type size() const {
+        return size;
+    }
 };
 
 }

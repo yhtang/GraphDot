@@ -82,4 +82,9 @@ def Normalize(kernel: MicroKernel):
         def bounds(self):
             return self.kernel.bounds
 
+        @property
+        def minmax(self):
+            lo, hi = self.kernel.minmax
+            return (lo / hi, 1)
+
     return Normalized(kernel)

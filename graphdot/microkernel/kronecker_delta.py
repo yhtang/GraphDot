@@ -65,4 +65,8 @@ def KroneckerDelta(h, h_bounds=(1e-3, 1)):
         def bounds(self):
             return (self.h_bounds,)
 
+        @property
+        def minmax(self):
+            return (self.h, 1)
+
     return KroneckerDeltaKernel(h, h_bounds)
