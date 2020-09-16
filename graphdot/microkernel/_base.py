@@ -330,7 +330,7 @@ class MicroKernelExpr(MicroKernel):
         return Exponentiation(k1, k2)
 
 
-def Constant(c, c_bounds=None):
+def Constant(c, c_bounds='fixed'):
     r"""Creates a no-op microkernel that returns a constant value,
     i.e. :math:`k_\mathrm{c}(\cdot, \cdot) \equiv constant`. This kernel is
     often mutliplied with other microkernels as an adjustable weight.
@@ -340,9 +340,6 @@ def Constant(c, c_bounds=None):
     c: float > 0
         The constant value.
     """
-    if c_bounds is None:
-        c_bounds = (c, c)
-
     @cpptype(c=np.float32)
     class ConstantKernel(MicroKernel):
         @property
