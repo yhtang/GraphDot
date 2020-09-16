@@ -22,5 +22,7 @@ RationalQuadratic = MicroKernel.from_sympy(
     ('alpha', np.float32, 1e-3, np.inf,
      r"""The relative weights of large-scale square exponential components.
      Larger alpha values leads to a faster decay of the weights for larger
-     length scales.""")
+     length scales."""),
+
+    minmax=(0, 1)
 )

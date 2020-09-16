@@ -4,15 +4,13 @@
 Microkernels are positive-semidefinite functions between individual nodes and
 edges of graphs.
 """
-from ._base import MicroKernel, Constant
+from ._base import MicroKernel, Constant, Normalize
 
 from .product import Product
 from .kronecker_delta import KroneckerDelta
 
 from .square_exponential import SquareExponential
 from .rational_quadratic import RationalQuadratic
-
-from .normalize import Normalize
 
 from .composite import Composite
 from .additive import Additive

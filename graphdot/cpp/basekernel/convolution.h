@@ -7,7 +7,7 @@ namespace graphdot {
 
 namespace basekernel {
 
-template<class F, class X, class Y>
+template<bool mean, class F, class X, class Y>
 inline __host__ __device__ float convolution(
     F const f,
     X const x,
@@ -19,10 +19,14 @@ inline __host__ __device__ float convolution(
             k += f(_1, _2);
         }
     }
-    return k;
+    if (mean) {
+        return k / (x.size * y.size);
+    } else {
+        return k;
+    }
 }
 
-template<class J, class X, class Y>
+template<bool mean, class J, class X, class Y>
 inline __host__ __device__ float convolution_jacobian(
     J const j,
     X const x,
@@ -34,7 +38,11 @@ inline __host__ __device__ float convolution_jacobian(
             dk += j(_1, _2);
         }
     }
-    return dk;
+    if (mean) {
+        return dk / (x.size * y.size);
+    } else {
+        return dk;
+    }
 }
 
 }
