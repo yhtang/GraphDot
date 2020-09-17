@@ -18,6 +18,8 @@ from .tensor_product import TensorProduct
 
 from .convolution import Convolution
 
+from .dotproduct import DotProduct
+
 
 __all__ = [
     'MicroKernel',
@@ -31,4 +33,5 @@ __all__ = [
     'TensorProduct',
     'Additive',
     'Convolution',
+    'DotProduct'
 ]

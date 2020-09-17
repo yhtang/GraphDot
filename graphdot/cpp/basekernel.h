@@ -3,5 +3,6 @@
 
 #include "basekernel/normalize.h"
 #include "basekernel/convolution.h"
+#include "basekernel/dotproduct.h"
 
 #endif

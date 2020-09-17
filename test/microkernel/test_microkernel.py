@@ -17,6 +17,7 @@ from graphdot.microkernel import (
     TensorProduct,
     Additive,
     Convolution,
+    DotProduct
 )
 
 inf = float('inf')
@@ -605,3 +606,23 @@ def test_normliazed_property(kernel):
     assert(kernel.normalized.name == 'Normalize')
     assert(kernel.normalized.minmax[0] >= 0)
     assert(kernel.normalized.minmax[1] == 1)
+
+
+def test_dotproduct():
+    k = DotProduct()
+    ''' length cases '''
+    assert(k([], []) == 0)
+    assert(k(tuple(), tuple()) == 0)
+    ''' check by definition '''
+    for i, j in ([1, 2], [0, 2], [2, 4]):
+        for n in range(10):
+            assert(k([i] * n, [j] * n) == i * j * n)
+    ''' representation generation '''
+    eval(repr(k))
+    ''' C++ counterpart and hyperparameter retrieval '''
+    assert(k.dtype.isalignedstruct)
+    copy.copy(k)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] >= 0)
+    assert(k.minmax[1] >= k.minmax[0])
