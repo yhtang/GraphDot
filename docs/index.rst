@@ -44,6 +44,7 @@ Contents
    marginalized
    api
    contribute
+   changelog
 
 
 Citation

@@ -11,3 +11,4 @@ sphinx-rtd-theme
 treelib
 kahypar
 numba
+m2r
