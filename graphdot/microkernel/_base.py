@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from itertools import starmap
+import operator
 import numpy as np
 import sympy as sy
 from sympy.utilities.lambdify import lambdify
@@ -18,7 +20,13 @@ class MicroKernel(ABC):
     @abstractmethod
     def name(self):
         '''Name of the kernel.'''
-        pass
+
+    @property
+    def normalized(self):
+        r'''A normalized version of the original kernel using the dot product
+        formula: :py:math:`k^\mathrm{normalized}(i, j) =
+        \frac{k(i, j)}{\sqrt{k(i, i) k(j, j)}}`.'''
+        return Normalize(self)
 
     @abstractmethod
     def __call__(self, i, j, jac=False):
@@ -39,13 +47,11 @@ class MicroKernel(ABC):
         jacobian: 1D ndarray
             The gradient of the kernel with regard to hyperparameters.
         '''
-        pass
 
     @abstractmethod
     def __repr__(self):
         '''Evaluating the representation of a kernel should create an exact
         instance of the kernel itself.'''
-        pass
 
     @abstractmethod
     def gen_expr(self, x, y, theta_scope=''):
@@ -66,26 +72,28 @@ class MicroKernel(ABC):
         jac_expr: list of strs
             C++ expressions that evaluate the derivative of the kernel.
         '''
-        pass
 
     @property
     @abstractmethod
     def theta(self):
         '''A tuple of all the kernel hyperparameters.'''
-        pass
 
     @theta.setter
     @abstractmethod
     def theta(self, value):
         '''Method for setting the kernel hyperparameters from a tuple.'''
-        pass
 
     @property
     @abstractmethod
     def bounds(self):
         '''A list of 2-tuples for the lower and upper bounds of each kernel
         hyperparameter.'''
-        pass
+
+    @property
+    @abstractmethod
+    def minmax(self):
+        '''A 2-tuple of the minimum and maximum values that the kernel could
+        take.'''
 
     def _assert_bounds(self, hyp, bounds):
         if not ((isinstance(bounds, tuple) and len(bounds) == 2)
@@ -96,7 +104,9 @@ class MicroKernel(ABC):
             )
 
     @staticmethod
-    def from_sympy(name, desc, expr, vars, *hyperparameter_specs):
+    def from_sympy(
+        name, desc, expr, vars, *hyperparameter_specs, minmax=(0, 1)
+    ):
         '''Create a pairwise kernel class from a SymPy expression.
 
         Parameters
@@ -128,7 +138,9 @@ class MicroKernel(ABC):
             creation, using arguments as specified in the kernel class's
             docstring.
         '''
-        return _from_sympy(name, desc, expr, vars, *hyperparameter_specs)
+        return _from_sympy(
+            name, desc, expr, vars, *hyperparameter_specs, minmax=minmax
+        )
 
     def __add__(self, k):
         r"""Implements the additive kernel composition semantics, i.e.
@@ -213,6 +225,10 @@ class MicroKernelExpr(MicroKernel):
                 f2, J2 = self.k2.gen_expr(x, y, theta_scope + 'k2.')
                 return (f'({f1} + {f2})', J1 + J2)
 
+            @property
+            def minmax(self):
+                return tuple(starmap(operator.add, zip(k1.minmax, k2.minmax)))
+
         return Add(k1, k2)
 
     @staticmethod
@@ -252,6 +268,10 @@ class MicroKernelExpr(MicroKernel):
                     [f'({j1} * {f2})' for j1 in J1] +
                     [f'({f1} * {j2})' for j2 in J2]
                 )
+
+            @property
+            def minmax(self):
+                return tuple(starmap(operator.mul, zip(k1.minmax, k2.minmax)))
 
         return Multiply(k1, k2)
 
@@ -303,10 +323,14 @@ class MicroKernelExpr(MicroKernel):
                     [f'(__powf({f1}, {f2}) * __logf({f1}) * {j})' for j in J2]
                 )
 
+            @property
+            def minmax(self):
+                return tuple(starmap(operator.pow, zip(k1.minmax, k2.minmax)))
+
         return Exponentiation(k1, k2)
 
 
-def Constant(c, c_bounds=None):
+def Constant(c, c_bounds='fixed'):
     r"""Creates a no-op microkernel that returns a constant value,
     i.e. :math:`k_\mathrm{c}(\cdot, \cdot) \equiv constant`. This kernel is
     often mutliplied with other microkernels as an adjustable weight.
@@ -316,9 +340,6 @@ def Constant(c, c_bounds=None):
     c: float > 0
         The constant value.
     """
-    if c_bounds is None:
-        c_bounds = (c, c)
-
     @cpptype(c=np.float32)
     class ConstantKernel(MicroKernel):
         @property
@@ -357,10 +378,107 @@ def Constant(c, c_bounds=None):
         def bounds(self):
             return (self.c_bounds,)
 
+        @property
+        def minmax(self):
+            return (self.c, self.c)
+
     return ConstantKernel(c, c_bounds)
 
 
-def _from_sympy(name, desc, expr, vars, *hyperparameter_specs):
+def Normalize(kernel: MicroKernel):
+    r"""Normalize the value range of a microkernel to [0, 1] using the cosine
+    of angle formula: :math:`k_{normalized}(x, y) = \frac{k(x, y)}
+    {\sqrt{k(x, x) k(y, y)}}`.
+
+    Parameters
+    ----------
+    kernel:
+        The microkernel to be normalized.
+    """
+    if kernel.name == 'Normalize':
+        # avoid repeated normalization
+        return kernel
+    else:
+        @cpptype(kernel=kernel.dtype)
+        class Normalized(MicroKernel):
+            @property
+            def name(self):
+                return 'Normalize'
+
+            def __init__(self, kernel):
+                self.kernel = kernel
+
+            def __call__(self, X, Y, jac=False):
+                if jac is True:
+                    Fxx, Jxx = self.kernel(X, X, jac=True)
+                    Fxy, Jxy = self.kernel(X, Y, jac=True)
+                    Fyy, Jyy = self.kernel(Y, Y, jac=True)
+
+                    if Fxx > 0 and Fyy > 0:
+                        return (
+                            Fxy * (Fxx * Fyy)**-0.5,
+                            (Jxy * (Fxx * Fyy)**-0.5
+                             - (0.5 * Fxy * (Fxx * Fyy)**-1.5
+                                * (Jxx * Fyy + Fxx * Jyy)))
+                        )
+                    else:
+                        return (0.0, np.zeros_like(Jxy))
+                else:
+                    Fxx = self.kernel(X, X)
+                    Fxy = self.kernel(X, Y)
+                    Fyy = self.kernel(Y, Y)
+                    if Fxx > 0 and Fyy > 0:
+                        return Fxy * (Fxx * Fyy)**-0.5
+                    else:
+                        return 0.0
+
+            def __repr__(self):
+                return f'{self.name}({repr(self.kernel)})'
+
+            def gen_expr(self, x, y, theta_scope=''):
+                F, J = self.kernel.gen_expr(
+                    '_1', '_2', theta_scope + 'kernel.'
+                )
+                f = Template(
+                    r'''normalize(
+                            [&](auto _1, auto _2){return ${f};},
+                            ${x}, ${y}
+                    )'''
+                ).render(
+                    x=x, y=y, f=F
+                )
+                template = Template(
+                    r'''normalize_jacobian(
+                            [&](auto _1, auto _2){return ${f};},
+                            [&](auto _1, auto _2){return ${j};},
+                            ${x},
+                            ${y}
+                        )'''
+                )
+                jacobian = [template.render(x=x, y=y, f=F, j=j) for j in J]
+                return f, jacobian
+
+            @property
+            def theta(self):
+                return self.kernel.theta
+
+            @theta.setter
+            def theta(self, seq):
+                self.kernel.theta = seq
+
+            @property
+            def bounds(self):
+                return self.kernel.bounds
+
+            @property
+            def minmax(self):
+                lo, hi = self.kernel.minmax
+                return (lo / hi, 1)
+
+        return Normalized(kernel)
+
+
+def _from_sympy(name, desc, expr, vars, *hyperparameter_specs, minmax=(0, 1)):
     '''Create a microkernel class from a SymPy expression.
 
     Parameters
@@ -391,6 +509,8 @@ def _from_sympy(name, desc, expr, vars, *hyperparameter_specs):
         then it must be specified explicitly during microkernel object
         creation, using arguments as specified in the microkernel class's
         docstring.
+    minmax: a 2-tuple of floats
+        The minimum and maximum value that the kernel can output.
     '''
 
     assert(isinstance(name, str) and name.isidentifier())
@@ -574,6 +694,10 @@ def _from_sympy(name, desc, expr, vars, *hyperparameter_specs):
         @property
         def bounds(self):
             return tuple(self._theta_bounds.values())
+
+        @property
+        def minmax(self):
+            return minmax
 
     '''furnish doc strings'''
     param_docs = [

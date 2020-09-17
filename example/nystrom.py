@@ -8,7 +8,6 @@ from graphdot.microkernel import (
     Additive,
     Convolution as kConv,
     Constant as kC,
-    Normalize,
     KroneckerDelta as kDelta,
     SquareExponential as kSE
 )
@@ -32,26 +31,22 @@ test_y = energy[1::2]
 core = train_X[::2]
 
 kernel = MarginalizedGraphKernel(
-    Normalize(
-        Additive(
-            aromatic=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
-            atomic_number=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9)),
-            charge=kC(0.5, (0.1, 1.0)) * kSE(1.0),
-            chiral=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
-            hcount=kC(0.5, (0.1, 1.0)) * kSE(1.0),
-            hybridization=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
-            ring_list=kC(0.5, (0.01, 1.0)) * kConv(kDelta(0.5, (0.1, 0.9)))
-        )
-    ),
-    Normalize(
-        Additive(
-            aromatic=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
-            conjugated=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
-            order=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9)),
-            ring_stereo=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9)),
-            stereo=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9))
-        )
-    ),
+    node_kernel=Additive(
+        aromatic=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
+        atomic_number=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9)),
+        charge=kC(0.5, (0.1, 1.0)) * kSE(1.0),
+        chiral=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
+        hcount=kC(0.5, (0.1, 1.0)) * kSE(1.0),
+        hybridization=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
+        ring_list=kC(0.5, (0.01, 1.0)) * kConv(kDelta(0.5, (0.1, 0.9)))
+    ).normalized,
+    edge_kernel=Additive(
+        aromatic=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
+        conjugated=kC(0.5, (0.1, 1.0)) * kDelta(0.5, (0.1, 0.9)),
+        order=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9)),
+        ring_stereo=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9)),
+        stereo=kC(0.5, (0.1, 1.0)) * kDelta(0.8, (0.1, 0.9))
+    ).normalized,
     p=Uniform(1.0, (0.1, 40.0)),
     q=0.05
 )

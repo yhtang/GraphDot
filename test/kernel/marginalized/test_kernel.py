@@ -12,6 +12,7 @@ from graphdot.microkernel import (
     KroneckerDelta,
     SquareExponential,
     TensorProduct,
+    Additive,
     Convolution
 )
 
@@ -97,8 +98,8 @@ labeled_graph1.add_edge('O1', 'H1', order=1, length=0.5)
 labeled_graph1.add_edge('O1', 'H2', order=2, length=1.0)
 
 labeled_graph2 = nx.Graph(title='H2')
-labeled_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1)
-labeled_graph2.add_node('H2', hybridization=Hybrid.SP, charge=-1)
+labeled_graph2.add_node('H1', hybridization=Hybrid.SP, charge=1.0)
+labeled_graph2.add_node('H2', hybridization=Hybrid.SP, charge=-1.0)
 labeled_graph2.add_edge('H1', 'H2', order=2, length=1.0)
 
 weighted_graph1 = nx.Graph(title='H2O')
@@ -141,9 +142,9 @@ case_dict = {
             Graph.from_networkx(labeled_graph2)
         ]),
         'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
-                               charge=SquareExponential(1.0)),
-        'kedge': TensorProduct(order=KroneckerDelta(0.3),
-                               length=SquareExponential(0.05)),
+                               charge=SquareExponential(1.) + 0.01).normalized,
+        'kedge': Additive(order=KroneckerDelta(0.3),
+                          length=SquareExponential(0.05)).normalized,
         'q': [0.01, 0.05, 0.1, 0.5]
     },
     'weighted': {
@@ -151,8 +152,8 @@ case_dict = {
             Graph.from_networkx(weighted_graph1, weight='w'),
             Graph.from_networkx(weighted_graph2, weight='w')
         ]),
-        'knode': TensorProduct(hybridization=KroneckerDelta(0.3),
-                               charge=SquareExponential(1.0)),
+        'knode': Additive(hybridization=KroneckerDelta(0.3),
+                          charge=SquareExponential(1.0)).normalized,
         'kedge': TensorProduct(order=KroneckerDelta(0.3),
                                length=SquareExponential(0.05)),
         'q': [0.01, 0.05, 0.1, 0.5]
@@ -252,6 +253,8 @@ def test_mlgk_gradient(caseitem):
     for q in case['q']:
 
         mlgk = MarginalizedGraphKernel(knode, kedge, q=q)
+
+        np.set_printoptions(precision=4, linewidth=999, suppress=True)
 
         R, dR = mlgk(G, nodal=False, eval_gradient=True)
 
@@ -563,3 +566,39 @@ def test_mlgk_fixed_hyperparameters():
     assert(dRvv[:, :, kernelVF.active_theta_mask] == pytest.approx(dRvf))
     assert(dRvv[:, :, kernelFV.active_theta_mask] == pytest.approx(dRfv))
     assert(dRvv[:, :, kernelFF.active_theta_mask] == pytest.approx(dRff))
+
+
+def test_mlgk_kernel_range_check():
+    MarginalizedGraphKernel(
+        node_kernel=KroneckerDelta(1e-7),
+        edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+    )
+    MarginalizedGraphKernel(
+        node_kernel=TensorProduct(feature=KroneckerDelta(0.5)),
+        edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+    )
+    with pytest.warns(DeprecationWarning):
+        MarginalizedGraphKernel(
+            node_kernel=KroneckerDelta(0),
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+        )
+    with pytest.warns(DeprecationWarning):
+        MarginalizedGraphKernel(
+            node_kernel=TensorProduct(feature=KroneckerDelta(0.5)) + 1,
+            edge_kernel=SquareExponential(1.0)
+        )
+    with pytest.warns(DeprecationWarning):
+        MarginalizedGraphKernel(
+            node_kernel=TensorProduct(feature=KroneckerDelta(0.5)),
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0)) + 1
+        )
+    with pytest.warns(DeprecationWarning):
+        MarginalizedGraphKernel(
+            node_kernel=KroneckerDelta(0.5) * 2,
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0))
+        )
+    with pytest.warns(DeprecationWarning):
+        MarginalizedGraphKernel(
+            node_kernel=TensorProduct(feature=KroneckerDelta(0.5)),
+            edge_kernel=TensorProduct(attribute=SquareExponential(1.0)) * 2
+        )

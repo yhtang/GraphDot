@@ -1,5 +1,12 @@
 # Change log of GraphDot
 
+## 0.7b2 (2020-09-16)
+
+- Added a `DotProduct` microkernel for vector-valued node and edge features.
+- Added a `.normalized` attribute to all elementary and composite microkernels.
+- Perform value range check for the node and edge kernels during graph kernel
+  creation.
+
 ## 0.7b1 (2020-09-12)
 
 - Performance improvements to the variance minimizing active learner.

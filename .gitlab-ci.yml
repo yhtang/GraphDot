@@ -14,10 +14,10 @@ Lint:
   script:
     - make lint
 
-Python3.6:
-  stage: unit-test
-  script:
-    - tox -e py36
+# Python3.6:
+#   stage: unit-test
+#   script:
+#     - tox -e py36
 
 Python3.7:
   stage: unit-test

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import numbers
+import warnings
 import itertools as it
 from collections import namedtuple
 import numpy as np
@@ -63,6 +64,25 @@ class MarginalizedGraphKernel:
         self.element_dtype = dtype
 
         self.backend = backend_factory(backend)
+
+        if self.node_kernel.minmax[0] <= 0 or self.node_kernel.minmax[1] > 1:
+            warnings.warn(
+                'Node kernel value range should be within (0, 1], '
+                f'got {self.node_kernel.minmax} for {self.node_kernel}. '
+                'This will not be allowed in a future version. '
+                'Consider adding a small constant or using the `.normalized` '
+                'attribute of the kernel.',
+                DeprecationWarning
+            )
+        if self.edge_kernel.minmax[0] < 0 or self.edge_kernel.minmax[1] > 1:
+            warnings.warn(
+                'Edge kernel value range must be within [0, 1], '
+                f'got {self.edge_kernel.minmax} for {self.edge_kernel}. '
+                'This will not be allowed in a future version. '
+                'Consider adding a small constant or using the `.normalized` '
+                'attribute of the kernel.',
+                DeprecationWarning
+            )
 
     def _get_starting_probability(self, p):
         if isinstance(p, StartingProbability):

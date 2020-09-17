@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from graphdot.microkernel import (
+    MicroKernel,
     Constant,
     KroneckerDelta,
     SquareExponential,
@@ -16,6 +17,7 @@ from graphdot.microkernel import (
     TensorProduct,
     Additive,
     Convolution,
+    DotProduct
 )
 
 inf = float('inf')
@@ -53,6 +55,10 @@ def test_simple_kernel(kernel):
     another = copy.copy(kernel)
     for t1, t2 in zip(kernel.theta, another.theta):
         assert(t1 == t2)
+    ''' range check '''
+    assert(len(kernel.minmax) == 2)
+    assert(kernel.minmax[0] >= 0)
+    assert(kernel.minmax[1] >= kernel.minmax[0])
 
 
 def test_constant_kernel():
@@ -74,6 +80,9 @@ def test_constant_kernel():
             with pytest.raises(ValueError):
                 Constant(1.0, c_bounds=tuple([1] * n))
     Constant(1.0, c_bounds='fixed')
+    ''' range check '''
+    assert(kernel.minmax[0] == kernel.c)
+    assert(kernel.minmax[1] == kernel.c)
 
 
 def test_kronecker_delta_kernel():
@@ -101,6 +110,9 @@ def test_kronecker_delta_kernel():
             with pytest.raises(ValueError):
                 KroneckerDelta(1.0, h_bounds=tuple([1] * n))
     KroneckerDelta(1.0, h_bounds='fixed')
+    ''' range check '''
+    assert(kernel.minmax[0] == kernel.h)
+    assert(kernel.minmax[1] == 1)
 
 
 def test_square_exponential_kernel():
@@ -121,6 +133,9 @@ def test_square_exponential_kernel():
             with pytest.raises(ValueError):
                 SquareExponential(1.0, length_scale_bounds=tuple([1] * n))
     SquareExponential(1.0, length_scale_bounds='fixed')
+    ''' range check '''
+    assert(kernel.minmax[0] == 0)
+    assert(kernel.minmax[1] == 1)
 
 
 def test_product_quasikernel():
@@ -141,6 +156,10 @@ def test_product_quasikernel():
     kernel.theta = kernel.theta
     ''' representation meaningness '''
     assert(eval(repr(kernel)).theta == kernel.theta)
+    ''' range check '''
+    assert(len(kernel.minmax) == 2)
+    assert(kernel.minmax[0] is None)
+    assert(kernel.minmax[1] is None)
 
 
 @pytest.mark.parametrize('kernel', [
@@ -171,6 +190,10 @@ def test_normalization(kernel):
     another = copy.copy(k)
     for t1, t2 in zip(k.theta, another.theta):
         assert(t1 == t2)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] >= 0)
+    assert(k.minmax[1] == 1)
 
 
 @pytest.mark.parametrize('k1', simple_kernels)
@@ -208,6 +231,10 @@ def test_tensor_product_2(k1, k2):
     assert(repr(k2) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] >= 0)
+    assert(k.minmax[1] >= k.minmax[0])
 
 
 @pytest.mark.parametrize('k1', simple_kernels)
@@ -241,6 +268,10 @@ def test_tensor_product_3(k1, k2, k3):
     assert(repr(k3) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] >= 0)
+    assert(k.minmax[1] >= k.minmax[0])
 
 
 @pytest.mark.parametrize('k1', simple_kernels)
@@ -278,6 +309,10 @@ def test_additive_2(k1, k2):
     assert(repr(k2) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] == k1.minmax[0] + k2.minmax[0])
+    assert(k.minmax[1] == k1.minmax[1] + k2.minmax[1])
 
 
 @pytest.mark.parametrize('k1', simple_kernels)
@@ -311,11 +346,15 @@ def test_additive_3(k1, k2, k3):
     assert(repr(k3) in repr(k))
     ''' C++ code generation '''
     assert(k.dtype.isalignedstruct)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] >= 0)
+    assert(k.minmax[1] >= k.minmax[0])
 
 
 @pytest.mark.parametrize('kernel', simple_kernels)
 def test_convolution(kernel):
-    k = Convolution(kernel, normalize=False)
+    k = Convolution(kernel, mean=False)
     ''' length cases '''
     assert(k([], []) == 0)
     assert(k(tuple(), tuple()) == 0)
@@ -337,6 +376,10 @@ def test_convolution(kernel):
     another = copy.copy(k)
     for t1, t2 in zip(k.theta, another.theta):
         assert(t1 == t2)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] >= 0)
+    assert(k.minmax[1] >= k.minmax[0])
 
 
 @pytest.mark.parametrize('kernel', simple_kernels)
@@ -363,6 +406,10 @@ def test_kernel_add_constant(kernel):
         kadd.theta = kadd.theta
         ''' C++ code generation '''
         assert(kadd.dtype.isalignedstruct)
+        ''' range check '''
+        assert(len(kadd.minmax) == 2)
+        assert(kadd.minmax[0] >= 0)
+        assert(kadd.minmax[1] >= kadd.minmax[0])
 
 
 @pytest.mark.parametrize('k1', simple_kernels)
@@ -393,6 +440,14 @@ def test_kernel_add_kernel(k1, k2):
     kadd.theta = kadd.theta
     ''' C++ code generation '''
     assert(kadd.dtype.isalignedstruct)
+    ''' range check '''
+    assert(len(kadd.minmax) == 2)
+    assert(kadd.minmax[0] >= 0)
+    assert(kadd.minmax[1] >= kadd.minmax[0])
+    ''' range check '''
+    assert(len(kadd.minmax) == 2)
+    assert(kadd.minmax[0] == k1.minmax[0] + k2.minmax[0])
+    assert(kadd.minmax[1] == k1.minmax[1] + k2.minmax[1])
 
 
 @pytest.mark.parametrize('kernel', simple_kernels)
@@ -419,6 +474,10 @@ def test_kernel_mul_constant(kernel):
         kmul.theta = kmul.theta
         ''' C++ code generation '''
         assert(kmul.dtype.isalignedstruct)
+        ''' range check '''
+        assert(len(kmul.minmax) == 2)
+        assert(kmul.minmax[0] >= 0)
+        assert(kmul.minmax[1] >= kmul.minmax[0])
 
 
 @pytest.mark.parametrize('k1', simple_kernels)
@@ -449,6 +508,14 @@ def test_kernel_mul_kernel(k1, k2):
     kmul.theta = kmul.theta
     ''' C++ code generation '''
     assert(kmul.dtype.isalignedstruct)
+    ''' range check '''
+    assert(len(kmul.minmax) == 2)
+    assert(kmul.minmax[0] >= 0)
+    assert(kmul.minmax[1] >= kmul.minmax[0])
+    ''' range check '''
+    assert(len(kmul.minmax) == 2)
+    assert(kmul.minmax[0] == k1.minmax[0] * k2.minmax[0])
+    assert(kmul.minmax[1] == k1.minmax[1] * k2.minmax[1])
 
 
 @pytest.mark.parametrize('kernel', simple_kernels)
@@ -475,6 +542,10 @@ def test_kernel_exp_constant(kernel):
     kexp.theta = kexp.theta
     ''' C++ code generation '''
     assert(kexp.dtype.isalignedstruct)
+    ''' range check '''
+    assert(len(kexp.minmax) == 2)
+    assert(kexp.minmax[0] == kernel.minmax[0]**2)
+    assert(kexp.minmax[1] == kernel.minmax[1]**2)
 
 
 @pytest.mark.parametrize('k1', simple_kernels)
@@ -506,6 +577,52 @@ def test_kernel_exp_kernel(k1, k2):
         kexp.theta = kexp.theta
         ''' C++ code generation '''
         assert(kexp.dtype.isalignedstruct)
+        ''' range check '''
+        assert(len(kexp.minmax) == 2)
+        assert(kexp.minmax[0] == k1.minmax[0]**k2.minmax[0])
+        assert(kexp.minmax[1] == k1.minmax[1]**k2.minmax[1])
     else:
         with pytest.raises(ValueError):
             kexp = k1**k2
+
+
+@pytest.mark.parametrize('kernel', simple_kernels + [
+    simple_kernels[0] + simple_kernels[1],
+    simple_kernels[-1] * simple_kernels[-2],
+    simple_kernels[-1]**3,
+    simple_kernels[0] + np.pi,
+    TensorProduct(
+        a=simple_kernels[0],
+        b=simple_kernels[-1]
+    ),
+    Additive(
+        x=simple_kernels[0],
+        y=simple_kernels[-1]
+    )
+])
+def test_normliazed_property(kernel):
+    assert(hasattr(kernel, 'normalized'))
+    assert(isinstance(kernel.normalized, MicroKernel))
+    assert(kernel.normalized.name == 'Normalize')
+    assert(kernel.normalized.minmax[0] >= 0)
+    assert(kernel.normalized.minmax[1] == 1)
+
+
+def test_dotproduct():
+    k = DotProduct()
+    ''' length cases '''
+    assert(k([], []) == 0)
+    assert(k(tuple(), tuple()) == 0)
+    ''' check by definition '''
+    for i, j in ([1, 2], [0, 2], [2, 4]):
+        for n in range(10):
+            assert(k([i] * n, [j] * n) == i * j * n)
+    ''' representation generation '''
+    eval(repr(k))
+    ''' C++ counterpart and hyperparameter retrieval '''
+    assert(k.dtype.isalignedstruct)
+    copy.copy(k)
+    ''' range check '''
+    assert(len(k.minmax) == 2)
+    assert(k.minmax[0] >= 0)
+    assert(k.minmax[1] >= k.minmax[0])
