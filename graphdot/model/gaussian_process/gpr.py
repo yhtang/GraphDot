@@ -459,22 +459,16 @@ class GaussianProcessRegressor:
         return retval
 
     def _hyper_opt(self, fun, x0, tol, repeat, theta_jitter, verbose):
-        X0 = np.copy(self.kernel.theta)
         opt = None
 
         for r in range(repeat):
-            if r > 0:
-                x0 = X0 + theta_jitter * np.random.randn(len(X0))
-            else:
-                x0 = X0
-
             if verbose:
                 mprint.table_start()
 
             opt_local = minimize(
                 fun=fun,
                 method=self.optimizer,
-                x0=x0,
+                x0=x0 + theta_jitter * np.random.randn(len(x0)) if r else x0,
                 bounds=self.kernel.bounds,
                 jac=True,
                 tol=tol,
