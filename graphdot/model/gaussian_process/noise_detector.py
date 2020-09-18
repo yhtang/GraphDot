@@ -146,7 +146,7 @@ class GPRNoiseDetector:
                     'because a pseudoinverse could not be computed.'
                 )
 
-    def fit(self, X, y, w, loss='likelihood', tol=1e-5, repeat=1,
+    def fit(self, X, y, w, udistro=None, tol=1e-5, repeat=1,
             theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
@@ -160,10 +160,10 @@ class GPRNoiseDetector:
             Output/target values of the training data.
         w: float
             The strength of L1 penalty on the noise terms.
-        loss: 'likelihood' or 'loocv'
-            The loss function to be minimzed during training. Could be either
-            'likelihood' (negative log-likelihood) or 'loocv' (mean-square
-            leave-one-out cross validation error).
+        udistro: callable
+            A random number generator for the initial guesses of the
+            uncertainties. A lognormal distribution will be used by
+            default if the argument is None.
         tol: float
             Tolerance for termination.
         repeat: int
@@ -186,23 +186,14 @@ class GPRNoiseDetector:
         '''hyperparameter optimization'''
         if self.optimizer:
 
-            if loss == 'likelihood':
-                objective = self.log_marginal_likelihood
-
             opt = self._hyper_opt_l1reg(
-                lambda theta_ext, objective=objective: objective(
+                lambda theta_ext: self.log_marginal_likelihood(
                     theta_ext, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                np.concatenate((
-                    self.kernel.theta,
-                    np.log(np.ones_like(y) * self.sigma_bounds[0])
-                )),
-                np.concatenate((
-                    np.zeros_like(self.kernel.theta),
-                    np.ones_like(y) * w
-                )),
-                tol, repeat, theta_jitter, verbose
+                self.kernel.theta,
+                udistro,
+                w, tol, repeat, theta_jitter, verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -215,7 +206,7 @@ class GPRNoiseDetector:
                 self._sigma = np.exp(log_sigma)
             else:
                 raise RuntimeError(
-                    f'Training using the {loss} loss did not converge, got:\n'
+                    f'Training did not converge, got:\n'
                     f'{opt}'
                 )
 
@@ -362,14 +353,25 @@ class GPRNoiseDetector:
 
         return retval
 
-    def _hyper_opt_l1reg(self, fun, x0, w, tol, repeat, theta_jitter, verbose):
+    def _hyper_opt_l1reg(
+        self, fun, theta0, udistro, w, tol, repeat, theta_jitter, verbose
+    ):
+        if udistro is None:
+            def udistro(n):
+                return np.std(self.y) * np.random.lognormal(-1.0, 1.0, n)
+        assert callable(udistro)
+
+        penalty = np.concatenate((
+            np.zeros_like(theta0),
+            np.ones_like(self.y) * w
+        ))
 
         def ext_fun(x):
             exp_x = np.exp(x)
             val, jac = fun(x)
             return (
-                val + np.linalg.norm(w * exp_x, ord=1),
-                jac + w * exp_x
+                val + np.linalg.norm(penalty * exp_x, ord=1),
+                jac + penalty * exp_x
             )
 
         opt = None
@@ -378,10 +380,15 @@ class GPRNoiseDetector:
             if verbose:
                 mprint.table_start()
 
+            if r == 0:
+                theta = theta0
+            else:
+                theta = theta0 + theta_jitter * np.random.randn(len(theta))
+
             opt_local = minimize(
                 fun=ext_fun,
                 method=self.optimizer,
-                x0=x0 + theta_jitter * np.random.randn(len(x0)) if r else x0,
+                x0=np.concatenate((theta, np.log(udistro(len(self.y))))),
                 bounds=np.vstack((
                     self.kernel.bounds,
                     np.tile(np.log(self.sigma_bounds), (len(self.y), 1)),
