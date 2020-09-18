@@ -52,7 +52,7 @@ class GPRNoiseDetector:
     def __init__(self, kernel, alpha_bounds=(1e-8, np.inf), beta=1e-8,
                  optimizer=True, normalize_y=False, kernel_options={}):
         self.kernel = kernel
-        self.alpha_bounds = alpha_bounds
+        self.sigma_bounds = np.sqrt(alpha_bounds)
         self.beta = beta
         self.optimizer = optimizer
         if self.optimizer is True:
@@ -95,7 +95,13 @@ class GPRNoiseDetector:
 
     @property
     def y_uncertainty(self):
-        return np.sqrt(self.alpha)
+        '''The learned uncertainty magnitude of each training sample.'''
+        try:
+            return self._sigma
+        except AttributeError:
+            raise AttributeError(
+                'Uncertainty must be learned via fit().'
+            )
 
     def _gramian(self, alpha, X, Y=None, kernel=None, jac=False, diag=False):
         kernel = kernel or self.kernel
@@ -190,7 +196,7 @@ class GPRNoiseDetector:
                 ),
                 np.concatenate((
                     self.kernel.theta,
-                    np.log(np.ones_like(y) * self.alpha_bounds[0])
+                    np.log(np.ones_like(y) * self.sigma_bounds[0])
                 )),
                 np.concatenate((
                     np.zeros_like(self.kernel.theta),
@@ -202,11 +208,11 @@ class GPRNoiseDetector:
                 print(f'Optimization result:\n{opt}')
 
             if opt.success:
-                self.kernel.theta, self.alpha = fold_like(
+                self.kernel.theta, log_sigma = fold_like(
                     opt.x,
                     (self.kernel.theta, self.y)
                 )
-                self.alpha = np.exp(self.alpha)
+                self._sigma = np.exp(log_sigma)
             else:
                 raise RuntimeError(
                     f'Training using the {loss} loss did not converge, got:\n'
@@ -214,7 +220,7 @@ class GPRNoiseDetector:
                 )
 
         '''build and store GPR model'''
-        self.K = K = self._gramian(self.alpha, self.X)
+        self.K = K = self._gramian(self._sigma**2, self.X)
         self.Kinv, _ = self._invert(K)
         self.Ky = self.Kinv @ self.y
         return self
@@ -299,8 +305,8 @@ class GPRNoiseDetector:
         """
         X = X if X is not None else self.X
         y = y if y is not None else self.y
-        theta, alpha = fold_like(theta_ext, (self.kernel.theta, y))
-        alpha = np.exp(alpha)
+        theta, log_sigma = fold_like(theta_ext, (self.kernel.theta, y))
+        sigma = np.exp(log_sigma)
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -311,9 +317,9 @@ class GPRNoiseDetector:
         t_kernel = time.perf_counter()
 
         if eval_gradient is True:
-            K, dK = self._gramian(alpha, X, kernel=kernel, jac=True)
+            K, dK = self._gramian(sigma**2, X, kernel=kernel, jac=True)
         else:
-            K = self._gramian(alpha, X, kernel=kernel)
+            K = self._gramian(sigma**2, X, kernel=kernel)
 
         t_kernel = time.perf_counter() - t_kernel
 
@@ -333,7 +339,7 @@ class GPRNoiseDetector:
                 np.einsum('ij,ijk->k', Kinv, dK) -
                 np.einsum('i,ijk,j', Ky, dK, Ky)
             )
-            d_alpha = Kinv_diag - Ky**2
+            d_alpha = (Kinv_diag - Ky**2) * 2 * sigma
             retval = (
                 yKy + logdet,
                 np.concatenate((d_theta, d_alpha)) * np.exp(theta_ext)
@@ -378,7 +384,7 @@ class GPRNoiseDetector:
                 x0=x0 + theta_jitter * np.random.randn(len(x0)) if r else x0,
                 bounds=np.vstack((
                     self.kernel.bounds,
-                    np.tile(np.log(self.alpha_bounds), (len(self.y), 1)),
+                    np.tile(np.log(self.sigma_bounds), (len(self.y), 1)),
                 )),
                 jac=True,
                 tol=tol,
