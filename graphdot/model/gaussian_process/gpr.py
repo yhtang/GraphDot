@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import time
 import numpy as np
-from scipy.optimize import minimize
 from graphdot.util.printer import markdown as mprint
 from .base import GaussianProcessRegressorBase
 
@@ -96,13 +95,18 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             elif loss == 'loocv':
                 objective = self.squared_loocv_error
 
+            def xgen(n):
+                x0 = self.kernel.theta.copy()
+                yield x0
+                yield from x0 + theta_jitter * np.random.randn(n - 1, len(x0))
+
             opt = self._hyper_opt(
-                lambda theta, objective=objective: objective(
+                method=self.optimizer,
+                fun=lambda theta, objective=objective: objective(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                self.kernel.theta.copy(),
-                tol, repeat, theta_jitter, verbose
+                xgen=xgen(repeat), tol=tol, verbose=verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -150,7 +154,7 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Ks = self._gramian(self.alpha, Z, self.X)
+        Ks = self._gramian(None, Z, self.X)
         ymean = (Ks @ self.Ky) * self.y_std + self.y_mean
         if return_std is True:
             Kss = self._gramian(self.alpha, Z, diag=True)
@@ -379,24 +383,3 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             )
 
         return retval
-
-    def _hyper_opt(self, fun, x0, tol, repeat, theta_jitter, verbose):
-        opt = None
-
-        for r in range(repeat):
-            if verbose:
-                mprint.table_start()
-
-            opt_local = minimize(
-                fun=fun,
-                method=self.optimizer,
-                x0=x0 + theta_jitter * np.random.randn(len(x0)) if r else x0,
-                bounds=self.kernel.bounds,
-                jac=True,
-                tol=tol,
-            )
-
-            if not opt or (opt_local.success and opt_local.fun < opt.fun):
-                opt = opt_local
-
-        return opt

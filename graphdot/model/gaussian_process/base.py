@@ -4,8 +4,10 @@ import os
 import pickle
 import warnings
 import numpy as np
+from scipy.optimize import minimize
 from graphdot.linalg.cholesky import CholSolver
 from graphdot.linalg.spectral import pinvh
+from graphdot.util.printer import markdown as mprint
 
 
 class GaussianProcessRegressorBase:
@@ -95,6 +97,27 @@ class GaussianProcessRegressorBase:
 
     def _invert_pseudoinverse(self, K, rcond):
         return pinvh(K, rcond=rcond, mode='clamp', return_nlogdet=True)
+
+    def _hyper_opt(self, method, fun, xgen, tol, verbose):
+        opt = None
+
+        for x in xgen:
+            if verbose:
+                mprint.table_start()
+
+            opt_local = minimize(
+                fun=fun,
+                method=method,
+                x0=x,
+                bounds=self.kernel.bounds,
+                jac=True,
+                tol=tol,
+            )
+
+            if not opt or (opt_local.success and opt_local.fun < opt.fun):
+                opt = opt_local
+
+        return opt
 
     def save(self, path, filename='model.pkl', overwrite=False):
         """Save the trained GaussianProcessRegressor with the associated data

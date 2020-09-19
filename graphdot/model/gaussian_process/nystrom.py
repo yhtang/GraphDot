@@ -6,10 +6,10 @@ import numpy as np
 from graphdot.util.printer import markdown as mprint
 import graphdot.linalg.low_rank as lr
 from graphdot.linalg.spectral import powerh
-from .gpr import GaussianProcessRegressor
+from .base import GaussianProcessRegressorBase
 
 
-class LowRankApproximateGPR(GaussianProcessRegressor):
+class LowRankApproximateGPR(GaussianProcessRegressorBase):
     r"""Accelerated Gaussian process regression (GPR) using the Nystrom low-rank
     approximation.
 
@@ -45,14 +45,16 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
     def __init__(self, kernel, alpha=1e-7, beta=1e-7,
                  optimizer=None, normalize_y=False, kernel_options={}):
-        self.kernel = kernel
+        super().__init__(
+            kernel,
+            normalize_y=normalize_y,
+            kernel_options=kernel_options
+        )
         self.alpha = alpha
         self.beta = beta
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
-        self.normalize_y = normalize_y
-        self.kernel_options = kernel_options
 
     @property
     def C(self):
@@ -72,7 +74,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     def _corespace(self, C=None, Kcc=None):
         assert(C is None or Kcc is None)
         if Kcc is None:
-            Kcc = self._gramian(C)
+            Kcc = self._gramian(self.alpha, C)
         try:
             return powerh(Kcc, -0.5, return_symmetric=False)
         except np.linalg.LinAlgError:
@@ -137,13 +139,18 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                     '(ง๑ •̀_•́)ง LOOCV training not ready yet.'
                 )
 
+            def xgen(n):
+                x0 = self.kernel.theta.copy()
+                yield x0
+                yield from x0 + theta_jitter * np.random.randn(n - 1, len(x0))
+
             opt = self._hyper_opt(
-                lambda theta, objective=objective: objective(
+                method=self.optimizer,
+                fun=lambda theta, objective=objective: objective(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                self.kernel.theta.copy(),
-                tol, repeat, theta_jitter, verbose
+                xgen=xgen(repeat), tol=tol, verbose=verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -158,7 +165,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         '''build and store GPR model'''
         self.Kcc_rsqrt = self._corespace(C=self.C)
-        self.Kxc = self._gramian(self.X, self.C)
+        self.Kxc = self._gramian(None, self.X, self.C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
         self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').inverse()
         self.Ky = self.Kinv @ self.y
@@ -273,19 +280,19 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Kzc = self._gramian(Z, self.C)
+        Kzc = self._gramian(None, Z, self.C)
         Fzc = Kzc @ self.Kcc_rsqrt
         Kzx = lr.dot(Fzc, self.Fxc.T)
 
         ymean = Kzx @ self.Ky * self.y_std + self.y_mean
         if return_std is True:
-            Kzz = self._gramian(Z, diag=True)
+            Kzz = self._gramian(self.alpha, Z, diag=True)
             std = np.sqrt(
                 np.maximum(Kzz - (Kzx @ self.Kinv @ Kzx.T).diagonal(), 0)
             )
             return (ymean, std * self.y_std)
         elif return_cov is True:
-            Kzz = self._gramian(Z)
+            Kzz = self._gramian(self.alpha, Z)
             cov = np.maximum(Kzz - (Kzx @ self.Kinv @ Kzx.T).todense(), 0)
             return (ymean, cov * self.y_std**2)
         else:
@@ -331,7 +338,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         if not hasattr(self, 'Kcc_rsqrt'):
             raise RuntimeError('Model not trained.')
-        Kzc = self._gramian(Z, self.C)
+        Kzc = self._gramian(None, Z, self.C)
 
         Cov = Kzc.T @ Kzc
         Cov.flat[::len(self.C) + 1] += self.alpha
@@ -422,11 +429,11 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         t_kernel = time.perf_counter()
         if eval_gradient is True:
-            Kxc, d_Kxc = self._gramian(X, C, kernel=kernel, jac=True)
-            Kcc, d_Kcc = self._gramian(C, kernel=kernel, jac=True)
+            Kxc, d_Kxc = self._gramian(None, X, C, kernel=kernel, jac=True)
+            Kcc, d_Kcc = self._gramian(self.alpha, C, kernel=kernel, jac=True)
         else:
-            Kxc = self._gramian(X, C, kernel=kernel)
-            Kcc = self._gramian(C, kernel=kernel)
+            Kxc = self._gramian(None, X, C, kernel=kernel)
+            Kcc = self._gramian(self.alpha, C, kernel=kernel)
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
