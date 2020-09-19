@@ -36,20 +36,20 @@ class GaussianProcessRegressorBase:
     def y(self):
         '''The output/target values of the training set.'''
         try:
-            return self._y
+            return self._y * self._ystd + self._ymean
         except AttributeError:
             raise AttributeError(
                 'Training data does not exist. Please provide using fit().'
             )
 
     @y.setter
-    def y(self, _y):
+    def y(self, y):
         if self.normalize_y is True:
-            self.y_mean, self.y_std = np.mean(_y), np.std(_y)
-            self._y = (np.asarray(_y) - self.y_mean) / self.y_std
+            self._ymean, self._ystd = np.mean(y), np.std(y)
+            self._y = (np.asarray(y) - self._ymean) / self._ystd
         else:
-            self.y_mean, self.y_std = 0, 1
-            self._y = np.asarray(_y)
+            self._ymean, self._ystd = 0, 1
+            self._y = np.asarray(y)
 
     def _gramian(self, alpha, X, Y=None, kernel=None, jac=False, diag=False):
         kernel = kernel or self.kernel

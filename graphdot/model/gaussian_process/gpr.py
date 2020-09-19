@@ -120,9 +120,9 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
                 )
 
         '''build and store GPR model'''
-        self.K = K = self._gramian(self.alpha, self.X)
+        self.K = K = self._gramian(self.alpha, self._X)
         self.Kinv, _ = self._invert(K, rcond=self.beta)
-        self.Ky = self.Kinv @ self.y
+        self.Ky = self.Kinv @ self._y
         return self
 
     def fit_loocv(self, X, y, **options):
@@ -154,18 +154,18 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Ks = self._gramian(None, Z, self.X)
-        ymean = (Ks @ self.Ky) * self.y_std + self.y_mean
+        Ks = self._gramian(None, Z, self._X)
+        ymean = (Ks @ self.Ky) * self._ystd + self._ymean
         if return_std is True:
             Kss = self._gramian(self.alpha, Z, diag=True)
             std = np.sqrt(
                 np.maximum(0, Kss - (Ks @ (self.Kinv @ Ks.T)).diagonal())
             )
-            return (ymean, std * self.y_std)
+            return (ymean, std * self._ystd)
         elif return_cov is True:
             Kss = self._gramian(self.alpha, Z)
             cov = np.maximum(0, Kss - Ks @ (self.Kinv @ Ks.T))
-            return (ymean, cov * self.y_std**2)
+            return (ymean, cov * self._ystd**2)
         else:
             return ymean
 
@@ -245,8 +245,8 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             is True.
         """
         theta = theta if theta is not None else self.kernel.theta
-        X = X if X is not None else self.X
-        y = y if y is not None else self.y
+        X = X if X is not None else self._X
+        y = y if y is not None else self._y
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -331,8 +331,8 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             is True.
         """
         theta = theta if theta is not None else self.kernel.theta
-        X = X if X is not None else self.X
-        y = y if y is not None else self.y
+        X = X if X is not None else self._X
+        y = y if y is not None else self._y
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)

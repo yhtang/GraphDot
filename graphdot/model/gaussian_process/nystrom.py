@@ -164,96 +164,13 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
                 )
 
         '''build and store GPR model'''
-        self.Kcc_rsqrt = self._corespace(C=self.C)
-        self.Kxc = self._gramian(None, self.X, self.C)
+        self.Kcc_rsqrt = self._corespace(C=self._C)
+        self.Kxc = self._gramian(None, self._X, self._C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
         self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').inverse()
-        self.Ky = self.Kinv @ self.y
+        self.Ky = self.Kinv @ self._y
 
         return self
-
-    # def fit_loocv(self, X, y, return_mean=False, return_std=False,
-    #               tol=1e-4, repeat=1, theta_jitter=1.0, verbose=False):
-    #     """Train a GPR model and return the leave-one-out cross validation
-    #     results on the dataset. If the `optimizer` argument was set while
-    #     initializing the GPR object, the hyperparameters of the kernel will be
-    #     optimized with regard to the LOOCV RMSE.
-
-    #     Parameters
-    #     ----------
-    #     X: list of objects or feature vectors.
-    #         Input values of the training data.
-    #     y: 1D array
-    #         Output/target values of the training data.
-    #     return_mean: boolean
-    #         If True, the leave-one-out predictive mean of the model on the
-    #         training data are returned along with the model.
-    #     return_std: boolean
-    #         If True, the leave-one-out predictive standard deviations of the
-    #         model on the training data are returned along with the model.
-    #     tol: float
-    #         Tolerance for termination.
-    #     repeat: int
-    #         Repeat the hyperparameter optimization by the specified number of
-    #         times and return the best result.
-    #     theta_jitter: float
-    #         Standard deviation of the random noise added to the initial
-    #         logscale hyperparameters across repeated optimization runs.
-    #     verbose: bool
-    #         Whether or not to print out the optimization progress and outcome.
-
-    #     Returns
-    #     -------
-    #     self: GaussianProcessRegressor
-    #         returns an instance of self.
-    #     ymean: 1D array, only if return_mean is True
-    #         Mean of the leave-one-out predictive distribution at query points.
-    #     std: 1D array, only if return_std is True
-    #         Standard deviation of the leave-one-out predictive distribution.
-    #     """
-    #     self.X = X
-    #     self.y = y
-
-    #     '''hyperparameter optimization'''
-    #     if self.optimizer:
-    #         opt = self._hyper_opt(
-    #             lambda theta, self=self: self.squared_loocv_error(
-    #                 theta, eval_gradient=True, clone_kernel=False,
-    #                 verbose=verbose
-    #             ),
-    #             self.kernel.theta.copy(),
-    #             tol, repeat, theta_jitter, verbose
-    #         )
-    #         if verbose:
-    #             print(f'Optimization result:\n{opt}')
-
-    #         if opt.success:
-    #             self.kernel.theta = opt.x
-    #         else:
-    #             raise RuntimeError(
-    #                 f'Minimum LOOCV optimization did not converge, got:\n'
-    #                 f'{opt}'
-    #             )
-
-    #     '''build and store GPR model'''
-    #     self._compute_low_rank_subspace(inplace=True)
-    #     self.Kxc = self._gramian(self.X, self.C)
-    #     self.Fxc = self.Kxc @ self.Kcc_rsqrt
-    #     self.Kinv = LowRankApproximateInverse(self.Fxc, self.beta)
-    #     self.Ky = self.Kinv @ self.y
-
-    #     if return_mean is False and return_std is False:
-    #         return self
-    #     else:
-    #         retvals = []
-    #         Kinv_diag = self.Kinv.diagonal()
-    #         if return_mean is True:
-    #             ymean = self.y - self.Kinv @ self.y / Kinv_diag
-    #             retvals.append(ymean * self.y_std + self.y_mean)
-    #         if return_std is True:
-    #             ystd = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
-    #             retvals.append(ystd * self.y_std)
-    #         return (self, *retvals)
 
     def predict(self, Z, return_std=False, return_cov=False):
         """Predict using the trained GPR model.
@@ -280,21 +197,21 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Kzc = self._gramian(None, Z, self.C)
+        Kzc = self._gramian(None, Z, self._C)
         Fzc = Kzc @ self.Kcc_rsqrt
         Kzx = lr.dot(Fzc, self.Fxc.T)
 
-        ymean = Kzx @ self.Ky * self.y_std + self.y_mean
+        ymean = Kzx @ self.Ky * self._ystd + self._ymean
         if return_std is True:
             Kzz = self._gramian(self.alpha, Z, diag=True)
             std = np.sqrt(
                 np.maximum(Kzz - (Kzx @ self.Kinv @ Kzx.T).diagonal(), 0)
             )
-            return (ymean, std * self.y_std)
+            return (ymean, std * self._ystd)
         elif return_cov is True:
             Kzz = self._gramian(self.alpha, Z)
             cov = np.maximum(Kzz - (Kzx @ self.Kinv @ Kzx.T).todense(), 0)
-            return (ymean, cov * self.y_std**2)
+            return (ymean, cov * self._ystd**2)
         else:
             return ymean
 
@@ -338,10 +255,10 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
 
         if not hasattr(self, 'Kcc_rsqrt'):
             raise RuntimeError('Model not trained.')
-        Kzc = self._gramian(None, Z, self.C)
+        Kzc = self._gramian(None, Z, self._C)
 
         Cov = Kzc.T @ Kzc
-        Cov.flat[::len(self.C) + 1] += self.alpha
+        Cov.flat[::len(self._C) + 1] += self.alpha
         Cov_rsqrt, eigvals = powerh(
             Cov, -0.5, return_symmetric=False, return_eigvals=True
         )
@@ -417,9 +334,9 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
             is True.
         """
         theta = theta if theta is not None else self.kernel.theta
-        C = C if C is not None else self.C
-        X = X if X is not None else self.X
-        y = y if y is not None else self.y
+        C = C if C is not None else self._C
+        X = X if X is not None else self._X
+        y = y if y is not None else self._y
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -522,8 +439,8 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
     #     """
     #     raise RuntimeError('Not implemented')
     #     theta = theta if theta is not None else self.kernel.theta
-    #     X = X if X is not None else self.X
-    #     y = y if y is not None else self.y
+    #     X = X if X is not None else self._X
+    #     y = y if y is not None else self._y
 
     #     if clone_kernel is True:
     #         kernel = self.kernel.clone_with_theta(theta)
