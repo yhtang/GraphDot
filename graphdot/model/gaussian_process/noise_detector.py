@@ -1,18 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
-import pickle
 import time
-import warnings
 import numpy as np
 from scipy.optimize import minimize
-from graphdot.linalg.cholesky import CholSolver
-from graphdot.linalg.spectral import pinvh
 from graphdot.util.printer import markdown as mprint
 from graphdot.util.iterable import fold_like
+from .base import GaussianProcessRegressorBase
 
 
-class GPRNoiseDetector:
+class GPRNoiseDetector(GaussianProcessRegressorBase):
     """Gaussian process regression (GPR) with noise/outlier detection via
     maximum likelihood estimation.
 
@@ -51,102 +47,28 @@ class GPRNoiseDetector:
 
     def __init__(self, kernel, alpha_bounds=(1e-8, np.inf), beta=1e-8,
                  optimizer=True, normalize_y=False, kernel_options={}):
-        self.kernel = kernel
+        super().__init__(
+            kernel,
+            normalize_y=normalize_y,
+            kernel_options=kernel_options
+        )
         self.sigma_bounds = np.sqrt(alpha_bounds)
         self.beta = beta
         self.optimizer = optimizer
         if self.optimizer is True:
             self.optimizer = 'L-BFGS-B'
-        self.normalize_y = normalize_y
-        self.kernel_options = kernel_options
-
-    @property
-    def X(self):
-        '''The input values of the training set.'''
-        try:
-            return self._X
-        except AttributeError:
-            raise AttributeError(
-                'Training data does not exist. Please provide using fit().'
-            )
-
-    @X.setter
-    def X(self, X):
-        self._X = np.asarray(X)
-
-    @property
-    def y(self):
-        '''The output/target values of the training set.'''
-        try:
-            return self._y
-        except AttributeError:
-            raise AttributeError(
-                'Training data does not exist. Please provide using fit().'
-            )
-
-    @y.setter
-    def y(self, _y):
-        if self.normalize_y is True:
-            self.y_mean, self.y_std = np.mean(_y), np.std(_y)
-            self._y = (np.asarray(_y) - self.y_mean) / self.y_std
-        else:
-            self.y_mean, self.y_std = 0, 1
-            self._y = np.asarray(_y)
 
     @property
     def y_uncertainty(self):
         '''The learned uncertainty magnitude of each training sample.'''
         try:
-            return self._sigma
+            return self._sigma * self._ystd
         except AttributeError:
             raise AttributeError(
                 'Uncertainty must be learned via fit().'
             )
 
-    def _gramian(self, alpha, X, Y=None, kernel=None, jac=False, diag=False):
-        kernel = kernel or self.kernel
-        if Y is None:
-            if diag is True:
-                return kernel.diag(X, **self.kernel_options) + alpha
-            else:
-                if jac is True:
-                    K, J = kernel(X, eval_gradient=True, **self.kernel_options)
-                    K.flat[::len(K) + 1] += alpha
-                    return K, J
-                else:
-                    K = kernel(X, **self.kernel_options)
-                    K.flat[::len(K) + 1] += alpha
-                    return K
-        else:
-            if diag is True:
-                raise ValueError(
-                    'Diagonal Gramian does not exist between two sets.'
-                )
-            else:
-                if jac is True:
-                    return kernel(X, Y, eval_gradient=True,
-                                  **self.kernel_options)
-                else:
-                    return kernel(X, Y, **self.kernel_options)
-
-    def _invert(self, K):
-        try:
-            return CholSolver(K), np.prod(np.linalg.slogdet(K))
-        except np.linalg.LinAlgError:
-            try:
-                warnings.warn(
-                    'Kernel matrix singular, falling back to pseudoinverse'
-                )
-                return pinvh(
-                    K, rcond=self.beta, mode='clamp', return_nlogdet=True
-                )
-            except np.linalg.LinAlgError:
-                raise np.linalg.LinAlgError(
-                    'The kernel matrix is likely corrupted with NaNs and Infs '
-                    'because a pseudoinverse could not be computed.'
-                )
-
-    def fit(self, X, y, w, udistro=None, tol=1e-5, repeat=1,
+    def fit(self, X, y, w, udistro=None, tol=1e-4, repeat=1,
             theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
@@ -186,14 +108,19 @@ class GPRNoiseDetector:
         '''hyperparameter optimization'''
         if self.optimizer:
 
+            def xgen(n):
+                x0 = self.kernel.theta.copy()
+                yield x0
+                yield from x0 + theta_jitter * np.random.randn(n - 1, len(x0))
+
             opt = self._hyper_opt_l1reg(
-                lambda theta_ext: self.log_marginal_likelihood(
+                method=self.optimizer,
+                fun=lambda theta_ext: self.log_marginal_likelihood(
                     theta_ext, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                self.kernel.theta,
-                udistro,
-                w, tol, repeat, theta_jitter, verbose
+                xgen=xgen(repeat),
+                udistro=udistro, w=w, tol=tol, verbose=verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -201,7 +128,7 @@ class GPRNoiseDetector:
             if opt.success:
                 self.kernel.theta, log_sigma = fold_like(
                     opt.x,
-                    (self.kernel.theta, self.y)
+                    (self.kernel.theta, self._y)
                 )
                 self._sigma = np.exp(log_sigma)
             else:
@@ -211,9 +138,9 @@ class GPRNoiseDetector:
                 )
 
         '''build and store GPR model'''
-        self.K = K = self._gramian(self._sigma**2, self.X)
-        self.Kinv, _ = self._invert(K)
-        self.Ky = self.Kinv @ self.y
+        self.K = K = self._gramian(self._sigma**2, self._X)
+        self.Kinv, _ = self._invert_pseudoinverse(K, rcond=self.beta)
+        self.Ky = self.Kinv @ self._y
         return self
 
     def predict(self, Z, return_std=False, return_cov=False):
@@ -241,18 +168,18 @@ class GPRNoiseDetector:
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Ks = self._gramian(0, Z, self.X)
-        ymean = (Ks @ self.Ky) * self.y_std + self.y_mean
+        Ks = self._gramian(None, Z, self._X)
+        ymean = (Ks @ self.Ky) * self._ystd + self._ymean
         if return_std is True:
             Kss = self._gramian(0, Z, diag=True)
             std = np.sqrt(
                 np.maximum(0, Kss - (Ks @ (self.Kinv @ Ks.T)).diagonal())
             )
-            return (ymean, std * self.y_std)
+            return (ymean, std * self._ystd)
         elif return_cov is True:
             Kss = self._gramian(0, Z)
             cov = np.maximum(0, Kss - Ks @ (self.Kinv @ Ks.T))
-            return (ymean, cov * self.y_std**2)
+            return (ymean, cov * self._ystd**2)
         else:
             return ymean
 
@@ -294,8 +221,8 @@ class GPRNoiseDetector:
             hyperparameters at position theta. Only returned when eval_gradient
             is True.
         """
-        X = X if X is not None else self.X
-        y = y if y is not None else self.y
+        X = X if X is not None else self._X
+        y = y if y is not None else self._y
         theta, log_sigma = fold_like(theta_ext, (self.kernel.theta, y))
         sigma = np.exp(log_sigma)
 
@@ -316,12 +243,8 @@ class GPRNoiseDetector:
 
         t_linalg = time.perf_counter()
 
-        Kinv, logdet = self._invert(K)
-        try:
-            Kinv_diag = Kinv.diagonal()
-        except AttributeError:
-            Kinv = Kinv @ np.eye(len(y))
-            Kinv_diag = Kinv.diagonal()
+        Kinv, logdet = self._invert_pseudoinverse(K, rcond=self.beta)
+        Kinv_diag = Kinv.diagonal()
         Ky = Kinv @ y
         yKy = y @ Ky
 
@@ -354,16 +277,16 @@ class GPRNoiseDetector:
         return retval
 
     def _hyper_opt_l1reg(
-        self, fun, theta0, udistro, w, tol, repeat, theta_jitter, verbose
+        self, method, fun, xgen, udistro, w, tol, verbose
     ):
         if udistro is None:
             def udistro(n):
-                return np.std(self.y) * np.random.lognormal(-1.0, 1.0, n)
+                return self._ystd * np.random.lognormal(-1.0, 1.0, n)
         assert callable(udistro)
 
         penalty = np.concatenate((
-            np.zeros_like(theta0),
-            np.ones_like(self.y) * w
+            np.zeros_like(self.kernel.theta),
+            np.ones_like(self._y) * w
         ))
 
         def ext_fun(x):
@@ -376,22 +299,17 @@ class GPRNoiseDetector:
 
         opt = None
 
-        for r in range(repeat):
+        for x in xgen:
             if verbose:
                 mprint.table_start()
-
-            if r == 0:
-                theta = theta0
-            else:
-                theta = theta0 + theta_jitter * np.random.randn(len(theta))
 
             opt_local = minimize(
                 fun=ext_fun,
                 method=self.optimizer,
-                x0=np.concatenate((theta, np.log(udistro(len(self.y))))),
+                x0=np.concatenate((x, np.log(udistro(len(self._y))))),
                 bounds=np.vstack((
                     self.kernel.bounds,
-                    np.tile(np.log(self.sigma_bounds), (len(self.y), 1)),
+                    np.tile(np.log(self.sigma_bounds), (len(self._y), 1)),
                 )),
                 jac=True,
                 tol=tol,
@@ -401,44 +319,3 @@ class GPRNoiseDetector:
                 opt = opt_local
 
         return opt
-
-    def save(self, path, filename='model.pkl', overwrite=False):
-        """Save the trained GaussianProcessRegressor with the associated data
-        as a pickle.
-
-        Parameters
-        ----------
-        path: str
-            The directory to store the saved model.
-        filename: str
-            The file name for the saved model.
-        overwrite: bool
-            If True, a pre-existing file will be overwritten. Otherwise, a
-            runtime error will be raised.
-        """
-        f_model = os.path.join(path, filename)
-        if os.path.isfile(f_model) and not overwrite:
-            raise RuntimeError(
-                f'Path {f_model} already exists. To overwrite, set '
-                '`overwrite=True`.'
-            )
-        store = self.__dict__.copy()
-        store['theta'] = self.kernel.theta
-        store.pop('kernel', None)
-        pickle.dump(store, open(f_model, 'wb'), protocol=4)
-
-    def load(self, path, filename='model.pkl'):
-        """Load a stored GaussianProcessRegressor model from a pickle file.
-
-        Parameters
-        ----------
-        path: str
-            The directory where the model is saved.
-        filename: str
-            The file name for the saved model.
-        """
-        f_model = os.path.join(path, filename)
-        store = pickle.load(open(f_model, 'rb'))
-        theta = store.pop('theta')
-        self.__dict__.update(**store)
-        self.kernel.theta = theta

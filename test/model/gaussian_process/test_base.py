@@ -25,14 +25,16 @@ def test_gpr_store_X_y(normalize_y):
     assert(isinstance(gpr.y, np.ndarray))
     assert(gpr.X == pytest.approx(np.array(X)))
     if normalize_y:
-        assert(np.mean(gpr.y) == pytest.approx(0))
-        assert(np.std(gpr.y) == pytest.approx(1))
-        assert(gpr.y_mean == pytest.approx(np.mean(y)))
-        assert(gpr.y_std == pytest.approx(np.std(y)))
+        assert(gpr.y == pytest.approx(np.array(y)))
+        assert(np.mean(gpr._y) == pytest.approx(0))
+        assert(np.std(gpr._y) == pytest.approx(1))
+        assert(gpr._ymean == pytest.approx(np.mean(y)))
+        assert(gpr._ystd == pytest.approx(np.std(y)))
     else:
         assert(gpr.y == pytest.approx(np.array(y)))
-        assert(gpr.y_mean == 0)
-        assert(gpr.y_std == 1)
+        assert(gpr._y == pytest.approx(np.array(y)))
+        assert(gpr._ymean == 0)
+        assert(gpr._ystd == 1)
 
 
 def test_gpr_gramian():
@@ -156,6 +158,6 @@ def test_gpr_save_load(normalize_y):
         gpr_saved = GaussianProcessRegressorBase(kernel=kernel)
         gpr_saved.load(cwd, file)
 
-        assert(gpr.y_mean == pytest.approx(gpr_saved.y_mean))
-        assert(gpr.y_std == pytest.approx(gpr_saved.y_std))
+        assert(gpr._ymean == pytest.approx(gpr_saved._ymean))
+        assert(gpr._ystd == pytest.approx(gpr_saved._ystd))
         assert(gpr._y == pytest.approx(gpr_saved._y))
