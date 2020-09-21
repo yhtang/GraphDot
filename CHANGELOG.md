@@ -1,5 +1,29 @@
 # Change log of GraphDot
 
+## 0.7 (2020-09-21)
+
+This version formalizes the inclusion of new features introduced from 0.7a1
+to 0.7b2. An (incomplete) list of features include:
+- A redesigned active learning module (`graphdot.model.active_learning`).
+- The PBR graph reordering algorithm for graph kernel acceleration
+  (`graphdot.graph.reorder.pbr`).
+- LOOCV predictions using the low-rank approximate GPR.
+- Significant improvement to the robustness of the training methods of GPR
+  and Low-rank GPR models.
+- Allow kernel/microkernel hyperparameters to be declared as 'fixed' via the
+  `*_bounds` arguments.
+- Added a `DotProduct` microkernel for vector-valued node and edge features.
+- Added a `.normalized` attribute to all elementary and composite microkernels.
+- Graph representation string can now be directly deserialized using `eval`.
+- New atomic adjacency options such as alternative bell-shaped compact
+  adjacency functions (`compactbell[a,b]`), and new length scale choices using covalent radiu etc.
+- Perform value range check for the node and edge kernels during graph
+- kernel creation.
+- Added a `to_networkx()` method to `graphdot.Graph`.
+- Enhanced the readability of the string representations of kernel
+  hyperparameters using an indented print layout.
+- Various performance and bug fixes.
+
 ## 0.7b2 (2020-09-16)
 
 - Added a `DotProduct` microkernel for vector-valued node and edge features.
@@ -17,8 +41,8 @@
 
 ## 0.7a12 (2020-09-02)
 
-- Uses a more robust pseudoinverse algorithm for GPR when the kernel matrix is
-  nearly singular.
+- Uses a more robust pseudoinverse algorithm for GPR when the kernel matrix
+  is nearly singular.
 
 ## 0.7a11 (2020-09-02)
 
