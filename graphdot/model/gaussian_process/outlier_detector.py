@@ -8,7 +8,7 @@ from graphdot.util.iterable import fold_like
 from .base import GaussianProcessRegressorBase
 
 
-class GPRNoiseDetector(GaussianProcessRegressorBase):
+class GaussianProcessOutlierDetector(GaussianProcessRegressorBase):
     """Gaussian process regression (GPR) with noise/outlier detection via
     maximum likelihood estimation.
 
@@ -16,8 +16,8 @@ class GPRNoiseDetector(GaussianProcessRegressorBase):
     ----------
     kernel: kernel instance
         The covariance function of the GP.
-    alpha_bounds: a tuple of two floats
-        Value added to the diagonal of the kernel matrix during fitting. The
+    sigma_bounds: a tuple of two floats
+        As Value added to the diagonal of the kernel matrix during fitting. The
         2-tuple will be regarded as the lower and upper bounds of the
         values added to each diagonal element, which will be
         optimized individually by training.
@@ -45,14 +45,14 @@ class GPRNoiseDetector(GaussianProcessRegressorBase):
         kernel to data.
     """
 
-    def __init__(self, kernel, alpha_bounds=(1e-8, np.inf), beta=1e-8,
+    def __init__(self, kernel, sigma_bounds=(1e-4, np.inf), beta=1e-8,
                  optimizer=True, normalize_y=False, kernel_options={}):
         super().__init__(
             kernel,
             normalize_y=normalize_y,
             kernel_options=kernel_options
         )
-        self.sigma_bounds = np.sqrt(alpha_bounds)
+        self.sigma_bounds = sigma_bounds
         self.beta = beta
         self.optimizer = optimizer
         if self.optimizer is True:
