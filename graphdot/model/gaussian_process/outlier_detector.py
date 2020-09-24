@@ -8,7 +8,7 @@ from graphdot.util.iterable import fold_like
 from .base import GaussianProcessRegressorBase
 
 
-class GaussianProcessOutlierDetector(GaussianProcessRegressorBase):
+class GPROutlierDetector(GaussianProcessRegressorBase):
     """Gaussian process regression (GPR) with noise/outlier detection via
     maximum likelihood estimation.
 
@@ -68,7 +68,7 @@ class GaussianProcessOutlierDetector(GaussianProcessRegressorBase):
                 'Uncertainty must be learned via fit().'
             )
 
-    def fit(self, X, y, w, udistro=None, tol=1e-4, repeat=1,
+    def fit(self, X, y, w, udist=None, tol=1e-4, repeat=1,
             theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
@@ -82,7 +82,7 @@ class GaussianProcessOutlierDetector(GaussianProcessRegressorBase):
             Output/target values of the training data.
         w: float
             The strength of L1 penalty on the noise terms.
-        udistro: callable
+        udist: callable
             A random number generator for the initial guesses of the
             uncertainties. A lognormal distribution will be used by
             default if the argument is None.
@@ -120,7 +120,7 @@ class GaussianProcessOutlierDetector(GaussianProcessRegressorBase):
                     verbose=verbose
                 ),
                 xgen=xgen(repeat),
-                udistro=udistro, w=w, tol=tol, verbose=verbose
+                udist=udist, w=w, tol=tol, verbose=verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -277,12 +277,12 @@ class GaussianProcessOutlierDetector(GaussianProcessRegressorBase):
         return retval
 
     def _hyper_opt_l1reg(
-        self, method, fun, xgen, udistro, w, tol, verbose
+        self, method, fun, xgen, udist, w, tol, verbose
     ):
-        if udistro is None:
-            def udistro(n):
+        if udist is None:
+            def udist(n):
                 return self._ystd * np.random.lognormal(-1.0, 1.0, n)
-        assert callable(udistro)
+        assert callable(udist)
 
         penalty = np.concatenate((
             np.zeros_like(self.kernel.theta),
@@ -306,7 +306,7 @@ class GaussianProcessOutlierDetector(GaussianProcessRegressorBase):
             opt_local = minimize(
                 fun=ext_fun,
                 method=self.optimizer,
-                x0=np.concatenate((x, np.log(udistro(len(self._y))))),
+                x0=np.concatenate((x, np.log(udist(len(self._y))))),
                 bounds=np.vstack((
                     self.kernel.bounds,
                     np.tile(np.log(self.sigma_bounds), (len(self._y), 1)),
