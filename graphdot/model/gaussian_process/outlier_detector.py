@@ -2,21 +2,27 @@
 # -*- coding: utf-8 -*-
 import time
 import numpy as np
+from scipy.optimize import minimize
 from graphdot.util.printer import markdown as mprint
+from graphdot.util.iterable import fold_like
 from .base import GaussianProcessRegressorBase
 
 
-class GaussianProcessRegressor(GaussianProcessRegressorBase):
-    """Gaussian process regression (GPR).
+class GPROutlierDetector(GaussianProcessRegressorBase):
+    """Gaussian process regression (GPR) with noise/outlier detection via
+    maximum likelihood estimation.
 
     Parameters
     ----------
     kernel: kernel instance
         The covariance function of the GP.
-    alpha: float > 0
-        Value added to the diagonal of the kernel matrix during fitting. Larger
-        values correspond to increased noise level in the observations. A
-        practical usage of this parameter is to prevent potential numerical
+    sigma_bounds: a tuple of two floats
+        As Value added to the diagonal of the kernel matrix during fitting. The
+        2-tuple will be regarded as the lower and upper bounds of the
+        values added to each diagonal element, which will be
+        optimized individually by training.
+        Larger values correspond to increased noise level in the observations.
+        A practical usage of this parameter is to prevent potential numerical
         stability issues during fitting, and ensures that the kernel matrix is
         always positive definite in the precense of duplicate entries and/or
         round-off error.
@@ -39,20 +45,30 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         kernel to data.
     """
 
-    def __init__(self, kernel, alpha=1e-8, beta=1e-8, optimizer=None,
-                 normalize_y=False, kernel_options={}):
+    def __init__(self, kernel, sigma_bounds=(1e-4, np.inf), beta=1e-8,
+                 optimizer=True, normalize_y=False, kernel_options={}):
         super().__init__(
             kernel,
             normalize_y=normalize_y,
             kernel_options=kernel_options
         )
-        self.alpha = alpha
+        self.sigma_bounds = sigma_bounds
         self.beta = beta
         self.optimizer = optimizer
-        if optimizer is True:
+        if self.optimizer is True:
             self.optimizer = 'L-BFGS-B'
 
-    def fit(self, X, y, loss='likelihood', tol=1e-5, repeat=1,
+    @property
+    def y_uncertainty(self):
+        '''The learned uncertainty magnitude of each training sample.'''
+        try:
+            return self._sigma * self._ystd
+        except AttributeError:
+            raise AttributeError(
+                'Uncertainty must be learned via fit().'
+            )
+
+    def fit(self, X, y, w, udist=None, tol=1e-4, repeat=1,
             theta_jitter=1.0, verbose=False):
         """Train a GPR model. If the `optimizer` argument was set while
         initializing the GPR object, the hyperparameters of the kernel will be
@@ -64,10 +80,12 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             Input values of the training data.
         y: 1D array
             Output/target values of the training data.
-        loss: 'likelihood' or 'loocv'
-            The loss function to be minimzed during training. Could be either
-            'likelihood' (negative log-likelihood) or 'loocv' (mean-square
-            leave-one-out cross validation error).
+        w: float
+            The strength of L1 penalty on the noise terms.
+        udist: callable
+            A random number generator for the initial guesses of the
+            uncertainties. A lognormal distribution will be used by
+            default if the argument is None.
         tol: float
             Tolerance for termination.
         repeat: int
@@ -90,44 +108,40 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         '''hyperparameter optimization'''
         if self.optimizer:
 
-            if loss == 'likelihood':
-                objective = self.log_marginal_likelihood
-            elif loss == 'loocv':
-                objective = self.squared_loocv_error
-
             def xgen(n):
                 x0 = self.kernel.theta.copy()
                 yield x0
                 yield from x0 + theta_jitter * np.random.randn(n - 1, len(x0))
 
-            opt = self._hyper_opt(
+            opt = self._hyper_opt_l1reg(
                 method=self.optimizer,
-                fun=lambda theta, objective=objective: objective(
-                    theta, eval_gradient=True, clone_kernel=False,
+                fun=lambda theta_ext: self.log_marginal_likelihood(
+                    theta_ext, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                xgen=xgen(repeat), tol=tol, verbose=verbose
+                xgen=xgen(repeat),
+                udist=udist, w=w, tol=tol, verbose=verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
 
             if opt.success:
-                self.kernel.theta = opt.x
+                self.kernel.theta, log_sigma = fold_like(
+                    opt.x,
+                    (self.kernel.theta, self._y)
+                )
+                self._sigma = np.exp(log_sigma)
             else:
                 raise RuntimeError(
-                    f'Training using the {loss} loss did not converge, got:\n'
+                    f'Training did not converge, got:\n'
                     f'{opt}'
                 )
 
         '''build and store GPR model'''
-        self.K = K = self._gramian(self.alpha, self._X)
-        self.Kinv, _ = self._invert(K, rcond=self.beta)
+        self.K = K = self._gramian(self._sigma**2, self._X)
+        self.Kinv, _ = self._invert_pseudoinverse(K, rcond=self.beta)
         self.Ky = self.Kinv @ self._y
         return self
-
-    def fit_loocv(self, X, y, **options):
-        """Alias of :py:`fit_loocv(X, y, loss='loocv', **options)`."""
-        return self.fit(X, y, loss='loocv', **options)
 
     def predict(self, Z, return_std=False, return_cov=False):
         """Predict using the trained GPR model.
@@ -157,57 +171,19 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         Ks = self._gramian(None, Z, self._X)
         ymean = (Ks @ self.Ky) * self._ystd + self._ymean
         if return_std is True:
-            Kss = self._gramian(self.alpha, Z, diag=True)
+            Kss = self._gramian(0, Z, diag=True)
             std = np.sqrt(
                 np.maximum(0, Kss - (Ks @ (self.Kinv @ Ks.T)).diagonal())
             )
             return (ymean, std * self._ystd)
         elif return_cov is True:
-            Kss = self._gramian(self.alpha, Z)
+            Kss = self._gramian(0, Z)
             cov = np.maximum(0, Kss - Ks @ (self.Kinv @ Ks.T))
             return (ymean, cov * self._ystd**2)
         else:
             return ymean
 
-    def predict_loocv(self, Z, z, return_std=False):
-        """Compute the leave-one-out cross validation prediction of the given
-        data.
-
-        Parameters
-        ----------
-        Z: list of objects or feature vectors.
-            Input values of the unknown data.
-        z: 1D array
-            Target values of the training data.
-        return_std: boolean
-            If True, the standard-deviations of the predictions at the query
-            points are returned along with the mean.
-
-        Returns
-        -------
-        ymean: 1D array
-            Leave-one-out mean of the predictive distribution at query points.
-        std: 1D array
-            Leave-one-out standard deviation of the predictive distribution at
-            query points.
-        """
-        assert(len(Z) == len(z))
-        z = np.asarray(z)
-        if self.normalize_y is True:
-            z_mean, z_std = np.mean(z), np.std(z)
-            z = (z - z_mean) / z_std
-        else:
-            z_mean, z_std = 0, 1
-        Kinv, _ = self._invert(self._gramian(self.alpha, Z), rcond=self.beta)
-        Kinv_diag = (Kinv @ np.eye(len(Z))).diagonal()
-        ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
-        if return_std is True:
-            std = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
-            return (ymean, std * z_std)
-        else:
-            return ymean
-
-    def log_marginal_likelihood(self, theta=None, X=None, y=None,
+    def log_marginal_likelihood(self, theta_ext, X=None, y=None,
                                 eval_gradient=False, clone_kernel=True,
                                 verbose=False):
         """Returns the log-marginal likelihood of a given set of log-scale
@@ -215,9 +191,10 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
 
         Parameters
         ----------
-        theta: array-like
-            Kernel hyperparameters for which the log-marginal likelihood is
-            to be evaluated. If None, the current hyperparameters will be used.
+        theta_ext: array-like
+            Kernel hyperparameters and per-sample noise prior for which the
+            log-marginal likelihood is to be evaluated. If None, the current
+            hyperparameters will be used.
         X: list of objects or feature vectors.
             Input values of the training data. If None, `self.X` will be used.
         y: 1D array
@@ -244,9 +221,10 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             hyperparameters at position theta. Only returned when eval_gradient
             is True.
         """
-        theta = theta if theta is not None else self.kernel.theta
         X = X if X is not None else self._X
         y = y if y is not None else self._y
+        theta, log_sigma = fold_like(theta_ext, (self.kernel.theta, y))
+        sigma = np.exp(log_sigma)
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -257,24 +235,29 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         t_kernel = time.perf_counter()
 
         if eval_gradient is True:
-            K, dK = self._gramian(self.alpha, X, kernel=kernel, jac=True)
+            K, dK = self._gramian(sigma**2, X, kernel=kernel, jac=True)
         else:
-            K = self._gramian(self.alpha, X, kernel=kernel)
+            K = self._gramian(sigma**2, X, kernel=kernel)
 
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
 
-        Kinv, logdet = self._invert(K, rcond=self.beta)
+        Kinv, logdet = self._invert_pseudoinverse(K, rcond=self.beta)
+        Kinv_diag = Kinv.diagonal()
         Ky = Kinv @ y
         yKy = y @ Ky
 
         if eval_gradient is True:
             d_theta = (
-                np.einsum('ij,ijk->k', Kinv @ np.eye(len(K)), dK) -
+                np.einsum('ij,ijk->k', Kinv, dK) -
                 np.einsum('i,ijk,j', Ky, dK, Ky)
             )
-            retval = (yKy + logdet, d_theta * np.exp(theta))
+            d_alpha = (Kinv_diag - Ky**2) * 2 * sigma
+            retval = (
+                yKy + logdet,
+                np.concatenate((d_theta, d_alpha)) * np.exp(theta_ext)
+            )
         else:
             retval = yKy + logdet
 
@@ -293,93 +276,46 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
 
         return retval
 
-    def squared_loocv_error(self, theta=None, X=None, y=None,
-                            eval_gradient=False, clone_kernel=True,
-                            verbose=False):
-        """Returns the squared LOOCV error of a given set of log-scale
-        hyperparameters.
+    def _hyper_opt_l1reg(
+        self, method, fun, xgen, udist, w, tol, verbose
+    ):
+        if udist is None:
+            def udist(n):
+                return self._ystd * np.random.lognormal(-1.0, 1.0, n)
+        assert callable(udist)
 
-        Parameters
-        ----------
-        theta: array-like
-            Kernel hyperparameters for which the log-marginal likelihood is
-            to be evaluated. If None, the current hyperparameters will be used.
-        X: list of objects or feature vectors.
-            Input values of the training data. If None, `self.X` will be used.
-        y: 1D array
-            Output/target values of the training data. If None, `self.y` will
-            be used.
-        eval_gradient: boolean
-            If True, the gradient of the log-marginal likelihood with respect
-            to the kernel hyperparameters at position theta will be returned
-            alongside.
-        clone_kernel: boolean
-            If True, the kernel is copied so that probing with theta does not
-            alter the trained kernel. If False, the kernel hyperparameters will
-            be modified in-place.
-        verbose: boolean
-            If True, the log-likelihood value and its components will be
-            printed to the screen.
+        penalty = np.concatenate((
+            np.zeros_like(self.kernel.theta),
+            np.ones_like(self._y) * w
+        ))
 
-        Returns
-        -------
-        squared_error: float
-            Squared LOOCV error of theta for training data.
-        squared_error_gradient: 1D array
-            Gradient of the Squared LOOCV error with respect to the kernel
-            hyperparameters at position theta. Only returned when eval_gradient
-            is True.
-        """
-        theta = theta if theta is not None else self.kernel.theta
-        X = X if X is not None else self._X
-        y = y if y is not None else self._y
-
-        if clone_kernel is True:
-            kernel = self.kernel.clone_with_theta(theta)
-        else:
-            kernel = self.kernel
-            kernel.theta = theta
-
-        t_kernel = time.perf_counter()
-        if eval_gradient is True:
-            K, dK = self._gramian(self.alpha, X, kernel=kernel, jac=True)
-        else:
-            K = self._gramian(self.alpha, X, kernel=kernel)
-        t_kernel = time.perf_counter() - t_kernel
-
-        t_linalg = time.perf_counter()
-
-        Kinv, logdet = self._invert(K, rcond=self.beta)
-        if not isinstance(Kinv, np.ndarray):
-            Kinv = Kinv @ np.eye(len(X))
-        Kinv_diag = Kinv.diagonal()
-        Ky = Kinv @ y
-        e = Ky / Kinv_diag
-        squared_error = 0.5 * np.sum(e**2)
-
-        if eval_gradient is True:
-            D_theta = np.zeros_like(theta)
-            for i, t in enumerate(theta):
-                dk = dK[:, :, i]
-                KdK = Kinv @ dk
-                D_theta[i] = (
-                    - (e / Kinv_diag) @ (KdK @ Ky)
-                    + (e**2 / Kinv_diag) @ (KdK @ Kinv).diagonal()
-                ) * np.exp(t)
-            retval = (squared_error, D_theta)
-        else:
-            retval = squared_error
-
-        t_linalg = time.perf_counter() - t_linalg
-
-        if verbose:
-            mprint.table(
-                ('Sq.Err.', '%12.5g', squared_error),
-                ('d(SqErr)', '%12.5g', squared_error),
-                ('log|K| ', '%12.5g', logdet),
-                ('Cond(K)', '%12.5g', np.linalg.cond(K)),
-                ('t_GPU (s)', '%10.2g', t_kernel),
-                ('t_CPU (s)', '%10.2g', t_linalg),
+        def ext_fun(x):
+            exp_x = np.exp(x)
+            val, jac = fun(x)
+            return (
+                val + np.linalg.norm(penalty * exp_x, ord=1),
+                jac + penalty * exp_x
             )
 
-        return retval
+        opt = None
+
+        for x in xgen:
+            if verbose:
+                mprint.table_start()
+
+            opt_local = minimize(
+                fun=ext_fun,
+                method=self.optimizer,
+                x0=np.concatenate((x, np.log(udist(len(self._y))))),
+                bounds=np.vstack((
+                    self.kernel.bounds,
+                    np.tile(np.log(self.sigma_bounds), (len(self._y), 1)),
+                )),
+                jac=True,
+                tol=tol,
+            )
+
+            if not opt or (opt_local.success and opt_local.fun < opt.fun):
+                opt = opt_local
+
+        return opt
