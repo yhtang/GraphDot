@@ -17,17 +17,16 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
     ----------
     kernel: kernel instance
         The covariance function of the GP.
-    alpha: float > 0, default = 1e-7
+    alpha: float > 0
         Value added to the diagonal of the core matrix during fitting. Larger
         values correspond to increased noise level in the observations. A
         practical usage of this parameter is to prevent potential numerical
         stability issues during fitting, and ensures that the core matrix is
         always positive definite in the precense of duplicate entries and/or
         round-off error.
-    beta: float > 0, default = 1e-7
-        Threshold value for truncating the singular values when computing the
-        pseudoinverse of the low-rank kernel matrix. Can be used to tune the
-        numerical stability of the model.
+    beta: float > 0
+        Cutoff value on the singular values for the spectral pseudoinverse
+        of the low-rank kernel matrix.
     optimizer: one of (str, True, None, callable)
         A string or callable that represents one of the optimizers usable in
         the scipy.optimize.minimize method.
@@ -345,12 +344,14 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
             kernel.theta = theta
 
         t_kernel = time.perf_counter()
+
         if eval_gradient is True:
             Kxc, d_Kxc = self._gramian(None, X, C, kernel=kernel, jac=True)
             Kcc, d_Kcc = self._gramian(self.alpha, C, kernel=kernel, jac=True)
         else:
             Kxc = self._gramian(None, X, C, kernel=kernel)
             Kcc = self._gramian(self.alpha, C, kernel=kernel)
+
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
