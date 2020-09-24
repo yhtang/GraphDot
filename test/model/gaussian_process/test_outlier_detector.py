@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import unittest.mock
 import pytest
 import numpy as np
-import os
-import tempfile
 from graphdot.model.gaussian_process import GPROutlierDetector
 
 np.random.seed(0)
@@ -82,16 +79,20 @@ def test_gpr_log_marginal_likelihood(v, L):
         assert(dL[i] == pytest.approx(dL_diff, 1e-3, 1e-3))
 
 
-# @pytest.mark.parametrize('repeat', [3, 5])
-# @pytest.mark.parametrize('verbose', [True, False])
-# def test_gpr_fit_mle(repeat, verbose):
+def test_outlier_detection():
 
-#     X = np.linspace(0, 1, 16, endpoint=False)
-#     y = np.sin(X * 4 * np.pi)
-#     kernel = Kernel(0.49, 0.1)
-#     gpr = GPROutlierDetector(kernel=kernel, optimizer=True)
-#     gpr.fit(X, y, w=0.1, tol=1e-5, repeat=repeat, verbose=verbose)
-#     assert(kernel.p == pytest.approx(0.5, 1e-2))
-#     assert(gpr.y_uncertainty == pytest.approx(0, abs=1e-2))
+    X = np.linspace(-1, 1, 12, endpoint=False)
+    y = np.sin(X * np.pi)
+    y[3] += 0.5
+    y[7] -= 0.4
 
+    gpr = GPROutlierDetector(kernel=RBFKernel(1.0, 1.0))
+    gpr.fit(X, y, w=0.0, repeat=3, theta_jitter=1.0, verbose=True)
 
+    for i, u in enumerate(gpr.y_uncertainty):
+        if i == 3:
+            assert u == pytest.approx(0.5, rel=0.1)
+        elif i == 7:
+            assert u == pytest.approx(0.4, rel=0.1)
+        else:
+            assert u == pytest.approx(0, abs=1e-2)
