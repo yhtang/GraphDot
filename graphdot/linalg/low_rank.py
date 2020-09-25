@@ -33,8 +33,11 @@ class Sum(LowRankBase):
     def __neg__(self):
         return Sum([-f for f in self.factors])
 
+    def diagonal(self):
+        return np.sum([f.diagonal() for f in self.factors], axis=0)
+
     def trace(self):
-        return np.sum([f.trace() for f in self.factors])
+        return np.sum([f.diagonal().sum() for f in self.factors])
 
     def quadratic(self, a, b):
         '''Computes a @ X @ b.'''
@@ -85,7 +88,7 @@ class LATR(LowRankBase):
 
     def quadratic_diag(self, a, b):
         '''Computes diag(a @ X @ b).'''
-        return np.sum((a @ self.lhs) * (self.rhs @ b), axis=1)
+        return LATR(a @ self.lhs, self.rhs @ b).diagonal()
 
 
 class LLT(LATR):
@@ -123,14 +126,14 @@ class LLT(LATR):
     def diagonal(self):
         return np.sum(self.lhs**2, axis=1)
 
-    def inverse(self):
+    def pinv(self):
         return LLT((self.U, 1 / self.S))
 
     def logdet(self):
         return 2 * np.log(self.S).sum()
 
     def cond(self):
-        return self.S.max() / self.S.min()
+        return (self.S.max() / self.S.min())**2
 
     def __pow__(self, exp):
         return LLT((self.U, self.S**exp))

@@ -166,7 +166,7 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         self.Kcc_rsqrt = self._corespace(C=self._C)
         self.Kxc = self._gramian(None, self._X, self._C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
-        self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').inverse()
+        self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').pinv()
         self.Ky = self.Kinv @ self._y
 
         return self
@@ -280,7 +280,7 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
                 )
         elif method == 'gpr-like':
             F = Kzc @ self.Kcc_rsqrt
-            Kinv = lr.dot(F, rcond=self.beta, mode='clamp').inverse()
+            Kinv = lr.dot(F, rcond=self.beta, mode='clamp').pinv()
             zstar = z - (Kinv @ z) / Kinv.diagonal()
             if return_std is True:
                 std = np.sqrt(1 / np.maximum(Kinv.diagonal(), 1e-14))
@@ -359,7 +359,7 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         Kcc_rsqrt = self._corespace(Kcc=Kcc)
         F = Kxc @ Kcc_rsqrt
         K = lr.dot(F, rcond=self.beta, mode='clamp')
-        K_inv = K.inverse()
+        K_inv = K.pinv()
 
         logdet = K.logdet()
         Ky = K_inv @ y
