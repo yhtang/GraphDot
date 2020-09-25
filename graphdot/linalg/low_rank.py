@@ -4,7 +4,50 @@
 import numpy as np
 
 
-class FactorApprox:
+class LowRankBase:
+    def __add__(self, other):
+        return add(self, other)
+
+    def __sub__(self, other):
+        return sub(self, other)
+
+    def __matmul__(self, other):
+        return matmul(self, other)
+
+
+class Sum(LowRankBase):
+    '''Represents summations of factor approximations. Due to the bilinear
+    nature of matrix inner product, it is best to store the summation as-is so
+    as to preserve the low-rank structure of the matrices.'''
+
+    def __init__(self, factors):
+        self.factors = factors
+
+    def __repr__(self):
+        return ' + '.join([f'({repr(f)})' for f in self.factors])
+
+    @property
+    def T(self):
+        return Sum([f.T for f in self.factors])
+
+    def __neg__(self):
+        return Sum([-f for f in self.factors])
+
+    def diagonal(self):
+        return np.sum([f.diagonal() for f in self.factors], axis=0)
+
+    def trace(self):
+        return np.sum([f.diagonal().sum() for f in self.factors])
+
+    def quadratic(self, a, b):
+        '''Computes a @ X @ b.'''
+        return np.sum([f.quadratic(a, b) for f in self.factors], axis=0)
+
+    def todense(self):
+        return np.sum([f.todense() for f in self.factors], axis=0)
+
+
+class LATR(LowRankBase):
     '''Represents an N-by-N square matrix A as L @ R, where L and R are N-by-k
     and k-by-N (k << N) rectangular matrices.'''
 
@@ -25,36 +68,10 @@ class FactorApprox:
 
     @property
     def T(self):
-        return FactorApprox(self.rhs.T, self.lhs.T)
+        return LATR(self.rhs.T, self.lhs.T)
 
     def __neg__(self):
-        return FactorApprox(-self.lhs, self.rhs)
-
-    def __add__(self, other):
-        if isinstance(other, FactorApprox):
-            return BilinearSums((self, other))
-        elif isinstance(other, BilinearSums):
-            return BilinearSums((self, *other.factors))
-        else:
-            raise
-
-    def __sub__(self, other):
-        if isinstance(other, FactorApprox):
-            return BilinearSums((self, -other))
-        elif isinstance(other, BilinearSums):
-            return BilinearSums((self, *[-f for f in other.factors]))
-        else:
-            raise
-
-    def __matmul__(self, other):
-        if isinstance(other, BilinearSums):
-            return BilinearSums(tuple(
-                [self @ b for b in other.factors]
-            ))
-        elif isinstance(other, FactorApprox):
-            return FactorApprox(self.lhs, (self.rhs @ other.lhs) @ other.rhs)
-        else:
-            return self.lhs @ (self.rhs @ other)
+        return LATR(-self.lhs, self.rhs)
 
     def todense(self):
         return self.lhs @ self.rhs
@@ -71,62 +88,13 @@ class FactorApprox:
 
     def quadratic_diag(self, a, b):
         '''Computes diag(a @ X @ b).'''
-        return np.sum((a @ self.lhs) * (self.rhs @ b), axis=1)
+        return LATR(a @ self.lhs, self.rhs @ b).diagonal()
 
 
-class BilinearSums(FactorApprox):
-    '''Represents summations of factor approximations. Due to the bilinear
-    nature of matrix inner product, it is best to store the summation as-is so
-    as to preserve the low-rank structure of the matrices.'''
-
-    def __init__(self, factors):
-        self.factors = factors
-
-    def __repr__(self):
-        return ' + '.join([f'({repr(f)})' for f in self.factors])
-
-    @property
-    def T(self):
-        return BilinearSums([f.T for f in self.factors])
-
-    def __neg__(self):
-        return BilinearSums([-f for f in self.factors])
-
-    def __add__(self, other):
-        if isinstance(other, FactorApprox):
-            return BilinearSums((*self.factors, other))
-        elif isinstance(other, BilinearSums):
-            return BilinearSums((*self.factors, *other.factors))
-        else:
-            raise
-
-    def __matmul__(self, other):
-        if isinstance(other, BilinearSums):
-            return BilinearSums(tuple(
-                [a @ b for a in self.factors for b in other.factors]
-            ))
-        elif isinstance(other, FactorApprox):
-            return BilinearSums(tuple(
-                [a @ other for a in self.factors]
-            ))
-        else:
-            raise
-
-    def trace(self):
-        return np.sum([f.trace() for f in self.factors])
-
-    def quadratic(self, a, b):
-        '''Computes a @ X @ b.'''
-        return np.sum([f.quadratic(a, b) for f in self.factors], axis=0)
-
-    def todense(self):
-        return np.sum([f.todense() for f in self.factors], axis=0)
-
-
-class SpectralApprox(FactorApprox):
+class LLT(LATR):
     '''A special case of factor approximation where the matrix is symmetric and
-    positive-semidefinite. In this case, the matrix can be represented using a
-    spectral decomposition.'''
+    positive-semidefinite. In this case, the matrix can be represented as
+    L @ L.T from a spectral decomposition.'''
 
     def __init__(self, X, rcond=0, mode='truncate'):
         if isinstance(X, np.ndarray):
@@ -158,22 +126,55 @@ class SpectralApprox(FactorApprox):
     def diagonal(self):
         return np.sum(self.lhs**2, axis=1)
 
-    def inverse(self):
-        return SpectralApprox((self.U, 1 / self.S))
+    def pinv(self):
+        return LLT((self.U, 1 / self.S))
 
     def logdet(self):
         return 2 * np.log(self.S).sum()
 
     def cond(self):
-        return self.S.max() / self.S.min()
+        return (self.S.max() / self.S.min())**2
 
     def __pow__(self, exp):
-        return SpectralApprox((self.U, self.S**exp))
+        return LLT((self.U, self.S**exp))
 
 
 def dot(X, Y=None, rcond=0, mode='truncate'):
     '''A utility method that creates factor-approximated matrix objects.'''
     if Y is None:
-        return SpectralApprox(X, rcond=rcond, mode=mode)
+        return LLT(X, rcond=rcond, mode=mode)
     else:
-        return FactorApprox(X, Y)
+        return LATR(X, Y)
+
+
+def add(A, B):
+    factors = A.factors if isinstance(A, Sum) else [A]
+    factors += B.factors if isinstance(B, Sum) else [B]
+    return Sum(factors)
+
+
+def sub(A, B):
+    factors = A.factors if isinstance(A, Sum) else [A]
+    factors += [-f for f in B.factors] if isinstance(B, Sum) else [-B]
+    return Sum(factors)
+
+
+def matmul(A, B):
+    if isinstance(A, Sum):
+        if isinstance(B, Sum):
+            return Sum([
+                a @ b for a in A.factors for b in B.factors
+            ])
+        else:
+            return Sum([
+                a @ B for a in A.factors
+            ])
+    else:
+        if isinstance(B, Sum):
+            return Sum([
+                A @ b for b in B.factors
+            ])
+        elif isinstance(B, LATR):
+            return LATR(A.lhs, (A.rhs @ B.lhs) @ B.rhs)
+        else:
+            return A.lhs @ (A.rhs @ B)

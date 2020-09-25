@@ -17,17 +17,16 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
     ----------
     kernel: kernel instance
         The covariance function of the GP.
-    alpha: float > 0, default = 1e-7
+    alpha: float > 0
         Value added to the diagonal of the core matrix during fitting. Larger
         values correspond to increased noise level in the observations. A
         practical usage of this parameter is to prevent potential numerical
         stability issues during fitting, and ensures that the core matrix is
         always positive definite in the precense of duplicate entries and/or
         round-off error.
-    beta: float > 0, default = 1e-7
-        Threshold value for truncating the singular values when computing the
-        pseudoinverse of the low-rank kernel matrix. Can be used to tune the
-        numerical stability of the model.
+    beta: float > 0
+        Cutoff value on the singular values for the spectral pseudoinverse
+        of the low-rank kernel matrix.
     optimizer: one of (str, True, None, callable)
         A string or callable that represents one of the optimizers usable in
         the scipy.optimize.minimize method.
@@ -167,7 +166,7 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         self.Kcc_rsqrt = self._corespace(C=self._C)
         self.Kxc = self._gramian(None, self._X, self._C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
-        self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').inverse()
+        self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').pinv()
         self.Ky = self.Kinv @ self._y
 
         return self
@@ -281,7 +280,7 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
                 )
         elif method == 'gpr-like':
             F = Kzc @ self.Kcc_rsqrt
-            Kinv = lr.dot(F, rcond=self.beta, mode='clamp').inverse()
+            Kinv = lr.dot(F, rcond=self.beta, mode='clamp').pinv()
             zstar = z - (Kinv @ z) / Kinv.diagonal()
             if return_std is True:
                 std = np.sqrt(1 / np.maximum(Kinv.diagonal(), 1e-14))
@@ -345,12 +344,14 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
             kernel.theta = theta
 
         t_kernel = time.perf_counter()
+
         if eval_gradient is True:
             Kxc, d_Kxc = self._gramian(None, X, C, kernel=kernel, jac=True)
             Kcc, d_Kcc = self._gramian(self.alpha, C, kernel=kernel, jac=True)
         else:
             Kxc = self._gramian(None, X, C, kernel=kernel)
             Kcc = self._gramian(self.alpha, C, kernel=kernel)
+
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
@@ -358,7 +359,7 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         Kcc_rsqrt = self._corespace(Kcc=Kcc)
         F = Kxc @ Kcc_rsqrt
         K = lr.dot(F, rcond=self.beta, mode='clamp')
-        K_inv = K.inverse()
+        K_inv = K.pinv()
 
         logdet = K.logdet()
         Ky = K_inv @ y
