@@ -148,3 +148,24 @@ def test_dot():
     assert(isinstance(lr.dot(X, Y.T), lr.LATR))
     assert(isinstance(lr.dot(X, X.T), lr.LATR))
     assert(isinstance(lr.dot(X), lr.LLT))
+
+
+@pytest.mark.parametrize('lambd', [-5, -4, -3, -2, -1, 0])
+@pytest.mark.parametrize('r', [1, 3, 5, 10, 20, 30])
+def test_pinvh(lambd, r):
+    N = 100
+    k = 10
+    rcond = 1e-10
+    lhs = np.random.randn(N, k)
+    for _ in range(5):
+        A = lr.LLT(lhs)
+        d = np.zeros(N)
+        d[np.random.choice(N, r, False)] = np.random.lognormal(lambd, 1)
+        Ainv = lr.pinvh(A, d, rcond=rcond)
+        Ad = A.todense()
+        Ad.flat[::len(Ad) + 1] += d
+        assert(np.allclose(
+            Ainv.todense(),
+            np.linalg.pinv(Ad, rcond=rcond),
+            atol=1e-6, rtol=1e-2
+        ))

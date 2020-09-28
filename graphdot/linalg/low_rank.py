@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 '''Low-rank approximation of square matrices.'''
 import numpy as np
+import scipy.sparse.linalg as splin
 
 
 class LowRankBase:
@@ -48,8 +49,8 @@ class Sum(LowRankBase):
 
 
 class LATR(LowRankBase):
-    '''Represents an N-by-N square matrix A as L @ R, where L and R are N-by-k
-    and k-by-N (k << N) rectangular matrices.'''
+    r'''Represents an N-by-N square matrix A as :py:math:`L \cdot R`, where L
+    and R are N-by-k and k-by-N (:py:math:`k << N`) rectangular matrices.'''
 
     def __init__(self, lhs, rhs):
         self._lhs = lhs
@@ -92,9 +93,9 @@ class LATR(LowRankBase):
 
 
 class LLT(LATR):
-    '''A special case of factor approximation where the matrix is symmetric and
-    positive-semidefinite. In this case, the matrix can be represented as
-    L @ L.T from a spectral decomposition.'''
+    r'''A special case of factor approximation where the matrix is symmetric
+    and positive-semidefinite. In this case, the matrix can be represented as
+    :py:math:`L \cdot L^\mathsf{T}` from a spectral decomposition.'''
 
     def __init__(self, X, rcond=0, mode='truncate'):
         if isinstance(X, np.ndarray):
@@ -178,3 +179,75 @@ def matmul(A, B):
             return LATR(A.lhs, (A.rhs @ B.lhs) @ B.rhs)
         else:
             return A.lhs @ (A.rhs @ B)
+
+
+def pinvh(A: LLT, d, k='auto', rcond=1e-10, mode='truncate'):
+    '''Calculate the low-rank approximated pseudoinverse of a low-rank
+    symmetric matrix with optional diagonal regularization.
+
+    Parameters
+    ----------
+    A: :py:class:`LLT`.
+        A low-rank symmetric positive semidefinite matrix.
+    d: array
+        An optional regularization vector that will be added elementwise to the
+        diagonal of ``A``.
+    k: int or 'auto'
+        Number of eigenvalues to resolve. If 'auto', k will be set to be the
+        sum of the rank of ``A`` plus the number of nonzeros in ``d``.
+    rcond: float
+        Cutoff for small eigenvalues. Eigenvalues less than or equal to
+        `rcond * largest_eigenvalue` and associated eigenvators are discarded
+        in forming the pseudoinverse.
+    mode: str
+        Determines how small eigenvalues of the original matrix are handled.
+        For 'truncate', small eigenvalues are discarded; for 'clamp', they are
+        fixed to be the product of the largest eigenvalue and rcond.
+
+    Returns
+    -------
+    Ainv: :py:class:`LLT`.
+        A low-rank representation of the pseudoinverse of ``A``.
+    '''
+
+    class MatVecOperator(splin.LinearOperator):
+
+        def __init__(self, A, d):
+            self.A = A
+            self.d = d
+
+        @property
+        def shape(self):
+            return (len(self.d), len(self.d))
+
+        @property
+        def dtype(self):
+            return self.d.dtype
+
+        def _matvec(self, b):
+            return self.A @ b + self.d * b
+
+        def _matmat(self, b):
+            return self.A @ b + self.d[:, None] * b
+
+        def _adjoint(self):
+            return self
+
+    if k == 'auto':
+        k = A.lhs.shape[1] + np.count_nonzero(d)
+    else:
+        assert isinstance(k, int)
+
+    a, Q = splin.eigsh(MatVecOperator(A, d), k=k)
+    beta = a.max() * rcond
+    mask = a > beta
+
+    if mode == 'truncate':
+        a = a[mask]
+        Q = Q[:, mask]
+    elif mode == 'clamp':
+        a[~mask] = beta
+    else:
+        raise RuntimeError(f"Unknown pseudoinverse mode '{mode}'.")
+
+    return LLT((Q, a**-0.5))
