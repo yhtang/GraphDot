@@ -140,12 +140,42 @@ class LLT(LATR):
         return LLT((self.U, self.S**exp))
 
 
-def dot(X, Y=None, rcond=0, mode='truncate'):
-    '''A utility method that creates factor-approximated matrix objects.'''
+def dot(X, Y=None, method='auto', rcond=0, mode='truncate'):
+    r'''A utility method that creates low-rank matrices
+    :py:math:`A \doteq X \cdot Y`.
+
+    Parameters
+    ----------
+    X: ndarray
+        Left hand side of the product.
+    Y: ndarray
+        Right hand side of the product. If None, Y will be assumed to be the
+        transposition of X.
+    method: 'auto' or 'direct' or 'spectral'
+        If 'direct', store the matrix as the product of X and Y. If 'spectral'
+        and Y is None, store the matrix as the product of the singular vectors
+        and singular values of X. 'auto' is equivalent to 'spectral' when Y is
+        None and 'direct' otherwise.
+    rcond: float
+        Threshold for small singular values when method is 'spectral'.
+    mode : 'truncate' or 'clamp'
+        Determines how small singular values of the original matrix are
+        handled. For 'truncate', small values are discarded; for 'clamp', they
+        are fixed to be the product of the largest singular value and rcond.
+    '''
+    assert method in ['auto', 'direct', 'spectral'], f'Unknown method {method}'
     if Y is None:
-        return LLT(X, rcond=rcond, mode=mode)
+        if method == 'spectral' or method == 'auto':
+            return LLT(X, rcond=rcond, mode=mode)
+        else:
+            return LATR(X, X.T)
     else:
-        return LATR(X, Y)
+        if method == 'spectral':
+            raise RuntimeError(
+                'Spectral approximation only usable when Y is None.'
+            )
+        else:
+            return LATR(X, Y)
 
 
 def add(A, B):
@@ -181,13 +211,13 @@ def matmul(A, B):
             return A.lhs @ (A.rhs @ B)
 
 
-def pinvh(A: LLT, d, k='auto', rcond=1e-10, mode='truncate'):
+def pinvh(A: LATR, d, k='auto', rcond=1e-10, mode='truncate'):
     '''Calculate the low-rank approximated pseudoinverse of a low-rank
     symmetric matrix with optional diagonal regularization.
 
     Parameters
     ----------
-    A: :py:class:`LLT`.
+    A: :py:class:`LATR`.
         A low-rank symmetric positive semidefinite matrix.
     d: array
         An optional regularization vector that will be added elementwise to the

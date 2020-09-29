@@ -148,6 +148,17 @@ def test_dot():
     assert(isinstance(lr.dot(X, Y.T), lr.LATR))
     assert(isinstance(lr.dot(X, X.T), lr.LATR))
     assert(isinstance(lr.dot(X), lr.LLT))
+    assert(isinstance(lr.dot(X, method='direct'), lr.LATR))
+    assert(isinstance(lr.dot(X, method='auto'), lr.LLT))
+    assert(isinstance(lr.dot(X, method='spectral'), lr.LLT))
+    assert(isinstance(lr.dot(X, Y.T, method='direct'), lr.LATR))
+    assert(isinstance(lr.dot(X, Y.T, method='auto'), lr.LATR))
+    with pytest.raises(RuntimeError):
+        lr.dot(X, Y.T, method='spectral')
+    with pytest.raises(AssertionError):
+        lr.dot(X, method='abc')
+    with pytest.raises(AssertionError):
+        lr.dot(X, Y.T, method='abc')
 
 
 @pytest.mark.parametrize('lambd', [-5, -4, -3, -2, -1, 0])
