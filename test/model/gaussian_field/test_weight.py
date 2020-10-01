@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+import pytest
 from scipy.spatial import distance_matrix as pairwise_distances
 from graphdot.model.gaussian_field import RBFOverHausdorff
 
