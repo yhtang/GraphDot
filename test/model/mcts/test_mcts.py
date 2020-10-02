@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+from mcts import Rewrite
 import os
 from rdkit import RDConfig
 from rdkit import Chem
 from rdkit.Chem import *
 from rdkit.Chem import AllChem
 from rdkit.Chem import FragmentCatalog
-from utils import *
 import random
 from graphdot import Graph
 from graphdot.kernel.marginalized import MarginalizedGraphKernel
@@ -24,6 +25,155 @@ from graphdot.kernel.basekernel import (
 )
 from scipy.stats import norm
 
+class RewriteSmiles(Rewrite): 
+    ''' Rewrite rule database. '''
+    
+    def _process(smiles):
+        '''' Gets rid of all the temporary characters in a SMILES string. '''
+        smiles = smiles.replace("*", "")
+        smiles = smiles.replace("#", "")
+        smiles = smiles.replace(".", "")
+        return smiles
+    
+    def add(smiles, index, bondtype, new):
+        ''' Adds a new atom to the molecule. 
+        Parameters
+        ----------
+            smiles: string, the SMILES string of the molecule
+            index: int, where to add the new atom
+            bondtype: string, either "Single" or "Double"
+            new: int, atomic number of atom to be added in
+        Returns
+        -------
+            molecule: graph, current molecule being produced, None if not possible
+        '''
+        if bondtype == 'Single':
+            bond = Chem.BondType.SINGLE
+        elif bondtype == 'Double':
+            bond = Chem.BondType.DOUBLE
+        try:
+            m = Chem.MolFromSmiles(smiles)
+            length = m.GetNumAtoms()
+            mw = Chem.RWMol(m)
+            mw.AddAtom(Chem.Atom(new))
+            mw.AddBond(index, length, bond)
+            return Chem.MolToSmiles(mw)
+        except:
+            return None
+        
+    def substitute(smiles, original, replacement):
+        ''' Switches given substruct with another substruct. 
+
+        Parameters
+        ----------
+            smiles: string, the SMILES string of the molecule
+            original: string, original SMARTS pattern to be switched out
+            replacement: string, replacement SMARTS pattern to be switched in
+
+        Returns
+        -------
+            molecule_lst: list of graphs, current molecule being produced, None if not possible
+        '''
+        try:
+            molecule = Chem.MolFromSmiles(smiles)
+            o = Chem.MolFromSmarts(original)
+            r = Chem.MolFromSmarts(replacement)
+            new = AllChem.ReplaceSubstructs(molecule, o, r)
+            return [Rewrites._process(Chem.MolToSmiles(m)) for m in new]
+        except: 
+            return None
+
+    def delete(smiles, substruct):
+        ''' Deleted given substruct. 
+        Parameters: 
+            smarts: string, the SMILES string of the molecule
+            substruct: string, original SMARTS pattern to be deleted
+        Returns:
+            molecule_lst: list of graphs, current molecule being produced, None if not possible
+        '''
+        molecule = Chem.MolFromSmiles(smiles)
+        sub = Chem.MolFromSmarts(substruct)
+        try: 
+            new = AllChem.DeleteSubstructs(molecule,sub)
+            return Rewrites._process(Chem.MolToSmiles(new))
+        except: 
+            return None
+    
+    def getFuncGroups(smiles):
+        ''' Returns a tuple of (name, SMILES) of all the functional groups present in a molecule. 
+        Parameters:
+            smiles: string, SMILES representation of molecule to be tested
+        Returns:
+            result: (string, string), tuple of form (name, SMILES)
+        '''
+        try:
+            fName=os.path.join('Data/FunctionalGroups/FunctionalGroups.txt')
+            fparams = FragmentCatalog.FragCatParams(1,6,fName)
+            fcat=FragmentCatalog.FragCatalog(fparams)
+            fcgen=FragmentCatalog.FragCatGenerator()
+            m = Chem.MolFromSmiles(smiles)
+            fcgen.AddFragsFromMol(m,fcat)
+            fs = list(fcat.GetEntryFuncGroupIds(fcat.GetNumEntries() - 1))
+            result = []
+            for idx in fs:
+                mol = fparams.GetFuncGroup(idx)
+                s = Chem.MolToSmiles(mol)
+                name = mol.GetProp('_Name')
+                result.append((name, s))
+            return result
+        except: 
+            return []
+    
+    def allFuncGroups():
+        ''' Returns lists of all functional groups in RDKit.
+        Returns:
+            names: list(string), names of all functional groups
+            smiles: list(string), names of all SMILES representations of functional groups
+        '''
+        fName=os.path.join('Data/FunctionalGroups/FunctionalGroups.txt')
+        fparams = FragmentCatalog.FragCatParams(1,6,fName)
+        txt = fparams.Serialize().replace("\t","\n").split("\n")[2:-1]
+        names = [txt[i] for i in range(0,len(txt),2)]
+        smiles = [txt[i] for i in range(1,len(txt),2)]
+        return names, smiles
+    
+    def getValidActions(mol):
+        ''' Returns two lists of all possible add and substitute actions that can be made.
+        Parameters: 
+            mol: string, SMILES representation of molecule to be tested
+        Returns:
+            addlst: list, with each item being of form (result, location, bondType, atom)
+            sublst: list, with each item being of form (result, original, replacement)
+        '''
+        elementlst = [6, 7, 8, 9, 15, 16, 17, 35, 53] # C, N, O, P, S and the Halogens
+        addlst = []
+        sublst = []
+        remlst = []
+        repeats = {}
+        funcgroups = Rewrites.getFuncGroups(mol)
+        if funcgroups is not None:
+            for (name, smiles) in funcgroups:
+                namelst, smileslst = Rewrites.allFuncGroups()
+                for repl in smileslst:
+                    sub = Rewrites.substitute(mol, smiles, repl)
+                    for elem in sub:
+                        if elem not in repeats:
+                            sublst.append((elem, smiles, repl))
+                            repeats[elem] = 1
+                rem = Rewrites.delete(mol, smiles)
+                if rem is not None and rem not in repeats: 
+                    remlst.append((rem, smiles))
+                    repeats[rem] = 1
+            for element in elementlst:
+                for i in range(len(mol)):
+                    for bondType in ['Single', 'Double']:
+                        add = Rewrites.add(mol, i, bondType, element)
+                        if add is not None and add not in repeats: 
+                            addlst.append((add, i, bondType, element))
+                            repeats[add] = 1
+            return addlst, sublst, remlst
+        else:
+            return None, None
 
 def test_mcts(molecule, data_path, target, train_size = 100):
     moldata = pd.read_csv(data_path)
