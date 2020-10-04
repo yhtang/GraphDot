@@ -25,59 +25,23 @@ class Rewrite(ABC):
 
     @abstractmethod
     @classmethod
-    def add(args):
-        ''' Adds a new node to the graph.
+    def __call__(self, graph, seed):
+        ''' Returns a newly rewritten graph. 
+        If no seed is provided, the method of rewriting is chosen uniformly between add, substitute, and delete. 
+        If a seed is provided, the graph will be modified according to the provided seed value.
+
         Parameters
         ----------
-        ???
+        graph: string
+            The input graph to be rewritten, in string format.
+        seed: float, optional
+            The seed value indicating the method of rewriting the graph.
+
         Returns
         -------
-        added_graph: graph
-            Returns the new graph that is produced, or None if not possible. 
-        '''
-        return None
-
-    @abstractmethod
-    @classmethod
-    def substitute(original_graph, subgraph, newgraph):
-        ''' Substitutes a subgraph with another subgraph.
-
-        Parameters
-        ----------
-        original_graph: graph
-            The full graph being rewritten.
-        subgraph: graph
-            The subgraph being taken out.
-        newgraph: graph
-            The new subgraph being substituted in.
-            
-        Returns
-        -------
-        graph_lst: list
-            Returns the list of graphs that can be produced with this operation, and None if not possible.
-            Note that more than one graph can be produced because the given subgraph may occur in multiple
-            parts of the original graph. 
-        '''
-        return None
-    
-    @abstractmethod
-    @classmethod
-    def delete(smiles, substruct):
-        ''' Deletes the given subgraph from the original graph.
-
-        Parameters
-        ----------
-        original_graph: graph
-            The full graph being rewritten.
-        subgraph: graph
-            The subgraph being taken out.
-
-        Returns
-        ------
-        graph_lst: list
-            Returns the list of graphs that can be produced with this operation, and None if not possible.
-            More than one graph can be produced because the given subgraph may occur in multiple
-            parts of the original graph. 
+        rewrite_graph: string
+            The newly rewritten graphm in string format.
+        
         '''
         return None
 
@@ -243,15 +207,12 @@ class MCTS():
         Returns
         -------
         created: boolean
-            Whether or not new children were added to the given node.
+            Whether or not new children were added to the given node
         '''
         graph = node.graph
-        addlst, sublst, remlst = Rewrites.getValidActions(graph)
-        possible_actions = addlst + sublst + remlst
-        possible_actions = np.array(possible_actions)[np.random.choice(len(possible_actions), min(len(possible_actions),self.width), False)]
-        for action in possible_actions: 
+        for i in range(self.width): 
             try:
-                new_graph = action[0]
+                new_graph = Rewrite(graph)
                 child = TreeNode(children=[], parent=node, graph=new_graph, visits=0, allchild=[], depth=node.depth+1)
                 node.children.append(child)
             except:
