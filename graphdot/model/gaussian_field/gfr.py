@@ -61,7 +61,7 @@ class GaussianFieldRegressor:
             Labels/target values.
         '''
         self.X = X
-        self.f_l = labels
+        self.labels = labels
 
     def fit(self, Z=None, y=None, loss=None, options=None):
         '''Train the Gaussian field model. If the loss is unspecified,
@@ -78,7 +78,7 @@ class GaussianFieldRegressor:
         '''
         if len(self.X) == 0:
             raise RuntimeError("Missing Training Data")
-        if len(self.f_l) == 0:
+        if len(self.labels) == 0:
             raise RuntimeError("Missing Training Labels")
         if self.weight.theta is not None and self.optimizer:
             if loss == 'mse':
@@ -131,13 +131,13 @@ class GaussianFieldRegressor:
         '''
         if len(self.X) == 0:
             raise RuntimeError("Missing Training Data")
-        if len(self.f_l) == 0:
+        if len(self.labels) == 0:
             raise RuntimeError("Missing Training Labels")
         if len(Z) == 0:
             return []
 
         X = self.X
-        f_l = self.f_l
+        labels = self.labels
         weight = self.weight
         smoothing = self.smoothing
         L = len(X)
@@ -169,12 +169,12 @@ class GaussianFieldRegressor:
         else:
             A = np.eye(u) - P_uu
         B = P_ul
-        f_u, _ = bicgstab(A, B @ f_l)
+        f_u, _ = bicgstab(A, B @ labels)
         result = f_u
         if display:
             weight_matrix = np.linalg.solve(A, B)
-            influence_matrix = weight_matrix * (2 * f_l - 1)
-            raw_mean = weight_matrix * (2 * (f_l - f_u[:, None]))**2
+            influence_matrix = weight_matrix * (2 * labels - 1)
+            raw_mean = weight_matrix * (2 * (labels - f_u[:, None]))**2
             predictive_uncertainty = np.sum(raw_mean, axis=1)**0.5
             result = f_u, influence_matrix, predictive_uncertainty
         return result
@@ -209,7 +209,7 @@ class GaussianFieldRegressor:
 
         if len(self.X) == 0:
             raise RuntimeError("Missing Training Data")
-        if len(self.f_l) == 0:
+        if len(self.labels) == 0:
             raise RuntimeError("Missing Training Labels")
         if theta is not None:
             self.weight.theta = theta
@@ -261,7 +261,7 @@ class GaussianFieldRegressor:
         '''
         if len(self.X) == 0:
             raise RuntimeError("Missing Training Data")
-        if len(self.f_l) == 0:
+        if len(self.labels) == 0:
             raise RuntimeError("Missing Training Labels")
 
         if theta is not None:
@@ -312,7 +312,7 @@ class GaussianFieldRegressor:
         '''
         if len(self.X) == 0:
             raise RuntimeError("Missing Training Data")
-        if len(self.f_l) == 0:
+        if len(self.labels) == 0:
             raise RuntimeError("Missing Training Labels")
 
         if theta is not None:
@@ -357,18 +357,18 @@ class GaussianFieldRegressor:
         '''
         if len(self.X) == 0:
             raise RuntimeError("Missing Training Data")
-        if len(self.f_l) == 0:
+        if len(self.labels) == 0:
             raise RuntimeError("Missing Training Labels")
         if theta is not None:
             self.weight.theta = theta
         smoothing = self.smoothing
         weight = self.weight
-        f_l = self.f_l
+        labels = self.labels
         X = self.X
         W = weight(X)
-        U_ll = np.full((len(f_l), len(f_l)), 1/len(f_l))
+        U_ll = np.full((len(labels), len(labels)), 1/len(labels))
         D_inv = np.diag(1/np.sum(W, axis=1))
-        h = (smoothing * (U_ll @ f_l)) + ((1 - smoothing) * D_inv @ (W @ f_l))
+        h = (smoothing * (U_ll @ labels)) + ((1 - smoothing) * D_inv @ (W @ labels))
         err = h @ h
         if eval_gradient is True:
             grad = np.zeros_like(self.weight.theta)

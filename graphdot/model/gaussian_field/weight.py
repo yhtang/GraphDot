@@ -77,6 +77,8 @@ class RBFOverHausdorff(Weight):
 
     def __init__(self, sigma, sigma_bounds, graphs, metric,
                  compute_D_from_graphs=True):
+        if not isinstance(sigma, np.ndarray):
+            RuntimeError("Sigma is not an ndarray.")
         self.sigma = sigma
         self.sigma_bounds = sigma_bounds
         self.cookie = VolatileCookie()
