@@ -368,7 +368,8 @@ class GaussianFieldRegressor:
         W = weight(X)
         U_ll = np.full((len(labels), len(labels)), 1/len(labels))
         D_inv = np.diag(1/np.sum(W, axis=1))
-        h = (smoothing * (U_ll @ labels)) + ((1 - smoothing) * D_inv @ (W @ labels))
+        h = (smoothing * (U_ll @ labels)) + \
+            ((1 - smoothing) * D_inv @ (W @ labels))
         err = h @ h
         if eval_gradient is True:
             grad = np.zeros_like(self.weight.theta)
