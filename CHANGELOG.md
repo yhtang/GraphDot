@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a1 (2020-10-15)
+
+- Enabled GPR training with missing target values.
+
 ## 0.7 (2020-09-21)
 
 This version formalizes the inclusion of new features introduced from 0.7a1
