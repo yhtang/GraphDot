@@ -90,6 +90,26 @@ def test_gpr_fit_self_consistency(X, y):
     assert(cov == pytest.approx(np.zeros((len(X), len(X))), 1e-3, 1e-3))
 
 
+def test_gpr_fit_masked_target():
+
+    class Kernel:
+        def __call__(self, X, Y=None):
+            return np.exp(-np.subtract.outer(X, Y if Y is not None else X)**2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    X = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    y = np.random.randn(10)
+    bad = [1, 4, 7]
+    y[bad] = None
+    kernel = Kernel()
+    gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
+    gpr.fit(X, y)
+    z = gpr.predict(X)
+    assert(np.all(np.isfinite(z)))
+
+
 def test_gpr_predict_periodic():
     '''test with a function with exactly two periods, and see if the GPR
     can use information across the periods to fill in the missing points.'''

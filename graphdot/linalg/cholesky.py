@@ -34,3 +34,9 @@ class CholSolver:
             lower=True,
             check_finite=False
         )
+
+    def todense(self):
+        return self @ np.eye(len(self.L))
+
+    def diagonal(self):
+        return self.todense().diagonal()

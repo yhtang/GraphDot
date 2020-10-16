@@ -120,7 +120,8 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
                 )
 
         '''build and store GPR model'''
-        self.K = K = self._gramian(self.alpha, self._X)
+        K = self._gramian(self.alpha, self._X)
+        self.K = K = K[self._y_mask, :][:, self._y_mask]
         self.Kinv, _ = self._invert(K, rcond=self.beta)
         self.Ky = self.Kinv @ self._y
         return self
@@ -154,7 +155,7 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Ks = self._gramian(None, Z, self._X)
+        Ks = self._gramian(None, Z, self._X)[:, self._y_mask]
         ymean = (Ks @ self.Ky) * self._ystd + self._ymean
         if return_std is True:
             Kss = self._gramian(self.alpha, Z, diag=True)
@@ -191,15 +192,17 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             Leave-one-out standard deviation of the predictive distribution at
             query points.
         """
-        assert(len(Z) == len(z))
-        z = np.asarray(z)
+        z_mask, z_masked = self.mask(z)
         if self.normalize_y is True:
-            z_mean, z_std = np.mean(z), np.std(z)
-            z = (z - z_mean) / z_std
+            z_mean, z_std = np.mean(z_masked), np.std(z_masked)
+            z = (z_masked - z_mean) / z_std
         else:
             z_mean, z_std = 0, 1
-        Kinv, _ = self._invert(self._gramian(self.alpha, Z), rcond=self.beta)
-        Kinv_diag = (Kinv @ np.eye(len(Z))).diagonal()
+            z = z_masked
+
+        K = self._gramian(self.alpha, Z)[z_mask, :][:, z_mask]
+        Kinv, _ = self._invert(K, rcond=self.beta)
+        Kinv_diag = Kinv.diagonal()
         ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
         if return_std is True:
             std = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
@@ -246,7 +249,11 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         """
         theta = theta if theta is not None else self.kernel.theta
         X = X if X is not None else self._X
-        y = y if y is not None else self._y
+        if y is not None:
+            y_mask, y = self.mask(y)
+        else:
+            y = self._y
+            y_mask = self._y_mask
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -258,8 +265,11 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
 
         if eval_gradient is True:
             K, dK = self._gramian(self.alpha, X, kernel=kernel, jac=True)
+            K = K[y_mask, :][:, y_mask]
+            dK = dK[y_mask, :, :][:, y_mask, :]
         else:
             K = self._gramian(self.alpha, X, kernel=kernel)
+            K = K[y_mask, :][:, y_mask]
 
         t_kernel = time.perf_counter() - t_kernel
 
@@ -271,7 +281,7 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
 
         if eval_gradient is True:
             d_theta = (
-                np.einsum('ij,ijk->k', Kinv @ np.eye(len(K)), dK) -
+                np.einsum('ij,ijk->k', Kinv.todense(), dK) -
                 np.einsum('i,ijk,j', Ky, dK, Ky)
             )
             retval = (yKy + logdet, d_theta * np.exp(theta))
@@ -332,7 +342,11 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         """
         theta = theta if theta is not None else self.kernel.theta
         X = X if X is not None else self._X
-        y = y if y is not None else self._y
+        if y is not None:
+            y_mask, y = self.mask(y)
+        else:
+            y = self._y
+            y_mask = self._y_mask
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -341,17 +355,22 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
             kernel.theta = theta
 
         t_kernel = time.perf_counter()
+
         if eval_gradient is True:
             K, dK = self._gramian(self.alpha, X, kernel=kernel, jac=True)
+            K = K[y_mask, :][:, y_mask]
+            dK = dK[y_mask, :, :][:, y_mask, :]
         else:
             K = self._gramian(self.alpha, X, kernel=kernel)
+            K = K[y_mask, :][:, y_mask]
+
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
 
         Kinv, logdet = self._invert(K, rcond=self.beta)
         if not isinstance(Kinv, np.ndarray):
-            Kinv = Kinv @ np.eye(len(X))
+            Kinv = Kinv.todense()
         Kinv_diag = Kinv.diagonal()
         Ky = Kinv @ y
         e = Ky / Kinv_diag

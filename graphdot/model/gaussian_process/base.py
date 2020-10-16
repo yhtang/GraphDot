@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import itertools as it
 import os
 import pickle
 import warnings
@@ -42,14 +43,24 @@ class GaussianProcessRegressorBase:
                 'Training data does not exist. Please provide using fit().'
             )
 
+    @staticmethod
+    def mask(iterable):
+        mask = np.fromiter(
+            map(lambda i: i is not None and np.isfinite(i), iterable),
+            dtype=np.bool_
+        )
+        masked = np.fromiter(it.compress(iterable, mask), dtype=np.float)
+        return mask, masked
+
     @y.setter
     def y(self, y):
+        self._y_mask, y_masked = self.mask(y)
         if self.normalize_y is True:
-            self._ymean, self._ystd = np.mean(y), np.std(y)
-            self._y = (np.asarray(y) - self._ymean) / self._ystd
+            self._ymean, self._ystd = y_masked.mean(), y_masked.std()
+            self._y = (y_masked - self._ymean) / self._ystd
         else:
             self._ymean, self._ystd = 0, 1
-            self._y = np.asarray(y)
+            self._y = y_masked
 
     def _gramian(self, alpha, X, Y=None, kernel=None, jac=False, diag=False):
         kernel = kernel or self.kernel
