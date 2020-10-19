@@ -2,22 +2,49 @@
 # -*- coding: utf-8 -*-
 
 from mcts import Rewrite
-from graphdot import Graph
-from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.model.gaussian_process import GaussianProcessRegressor, LowRankApproximateGPR
-from graphdot.graph.reorder import rcm
-from graphdot.kernel.fix import Normalization
-from graphdot.kernel.basekernel import (
-    Normalize,
-    Additive,
-    TensorProduct,
-    Constant,
-    Convolution,
-    SquareExponential,
-    KroneckerDelta
-)
 from scipy.stats import norm
 
+
 class RewriteSample(Rewrite):
-    pass
+    ''' Rewrite operation for string. 
+    Each graph is of the form 'A'*n + 'B'*n and the target graph we want has 3 A's and 3 B's.
+    Each rewrite operation either adds an 'A' or 'B', replaces an 'A' with a 'B', or deletes a letter (if len(graph) != 0)
+    '''
+
+    def __init__(self):
+        super(__init__)
+
+    def __call__(self, graph, random_state):
+        ''' Returns a newly rewritten string. 
+        '''
+        np.random.seed(random_state)
+        possible_actions = [self._add(graph),self._substitute(graph),self._delete(graph)][np.random.randint(2)]
+        action = np.array(possible_actions)[np.random.choice(len(possible_actions), min(len(possible_actions),self.width), False)]
+        return action
+
+    def _add(self, original):
+        ''' Returns all possible strings after having inserted a new letter into the original string.
+        '''
+        result = set()
+        for i in range(len(original)):
+            result.add(original[:i] + "A" + original[i:])
+            result.add(original[:i] + "B" + original[i:])
+        return result
+        
+    def _substitute(self, original):
+        '''  Returns all possible strings after having substituted one letter with another in the original string.
+        '''
+        reverse = {"A": "B", "B": "A"}
+        result = set()
+        for i in range(len(original)):
+            result.add(original[:i] + reverse[original[i]] + original[i+1:])
+        return result
+
+    def _delete(self, original):
+        '''  Returns all possible strings after having deleted a letter from the original string.
+        '''
+        result = set()
+        for i in range(len(original)):
+            result.add(original[:i] + original[i+1:])
+        return result
 

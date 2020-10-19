@@ -25,7 +25,7 @@ class Rewrite(ABC):
         Returns
         -------
         rewrite_graph: string
-            The newly rewritten graphm in string format.
+            The newly rewritten graph in string format.
         
         '''
         return None
@@ -197,7 +197,8 @@ class MCTS():
         graph = node.graph
         for i in range(self.width): 
             try:
-                new_graph = Rewrite(graph)
+                r = Rewrite()
+                new_graph = r(graph)
                 child = TreeNode(children=[], parent=node, graph=new_graph, visits=0, allchild=[], depth=node.depth+1)
                 node.children.append(child)
             except:

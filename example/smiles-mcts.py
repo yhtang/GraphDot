@@ -30,6 +30,9 @@ from scipy.stats import norm
 class RewriteSmiles(Rewrite): 
     ''' Rewrite rule database. '''
 
+    def __init__(self):
+        super(__init__)
+
     def __call__(self, molecule, random_state):
         ''' Returns a newly rewritten graph. 
         If no seed is provided, the method of rewriting is chosen uniformly between add, substitute, and delete. 
@@ -187,6 +190,7 @@ class RewriteSmiles(Rewrite):
         Returns:
             addlst: list, with each item being of form (result, location, bondType, atom)
             sublst: list, with each item being of form (result, original, replacement)
+            remlst: list, with each item being of form (result, original)
         '''
         elementlst = [6, 7, 8, 9, 15, 16, 17, 35, 53] # C, N, O, P, S and the Halogens
         addlst = []
@@ -198,19 +202,19 @@ class RewriteSmiles(Rewrite):
             for (name, smiles) in funcgroups:
                 namelst, smileslst = Rewrites.allFuncGroups()
                 for repl in smileslst:
-                    sub = Rewrites.substitute(mol, smiles, repl)
+                    sub = Rewrites._substitute(mol, smiles, repl)
                     for elem in sub:
                         if elem not in repeats:
                             sublst.append((elem, smiles, repl))
                             repeats[elem] = 1
-                rem = Rewrites.delete(mol, smiles)
+                rem = Rewrites._delete(mol, smiles)
                 if rem is not None and rem not in repeats: 
                     remlst.append((rem, smiles))
                     repeats[rem] = 1
             for element in elementlst:
                 for i in range(len(mol)):
                     for bondType in ['Single', 'Double']:
-                        add = Rewrites.add(mol, i, bondType, element)
+                        add = Rewrites._add(mol, i, bondType, element)
                         if add is not None and add not in repeats: 
                             addlst.append((add, i, bondType, element))
                             repeats[add] = 1
