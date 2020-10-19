@@ -5,27 +5,12 @@ import os
 import random
 from abc import ABC
 from scipy.stats import norm
-from graphdot import Graph
-from graphdot.kernel.marginalized import MarginalizedGraphKernel
-from graphdot.model.gaussian_process import GaussianProcessRegressor, LowRankApproximateGPR
-from graphdot.graph.reorder import rcm
-from graphdot.kernel.fix import Normalization
-from graphdot.kernel.basekernel import (
-    Normalize,
-    Additive,
-    TensorProduct,
-    Constant,
-    Convolution,
-    SquareExponential,
-    KroneckerDelta
-)
 
 class Rewrite(ABC):
     ''' Abstract base class for Rewrite operations. '''
 
     @abstractmethod
-    @classmethod
-    def __call__(self, graph, seed):
+    def __call__(self, graph, random_state):
         ''' Returns a newly rewritten graph. 
         If no seed is provided, the method of rewriting is chosen uniformly between add, substitute, and delete. 
         If a seed is provided, the graph will be modified according to the provided seed value.
@@ -34,7 +19,7 @@ class Rewrite(ABC):
         ----------
         graph: string
             The input graph to be rewritten, in string format.
-        seed: float, optional
+        random_state: float, optional
             The seed value indicating the method of rewriting the graph.
 
         Returns
@@ -103,7 +88,7 @@ class MCTS():
     ''' Monte Carlo Tree Search algorithm. 
     Parameters
     ----------
-    gp: Predictor instance
+    predictor: Predictor instance
         A predictor used to calculate the corresponding value of a given graph. 
         This predictor should be have the predict() function defined, which returns
         the mean and covariance matrix of the prediction.
@@ -126,24 +111,23 @@ class MCTS():
     exploration_constant: float
         The degree of exploration; this is a hyperparameter to be tuned.
     tograph: function
-        A function that
+        A function that converts a string representation to a graph.
     scoring: string, default = "uct"
         Either "uct" or "score". Determines the scoring function used.
     '''
     
-    def __init__(self, gp, seed_graph, tree, width, iterations, depth, target, margin, sigma_margin, exploration_constant, tograph, scoring='uct'):
+    def __init__(self, predictor, seed_graph, tree, width, iterations, depth, target, margin, sigma_margin, exploration_constant, tograph, scoring='uct'):
         self.seed_graph = seed_graph
         self.tree = tree
         self.iterations = iterations
         self.depth = depth
         self.width = width
         self.target = target
-        self.gp = gp
+        self.predictor = predictor
         self.margin = margin
         self.sigma_margin = sigma_margin
         self.exploration_constant = exploration_constant
-        if scoring != "uct" or scoring != "mlt":
-            raise ValueError("Invalid scoring argument")
+        assert scoring in ['mlt', 'uct']
         self.scoring = scoring
     
     def __str__(self):
@@ -170,6 +154,7 @@ class MCTS():
         if sigma < self.sigma_margin and abs(pred - self.target) < self.margin:
             child.selected = True
             return True
+        child.selected = False
         return False
     
     def selection(self): 
@@ -237,8 +222,8 @@ class MCTS():
             The list of graphs of all the node's children
         '''
         graph = node.graph
-        graphs = [Graph.from_rdkit(Chem.MolFromSmiles(child.graph)) for child in node.children]
-        mean, cov = self.gp.predict(graphs, return_cov=True)
+        graphs = [tograph(child.graph) for child in node.children]
+        mean, cov = self.predictor.predict(graphs, return_cov=True)
         for i in range(len(node.children)):
             child = node.children[i]
             if self.scoring == "mlt":
@@ -268,7 +253,7 @@ class MCTS():
         while node != None:
             node.allchild.extend(allchild_graphs)
             node.visits += 1
-            npmean, npvar = self.gp.predict(node.allchild, return_cov=True)
+            npmean, npvar = self.predictor.predict(node.allchild, return_cov=True)
             if self.scoring == "mlt":
                 npvar.flat[::len(npvar) + 1] += 1e-10
                 npvar_inv = np.linalg.inv(npvar)
