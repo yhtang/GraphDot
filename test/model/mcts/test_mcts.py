@@ -5,7 +5,7 @@ from mcts import Rewrite
 from scipy.stats import norm
 
 
-class RewriteSample(Rewrite):
+class RewriteString(Rewrite):
     ''' Rewrite operation for string. 
     Each graph is of the form 'A'*n + 'B'*n and the target graph we want has 3 A's and 3 B's.
     Each rewrite operation either adds an 'A' or 'B', replaces an 'A' with a 'B', or deletes a letter (if len(graph) != 0)
@@ -48,3 +48,14 @@ class RewriteSample(Rewrite):
             result.add(original[:i] + original[i+1:])
         return result
 
+class PredictorString():
+    def __init__(self):
+        pass
+    def predict(self, graphs):
+        mean = np.array([(self.add(graph)) // 2 for graph in graphs])
+        covariance = np.eye(len(graphs))
+        for i in range(len(graphs)):
+            for j in range(i+1, len(graphs)):
+                cov = abs(graphs[i].count("A") - graphs[j].count("A")) + abs(graphs[i].count("B") - graphs[j].count("B"))
+                covariance[i][j], covariance[j][i] = cov, cov
+        return mean, covariance
