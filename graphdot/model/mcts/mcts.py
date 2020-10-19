@@ -20,7 +20,7 @@ class Rewrite(ABC):
         graph: string
             The input graph to be rewritten, in string format.
         random_state: float, optional
-            The seed value indicating the method of rewriting the graph.
+            The seed value indicating the method of rewriting the graph, from 0 to 1.
 
         Returns
         -------

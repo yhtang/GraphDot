@@ -30,7 +30,7 @@ from scipy.stats import norm
 class RewriteSmiles(Rewrite): 
     ''' Rewrite rule database. '''
 
-    def __call__(self, molecule):
+    def __call__(self, molecule, random_state):
         ''' Returns a newly rewritten graph. 
         If no seed is provided, the method of rewriting is chosen uniformly between add, substitute, and delete. 
         If a seed is provided, the graph will be modified according to the provided seed value.
@@ -39,16 +39,19 @@ class RewriteSmiles(Rewrite):
         ----------
         graph: string
             The input graph to be rewritten, in string format.
-        seed: float, optional
-            The seed value indicating the method of rewriting the graph.
+        random_state: float, optional
+            The seed value indicating the method of rewriting the graph, from 0 to 1.
 
         Returns
         -------
         rewrite_graph: string
-            The newly rewritten graphm in string format.
+            The newly rewritten graph in string format.
         
         '''
-        return None
+        np.random.seed(random_state)
+        possible_actions = Rewrites.getValidActions(graph)[np.random.randint(2)]
+        action = np.array(possible_actions)[np.random.choice(len(possible_actions), min(len(possible_actions),self.width), False)]
+        return action
         # addlst, sublst, remlst = Rewrites.getValidActions(graph)
         # possible_actions = addlst + sublst + remlst
         # possible_actions = np.array(possible_actions)[np.random.choice(len(possible_actions), min(len(possible_actions),self.width), False)]
