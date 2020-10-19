@@ -279,8 +279,8 @@ def test_mcts(molecule, data_path, target, train_size = 100):
     original = gp.predict([Graph.from_rdkit(Chem.MolFromSmiles(molecule))])
     found = False
     while not found:
-        mcts = MCTS(gp = gp, molecule=molecule, tree=TreeNode(children=[], parent=None, molecule=molecule, visits=1, allchild=[], depth=0), width = 10, iterations=5, depth=5, target = target, margin = 0.01, sigma_margin = 0.01, exploration_constant = 1)
+        mcts = MCTS(predictor = gp, seed_graph=molecule, tree=TreeNode(children=[], parent=None, graph=molecule, visits=1, allchild=[], depth=0), width = 10, iterations=5, depth=5, target = target, margin = 0.01, sigma_margin = 0.01, exploration_constant = 1)
         found, best_action = mcts.solve()
-        molecule = best_action.molecule
+        molecule = best_action.graph
         new_predict = gp.predict([Graph.from_rdkit(Chem.MolFromSmiles(molecule))])
         assert (target - original) > (new_predict - original)
