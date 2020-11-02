@@ -1,77 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import unittest.mock
 import pytest
 import numpy as np
-import os
-import tempfile
 from graphdot.model.gaussian_process import GaussianProcessRegressor
 
 np.random.seed(0)
-
-
-@pytest.mark.parametrize('normalize_y', [False, True])
-def test_gpr_store_X_y(normalize_y):
-    gpr = GaussianProcessRegressor(kernel=None, normalize_y=normalize_y)
-    with pytest.raises(AttributeError):
-        gpr.X
-    with pytest.raises(AttributeError):
-        gpr.y
-    X = [1, 2, 3]
-    y = [4, 5, 6]
-    gpr.X = X
-    gpr.y = y
-    assert(isinstance(gpr.X, np.ndarray))
-    assert(isinstance(gpr.y, np.ndarray))
-    assert(gpr.X == pytest.approx(np.array(X)))
-    if normalize_y:
-        assert(np.mean(gpr.y) == pytest.approx(0))
-        assert(np.std(gpr.y) == pytest.approx(1))
-        assert(gpr.y_mean == pytest.approx(np.mean(y)))
-        assert(gpr.y_std == pytest.approx(np.std(y)))
-    else:
-        assert(gpr.y == pytest.approx(np.array(y)))
-        assert(gpr.y_mean == 0)
-        assert(gpr.y_std == 1)
-
-
-def test_gpr_gramian():
-    class Kernel:
-        def __call__(self, X, Y=None, eval_gradient=False):
-            d = np.subtract.outer(X, Y if Y is not None else X)
-            f = np.exp(-2 * np.sin(np.pi * d)**2)
-            if eval_gradient is False:
-                return f
-            else:
-                s = np.sin(d * np.pi)
-                c = np.cos(d * np.pi)
-                j1 = 2.0 * np.pi * d * 2 * s * c * f
-                j2 = 4.0 * s**2 * f
-                return f, np.stack((j1, j2), axis=2)
-
-        def diag(self, X):
-            return np.ones_like(X)
-
-    gpr = GaussianProcessRegressor(kernel=Kernel())
-
-    n = 5
-    m = 3
-    X = np.ones(n)
-    Y = np.ones(m)
-
-    assert(gpr._gramian(X) == pytest.approx(np.ones((n, n))))
-    assert(gpr._gramian(Y) == pytest.approx(np.ones((m, m))))
-    assert(gpr._gramian(X, Y) == pytest.approx(np.ones((n, m))))
-    assert(gpr._gramian(Y, X) == pytest.approx(np.ones((m, n))))
-    assert(len(gpr._gramian(X, jac=True)) == 2)
-    assert(gpr._gramian(X, jac=True)[1].shape == (n, n, 2))
-    assert(gpr._gramian(Y, jac=True)[1].shape == (m, m, 2))
-    assert(len(gpr._gramian(X, Y, jac=True)) == 2)
-    assert(gpr._gramian(X, Y, jac=True)[1].shape == (n, m, 2))
-    assert(gpr._gramian(X, diag=True) == pytest.approx(np.ones(n)))
-    assert(gpr._gramian(Y, diag=True) == pytest.approx(np.ones(m)))
-    with pytest.raises(ValueError):
-        gpr._gramian(X, Y, diag=True)
 
 
 def test_gpr_singular_kernel_matrix():
@@ -155,6 +88,26 @@ def test_gpr_fit_self_consistency(X, y):
     z, cov = gpr.predict(X, return_cov=True)
     assert(z == pytest.approx(y, 1e-3, 1e-3))
     assert(cov == pytest.approx(np.zeros((len(X), len(X))), 1e-3, 1e-3))
+
+
+def test_gpr_fit_masked_target():
+
+    class Kernel:
+        def __call__(self, X, Y=None):
+            return np.exp(-np.subtract.outer(X, Y if Y is not None else X)**2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    X = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    y = np.random.randn(10)
+    bad = [1, 4, 7]
+    y[bad] = None
+    kernel = Kernel()
+    gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
+    gpr.fit(X, y)
+    z = gpr.predict(X)
+    assert(np.all(np.isfinite(z)))
 
 
 def test_gpr_predict_periodic():
@@ -443,94 +396,3 @@ def test_gpr_fit_loocv_opt(normalize_y, repeat):
     e2 = gpr.squared_loocv_error(X=X, y=y)
     assert(e1 > e2)
     assert(kernel.L == pytest.approx(0.86, 0.01))
-
-
-def test_kernel_options():
-    n = 3
-    kernel = unittest.mock.MagicMock()
-    kernel.return_value = np.eye(n)
-    kernel.diag.return_value = np.ones(n)
-
-    options = {
-        'a': 1,
-        'b': False
-    }
-    gpr = GaussianProcessRegressor(kernel=kernel, kernel_options=options)
-    X = np.ones(n)
-    Y = np.zeros(n)
-    y = np.ones(n)
-
-    gpr.fit(X, y)
-    kernel.assert_called_with(X, **options)
-
-    gpr.predict(Y, return_std=True)
-    kernel.assert_called_with(Y, X, **options)
-    kernel.diag.assert_called_with(Y, **options)
-
-    gpr.predict(Y, return_cov=True)
-    kernel.assert_called_with(Y, **options)
-
-
-@pytest.mark.parametrize('normalize_y', [True, False])
-def test_gpr_save_load(normalize_y):
-
-    class Kernel:
-        def __init__(self, L):
-            self.L = L
-
-        def __call__(self, X, Y=None, eval_gradient=False):
-            L = self.L
-            d = np.subtract.outer(X, Y if Y is not None else X)
-            f = np.exp(-0.5 * d**2 / L**2)
-            if eval_gradient is False:
-                return f
-            else:
-                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
-                return f, np.stack((j, ), axis=2)
-
-        def diag(self, X):
-            return np.ones_like(X)
-
-        @property
-        def theta(self):
-            return np.log([self.L])
-
-        @theta.setter
-        def theta(self, t):
-            self.L = np.exp(t[0])
-
-        @property
-        def bounds(self):
-            return np.log([[1e-2, 10]])
-
-        def clone_with_theta(self, theta):
-            k = Kernel(1.0)
-            k.theta = theta
-            return k
-
-    X = np.linspace(-1, 1, 6, endpoint=False)
-    y = np.sin(X * np.pi)
-    kernel = Kernel(0.1)
-    gpr = GaussianProcessRegressor(
-        kernel=kernel,
-        alpha=1e-10,
-        normalize_y=normalize_y,
-        optimizer=True
-    )
-    gpr.fit_loocv(X, y, verbose=True)
-
-    with tempfile.TemporaryDirectory() as cwd:
-        file = 'test-model.pkl'
-        target_path = os.path.join(cwd, file)
-        gpr.save(cwd, file)
-        assert(os.path.exists(target_path))
-
-        gpr_saved = GaussianProcessRegressor(kernel=kernel)
-        gpr_saved.load(cwd, file)
-
-        assert(gpr.alpha == pytest.approx(gpr_saved.alpha))
-        assert(gpr.y_mean == pytest.approx(gpr_saved.y_mean))
-        assert(gpr.y_std == pytest.approx(gpr_saved.y_std))
-        assert(gpr._y == pytest.approx(gpr_saved._y))
-        assert(gpr.K == pytest.approx(gpr_saved.K))
-        assert(gpr.Ky == pytest.approx(gpr_saved.Ky))

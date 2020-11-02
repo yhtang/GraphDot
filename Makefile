@@ -27,5 +27,5 @@ test-coverage:
 	tox -e coverage
 
 docs:
-	m2r CHANGELOG.md
+	m2r2 CHANGELOG.md
 	cd docs && make html

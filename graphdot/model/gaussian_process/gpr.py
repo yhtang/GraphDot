@@ -1,17 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
-import pickle
 import time
-import warnings
 import numpy as np
-from scipy.optimize import minimize
 from graphdot.util.printer import markdown as mprint
-from graphdot.linalg.cholesky import CholSolver
-from graphdot.linalg.spectral import pinvh
+from .base import GaussianProcessRegressorBase
 
 
-class GaussianProcessRegressor:
+class GaussianProcessRegressor(GaussianProcessRegressorBase):
     """Gaussian process regression (GPR).
 
     Parameters
@@ -46,90 +41,16 @@ class GaussianProcessRegressor:
 
     def __init__(self, kernel, alpha=1e-8, beta=1e-8, optimizer=None,
                  normalize_y=False, kernel_options={}):
-        self.kernel = kernel
+        super().__init__(
+            kernel,
+            normalize_y=normalize_y,
+            kernel_options=kernel_options
+        )
         self.alpha = alpha
         self.beta = beta
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
-        self.normalize_y = normalize_y
-        self.kernel_options = kernel_options
-
-    @property
-    def X(self):
-        '''The input values of the training set.'''
-        try:
-            return self._X
-        except AttributeError:
-            raise AttributeError(
-                'Training data does not exist. Please provide using fit().'
-            )
-
-    @X.setter
-    def X(self, X):
-        self._X = np.asarray(X)
-
-    @property
-    def y(self):
-        '''The output/target values of the training set.'''
-        try:
-            return self._y
-        except AttributeError:
-            raise AttributeError(
-                'Training data does not exist. Please provide using fit().'
-            )
-
-    @y.setter
-    def y(self, _y):
-        if self.normalize_y is True:
-            self.y_mean, self.y_std = np.mean(_y), np.std(_y)
-            self._y = (np.asarray(_y) - self.y_mean) / self.y_std
-        else:
-            self.y_mean, self.y_std = 0, 1
-            self._y = np.asarray(_y)
-
-    def _gramian(self, X, Y=None, kernel=None, jac=False, diag=False):
-        kernel = kernel or self.kernel
-        if Y is None:
-            if diag is True:
-                return kernel.diag(X, **self.kernel_options) + self.alpha
-            else:
-                if jac is True:
-                    K, J = kernel(X, eval_gradient=True, **self.kernel_options)
-                    K.flat[::len(K) + 1] += self.alpha
-                    return K, J
-                else:
-                    K = kernel(X, **self.kernel_options)
-                    K.flat[::len(K) + 1] += self.alpha
-                    return K
-        else:
-            if diag is True:
-                raise ValueError(
-                    'Diagonal Gramian does not exist between two sets.'
-                )
-            else:
-                if jac is True:
-                    return kernel(X, Y, eval_gradient=True,
-                                  **self.kernel_options)
-                else:
-                    return kernel(X, Y, **self.kernel_options)
-
-    def _invert(self, K):
-        try:
-            return CholSolver(K), np.prod(np.linalg.slogdet(K))
-        except np.linalg.LinAlgError:
-            try:
-                warnings.warn(
-                    'Kernel matrix singular, falling back to pseudoinverse'
-                )
-                return pinvh(
-                    K, rcond=self.beta, mode='clamp', return_nlogdet=True
-                )
-            except np.linalg.LinAlgError:
-                raise np.linalg.LinAlgError(
-                    'The kernel matrix is likely corrupted with NaNs and Infs '
-                    'because a pseudoinverse could not be computed.'
-                )
 
     def fit(self, X, y, loss='likelihood', tol=1e-5, repeat=1,
             theta_jitter=1.0, verbose=False):
@@ -174,13 +95,18 @@ class GaussianProcessRegressor:
             elif loss == 'loocv':
                 objective = self.squared_loocv_error
 
+            def xgen(n):
+                x0 = self.kernel.theta.copy()
+                yield x0
+                yield from x0 + theta_jitter * np.random.randn(n - 1, len(x0))
+
             opt = self._hyper_opt(
-                lambda theta, objective=objective: objective(
+                method=self.optimizer,
+                fun=lambda theta, objective=objective: objective(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                self.kernel.theta.copy(),
-                tol, repeat, theta_jitter, verbose
+                xgen=xgen(repeat), tol=tol, verbose=verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -194,9 +120,10 @@ class GaussianProcessRegressor:
                 )
 
         '''build and store GPR model'''
-        self.K = K = self._gramian(self.X)
-        self.Kinv, _ = self._invert(K)
-        self.Ky = self.Kinv @ self.y
+        K = self._gramian(self.alpha, self._X)
+        self.K = K = K[self._y_mask, :][:, self._y_mask]
+        self.Kinv, _ = self._invert(K, rcond=self.beta)
+        self.Ky = self.Kinv @ self._y
         return self
 
     def fit_loocv(self, X, y, **options):
@@ -228,18 +155,18 @@ class GaussianProcessRegressor:
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Ks = self._gramian(Z, self.X)
-        ymean = (Ks @ self.Ky) * self.y_std + self.y_mean
+        Ks = self._gramian(None, Z, self._X)[:, self._y_mask]
+        ymean = (Ks @ self.Ky) * self._ystd + self._ymean
         if return_std is True:
-            Kss = self._gramian(Z, diag=True)
+            Kss = self._gramian(self.alpha, Z, diag=True)
             std = np.sqrt(
                 np.maximum(0, Kss - (Ks @ (self.Kinv @ Ks.T)).diagonal())
             )
-            return (ymean, std * self.y_std)
+            return (ymean, std * self._ystd)
         elif return_cov is True:
-            Kss = self._gramian(Z)
+            Kss = self._gramian(self.alpha, Z)
             cov = np.maximum(0, Kss - Ks @ (self.Kinv @ Ks.T))
-            return (ymean, cov * self.y_std**2)
+            return (ymean, cov * self._ystd**2)
         else:
             return ymean
 
@@ -265,15 +192,17 @@ class GaussianProcessRegressor:
             Leave-one-out standard deviation of the predictive distribution at
             query points.
         """
-        assert(len(Z) == len(z))
-        z = np.asarray(z)
+        z_mask, z_masked = self.mask(z)
         if self.normalize_y is True:
-            z_mean, z_std = np.mean(z), np.std(z)
-            z = (z - z_mean) / z_std
+            z_mean, z_std = np.mean(z_masked), np.std(z_masked)
+            z = (z_masked - z_mean) / z_std
         else:
             z_mean, z_std = 0, 1
-        Kinv, _ = self._invert(self._gramian(Z))
-        Kinv_diag = (Kinv @ np.eye(len(Z))).diagonal()
+            z = z_masked
+
+        K = self._gramian(self.alpha, Z)[z_mask, :][:, z_mask]
+        Kinv, _ = self._invert(K, rcond=self.beta)
+        Kinv_diag = Kinv.diagonal()
         ymean = (z - Kinv @ z / Kinv_diag) * z_std + z_mean
         if return_std is True:
             std = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
@@ -319,8 +248,12 @@ class GaussianProcessRegressor:
             is True.
         """
         theta = theta if theta is not None else self.kernel.theta
-        X = X if X is not None else self.X
-        y = y if y is not None else self.y
+        X = X if X is not None else self._X
+        if y is not None:
+            y_mask, y = self.mask(y)
+        else:
+            y = self._y
+            y_mask = self._y_mask
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -331,21 +264,24 @@ class GaussianProcessRegressor:
         t_kernel = time.perf_counter()
 
         if eval_gradient is True:
-            K, dK = self._gramian(X, kernel=kernel, jac=True)
+            K, dK = self._gramian(self.alpha, X, kernel=kernel, jac=True)
+            K = K[y_mask, :][:, y_mask]
+            dK = dK[y_mask, :, :][:, y_mask, :]
         else:
-            K = self._gramian(X, kernel=kernel)
+            K = self._gramian(self.alpha, X, kernel=kernel)
+            K = K[y_mask, :][:, y_mask]
 
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
 
-        Kinv, logdet = self._invert(K)
+        Kinv, logdet = self._invert(K, rcond=self.beta)
         Ky = Kinv @ y
         yKy = y @ Ky
 
         if eval_gradient is True:
             d_theta = (
-                np.einsum('ij,ijk->k', Kinv @ np.eye(len(K)), dK) -
+                np.einsum('ij,ijk->k', Kinv.todense(), dK) -
                 np.einsum('i,ijk,j', Ky, dK, Ky)
             )
             retval = (yKy + logdet, d_theta * np.exp(theta))
@@ -405,8 +341,12 @@ class GaussianProcessRegressor:
             is True.
         """
         theta = theta if theta is not None else self.kernel.theta
-        X = X if X is not None else self.X
-        y = y if y is not None else self.y
+        X = X if X is not None else self._X
+        if y is not None:
+            y_mask, y = self.mask(y)
+        else:
+            y = self._y
+            y_mask = self._y_mask
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -415,17 +355,22 @@ class GaussianProcessRegressor:
             kernel.theta = theta
 
         t_kernel = time.perf_counter()
+
         if eval_gradient is True:
-            K, dK = self._gramian(X, kernel=kernel, jac=True)
+            K, dK = self._gramian(self.alpha, X, kernel=kernel, jac=True)
+            K = K[y_mask, :][:, y_mask]
+            dK = dK[y_mask, :, :][:, y_mask, :]
         else:
-            K = self._gramian(X, kernel=kernel)
+            K = self._gramian(self.alpha, X, kernel=kernel)
+            K = K[y_mask, :][:, y_mask]
+
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
 
-        Kinv, logdet = self._invert(K)
+        Kinv, logdet = self._invert(K, rcond=self.beta)
         if not isinstance(Kinv, np.ndarray):
-            Kinv = Kinv @ np.eye(len(X))
+            Kinv = Kinv.todense()
         Kinv_diag = Kinv.diagonal()
         Ky = Kinv @ y
         e = Ky / Kinv_diag
@@ -457,65 +402,3 @@ class GaussianProcessRegressor:
             )
 
         return retval
-
-    def _hyper_opt(self, fun, x0, tol, repeat, theta_jitter, verbose):
-        opt = None
-
-        for r in range(repeat):
-            if verbose:
-                mprint.table_start()
-
-            opt_local = minimize(
-                fun=fun,
-                method=self.optimizer,
-                x0=x0 + theta_jitter * np.random.randn(len(x0)) if r else x0,
-                bounds=self.kernel.bounds,
-                jac=True,
-                tol=tol,
-            )
-
-            if not opt or (opt_local.success and opt_local.fun < opt.fun):
-                opt = opt_local
-
-        return opt
-
-    def save(self, path, filename='model.pkl', overwrite=False):
-        """Save the trained GaussianProcessRegressor with the associated data
-        as a pickle.
-
-        Parameters
-        ----------
-        path: str
-            The directory to store the saved model.
-        filename: str
-            The file name for the saved model.
-        overwrite: bool
-            If True, a pre-existing file will be overwritten. Otherwise, a
-            runtime error will be raised.
-        """
-        f_model = os.path.join(path, filename)
-        if os.path.isfile(f_model) and not overwrite:
-            raise RuntimeError(
-                f'Path {f_model} already exists. To overwrite, set '
-                '`overwrite=True`.'
-            )
-        store = self.__dict__.copy()
-        store['theta'] = self.kernel.theta
-        store.pop('kernel', None)
-        pickle.dump(store, open(f_model, 'wb'), protocol=4)
-
-    def load(self, path, filename='model.pkl'):
-        """Load a stored GaussianProcessRegressor model from a pickle file.
-
-        Parameters
-        ----------
-        path: str
-            The directory where the model is saved.
-        filename: str
-            The file name for the saved model.
-        """
-        f_model = os.path.join(path, filename)
-        store = pickle.load(open(f_model, 'rb'))
-        theta = store.pop('theta')
-        self.__dict__.update(**store)
-        self.kernel.theta = theta

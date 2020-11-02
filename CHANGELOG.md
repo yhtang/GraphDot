@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a1 (2020-10-15)
+
+- Enabled GPR training with missing target values.
+
 ## 0.7 (2020-09-21)
 
 This version formalizes the inclusion of new features introduced from 0.7a1
@@ -18,7 +22,7 @@ to 0.7b2. An (incomplete) list of features include:
 - New atomic adjacency options such as alternative bell-shaped compact
   adjacency functions (`compactbell[a,b]`), and new length scale choices using covalent radiu etc.
 - Perform value range check for the node and edge kernels during graph
-- kernel creation.
+  kernel creation.
 - Added a `to_networkx()` method to `graphdot.Graph`.
 - Enhanced the readability of the string representations of kernel
   hyperparameters using an indented print layout.

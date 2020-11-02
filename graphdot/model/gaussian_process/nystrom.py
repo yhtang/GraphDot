@@ -6,10 +6,10 @@ import numpy as np
 from graphdot.util.printer import markdown as mprint
 import graphdot.linalg.low_rank as lr
 from graphdot.linalg.spectral import powerh
-from .gpr import GaussianProcessRegressor
+from .base import GaussianProcessRegressorBase
 
 
-class LowRankApproximateGPR(GaussianProcessRegressor):
+class LowRankApproximateGPR(GaussianProcessRegressorBase):
     r"""Accelerated Gaussian process regression (GPR) using the Nystrom low-rank
     approximation.
 
@@ -17,17 +17,16 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     ----------
     kernel: kernel instance
         The covariance function of the GP.
-    alpha: float > 0, default = 1e-7
+    alpha: float > 0
         Value added to the diagonal of the core matrix during fitting. Larger
         values correspond to increased noise level in the observations. A
         practical usage of this parameter is to prevent potential numerical
         stability issues during fitting, and ensures that the core matrix is
         always positive definite in the precense of duplicate entries and/or
         round-off error.
-    beta: float > 0, default = 1e-7
-        Threshold value for truncating the singular values when computing the
-        pseudoinverse of the low-rank kernel matrix. Can be used to tune the
-        numerical stability of the model.
+    beta: float > 0
+        Cutoff value on the singular values for the spectral pseudoinverse
+        of the low-rank kernel matrix.
     optimizer: one of (str, True, None, callable)
         A string or callable that represents one of the optimizers usable in
         the scipy.optimize.minimize method.
@@ -45,14 +44,16 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
     def __init__(self, kernel, alpha=1e-7, beta=1e-7,
                  optimizer=None, normalize_y=False, kernel_options={}):
-        self.kernel = kernel
+        super().__init__(
+            kernel,
+            normalize_y=normalize_y,
+            kernel_options=kernel_options
+        )
         self.alpha = alpha
         self.beta = beta
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
-        self.normalize_y = normalize_y
-        self.kernel_options = kernel_options
 
     @property
     def C(self):
@@ -72,7 +73,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     def _corespace(self, C=None, Kcc=None):
         assert(C is None or Kcc is None)
         if Kcc is None:
-            Kcc = self._gramian(C)
+            Kcc = self._gramian(self.alpha, C)
         try:
             return powerh(Kcc, -0.5, return_symmetric=False)
         except np.linalg.LinAlgError:
@@ -137,13 +138,18 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                     '(ง๑ •̀_•́)ง LOOCV training not ready yet.'
                 )
 
+            def xgen(n):
+                x0 = self.kernel.theta.copy()
+                yield x0
+                yield from x0 + theta_jitter * np.random.randn(n - 1, len(x0))
+
             opt = self._hyper_opt(
-                lambda theta, objective=objective: objective(
+                method=self.optimizer,
+                fun=lambda theta, objective=objective: objective(
                     theta, eval_gradient=True, clone_kernel=False,
                     verbose=verbose
                 ),
-                self.kernel.theta.copy(),
-                tol, repeat, theta_jitter, verbose
+                xgen=xgen(repeat), tol=tol, verbose=verbose
             )
             if verbose:
                 print(f'Optimization result:\n{opt}')
@@ -157,96 +163,13 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 )
 
         '''build and store GPR model'''
-        self.Kcc_rsqrt = self._corespace(C=self.C)
-        self.Kxc = self._gramian(self.X, self.C)
+        self.Kcc_rsqrt = self._corespace(C=self._C)
+        self.Kxc = self._gramian(None, self._X, self._C)
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
-        self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').inverse()
-        self.Ky = self.Kinv @ self.y
+        self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').pinv()
+        self.Ky = self.Kinv @ self._y
 
         return self
-
-    # def fit_loocv(self, X, y, return_mean=False, return_std=False,
-    #               tol=1e-4, repeat=1, theta_jitter=1.0, verbose=False):
-    #     """Train a GPR model and return the leave-one-out cross validation
-    #     results on the dataset. If the `optimizer` argument was set while
-    #     initializing the GPR object, the hyperparameters of the kernel will be
-    #     optimized with regard to the LOOCV RMSE.
-
-    #     Parameters
-    #     ----------
-    #     X: list of objects or feature vectors.
-    #         Input values of the training data.
-    #     y: 1D array
-    #         Output/target values of the training data.
-    #     return_mean: boolean
-    #         If True, the leave-one-out predictive mean of the model on the
-    #         training data are returned along with the model.
-    #     return_std: boolean
-    #         If True, the leave-one-out predictive standard deviations of the
-    #         model on the training data are returned along with the model.
-    #     tol: float
-    #         Tolerance for termination.
-    #     repeat: int
-    #         Repeat the hyperparameter optimization by the specified number of
-    #         times and return the best result.
-    #     theta_jitter: float
-    #         Standard deviation of the random noise added to the initial
-    #         logscale hyperparameters across repeated optimization runs.
-    #     verbose: bool
-    #         Whether or not to print out the optimization progress and outcome.
-
-    #     Returns
-    #     -------
-    #     self: GaussianProcessRegressor
-    #         returns an instance of self.
-    #     ymean: 1D array, only if return_mean is True
-    #         Mean of the leave-one-out predictive distribution at query points.
-    #     std: 1D array, only if return_std is True
-    #         Standard deviation of the leave-one-out predictive distribution.
-    #     """
-    #     self.X = X
-    #     self.y = y
-
-    #     '''hyperparameter optimization'''
-    #     if self.optimizer:
-    #         opt = self._hyper_opt(
-    #             lambda theta, self=self: self.squared_loocv_error(
-    #                 theta, eval_gradient=True, clone_kernel=False,
-    #                 verbose=verbose
-    #             ),
-    #             self.kernel.theta.copy(),
-    #             tol, repeat, theta_jitter, verbose
-    #         )
-    #         if verbose:
-    #             print(f'Optimization result:\n{opt}')
-
-    #         if opt.success:
-    #             self.kernel.theta = opt.x
-    #         else:
-    #             raise RuntimeError(
-    #                 f'Minimum LOOCV optimization did not converge, got:\n'
-    #                 f'{opt}'
-    #             )
-
-    #     '''build and store GPR model'''
-    #     self._compute_low_rank_subspace(inplace=True)
-    #     self.Kxc = self._gramian(self.X, self.C)
-    #     self.Fxc = self.Kxc @ self.Kcc_rsqrt
-    #     self.Kinv = LowRankApproximateInverse(self.Fxc, self.beta)
-    #     self.Ky = self.Kinv @ self.y
-
-    #     if return_mean is False and return_std is False:
-    #         return self
-    #     else:
-    #         retvals = []
-    #         Kinv_diag = self.Kinv.diagonal()
-    #         if return_mean is True:
-    #             ymean = self.y - self.Kinv @ self.y / Kinv_diag
-    #             retvals.append(ymean * self.y_std + self.y_mean)
-    #         if return_std is True:
-    #             ystd = np.sqrt(1 / np.maximum(Kinv_diag, 1e-14))
-    #             retvals.append(ystd * self.y_std)
-    #         return (self, *retvals)
 
     def predict(self, Z, return_std=False, return_cov=False):
         """Predict using the trained GPR model.
@@ -273,21 +196,21 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         """
         if not hasattr(self, 'Kinv'):
             raise RuntimeError('Model not trained.')
-        Kzc = self._gramian(Z, self.C)
+        Kzc = self._gramian(None, Z, self._C)
         Fzc = Kzc @ self.Kcc_rsqrt
         Kzx = lr.dot(Fzc, self.Fxc.T)
 
-        ymean = Kzx @ self.Ky * self.y_std + self.y_mean
+        ymean = Kzx @ self.Ky * self._ystd + self._ymean
         if return_std is True:
-            Kzz = self._gramian(Z, diag=True)
+            Kzz = self._gramian(self.alpha, Z, diag=True)
             std = np.sqrt(
                 np.maximum(Kzz - (Kzx @ self.Kinv @ Kzx.T).diagonal(), 0)
             )
-            return (ymean, std * self.y_std)
+            return (ymean, std * self._ystd)
         elif return_cov is True:
-            Kzz = self._gramian(Z)
+            Kzz = self._gramian(self.alpha, Z)
             cov = np.maximum(Kzz - (Kzx @ self.Kinv @ Kzx.T).todense(), 0)
-            return (ymean, cov * self.y_std**2)
+            return (ymean, cov * self._ystd**2)
         else:
             return ymean
 
@@ -331,10 +254,10 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
 
         if not hasattr(self, 'Kcc_rsqrt'):
             raise RuntimeError('Model not trained.')
-        Kzc = self._gramian(Z, self.C)
+        Kzc = self._gramian(None, Z, self._C)
 
         Cov = Kzc.T @ Kzc
-        Cov.flat[::len(self.C) + 1] += self.alpha
+        Cov.flat[::len(self._C) + 1] += self.alpha
         Cov_rsqrt, eigvals = powerh(
             Cov, -0.5, return_symmetric=False, return_eigvals=True
         )
@@ -357,7 +280,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
                 )
         elif method == 'gpr-like':
             F = Kzc @ self.Kcc_rsqrt
-            Kinv = lr.dot(F, rcond=self.beta, mode='clamp').inverse()
+            Kinv = lr.dot(F, rcond=self.beta, mode='clamp').pinv()
             zstar = z - (Kinv @ z) / Kinv.diagonal()
             if return_std is True:
                 std = np.sqrt(1 / np.maximum(Kinv.diagonal(), 1e-14))
@@ -410,9 +333,9 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             is True.
         """
         theta = theta if theta is not None else self.kernel.theta
-        C = C if C is not None else self.C
-        X = X if X is not None else self.X
-        y = y if y is not None else self.y
+        C = C if C is not None else self._C
+        X = X if X is not None else self._X
+        y = y if y is not None else self._y
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -421,12 +344,14 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
             kernel.theta = theta
 
         t_kernel = time.perf_counter()
+
         if eval_gradient is True:
-            Kxc, d_Kxc = self._gramian(X, C, kernel=kernel, jac=True)
-            Kcc, d_Kcc = self._gramian(C, kernel=kernel, jac=True)
+            Kxc, d_Kxc = self._gramian(None, X, C, kernel=kernel, jac=True)
+            Kcc, d_Kcc = self._gramian(self.alpha, C, kernel=kernel, jac=True)
         else:
-            Kxc = self._gramian(X, C, kernel=kernel)
-            Kcc = self._gramian(C, kernel=kernel)
+            Kxc = self._gramian(None, X, C, kernel=kernel)
+            Kcc = self._gramian(self.alpha, C, kernel=kernel)
+
         t_kernel = time.perf_counter() - t_kernel
 
         t_linalg = time.perf_counter()
@@ -434,7 +359,7 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
         Kcc_rsqrt = self._corespace(Kcc=Kcc)
         F = Kxc @ Kcc_rsqrt
         K = lr.dot(F, rcond=self.beta, mode='clamp')
-        K_inv = K.inverse()
+        K_inv = K.pinv()
 
         logdet = K.logdet()
         Ky = K_inv @ y
@@ -515,8 +440,8 @@ class LowRankApproximateGPR(GaussianProcessRegressor):
     #     """
     #     raise RuntimeError('Not implemented')
     #     theta = theta if theta is not None else self.kernel.theta
-    #     X = X if X is not None else self.X
-    #     y = y if y is not None else self.y
+    #     X = X if X is not None else self._X
+    #     y = y if y is not None else self._y
 
     #     if clone_kernel is True:
     #         kernel = self.kernel.clone_with_theta(theta)
