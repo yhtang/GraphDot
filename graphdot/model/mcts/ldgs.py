@@ -1,141 +1,65 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os
-import random
-from abc import ABC
-from scipy.stats import norm
 
-class Rewrite(ABC):
-    ''' Abstract base class for Rewrite operations. '''
+class LikelihoodDrivenGraphSearch:
+    '''Monte Carlo tree search for creating graphs with desired propreties.
 
-    @abstractmethod
-    def __call__(self, graph, random_state):
-        ''' Returns a newly rewritten graph. 
-        If no seed is provided, the method of rewriting is chosen uniformly between add, substitute, and delete. 
-        If a seed is provided, the graph will be modified according to the provided seed value.
-
-        Parameters
-        ----------
-        graph: string
-            The input graph to be rewritten, in string format.
-        random_state: float, optional
-            The seed value indicating the method of rewriting the graph, from 0 to 1.
-
-        Returns
-        -------
-        rewrite_graph: string
-            The newly rewritten graph in string format.
-        
-        '''
-        return None
-
-class TreeNode:
-    ''' A MCTS tree node.
-
-    Parameters
-    -----------
-    children: list
-        A list of TreeNodes of the current Node's children
-    parent: TreeNode
-        The current Node's parent. If the current Node is the root node, parent is None.
-    graph: 
-        String representation of the graph being represented.
-    visits: integer
-        The number of times this node has been visited.
-    allchild: list of Graphs
-        The list of all graphs in the current node's subtree.
-    depth: integer
-        The depth of the tree.
-    '''
-
-    def __init__(self, children, parent, graph, visits, allchild, depth):
-        self.children = children
-        self.parent = parent
-        self.graph = graph
-        self.visits = visits
-        self.allchild = allchild
-        self.mean = 0
-        self.std = 0
-        self.post_mean = 0
-        self.post_var = 0
-        self.score = 0
-        self.depth = depth
-        self.selected = False
-
-    def __repr__(self):
-        if self.children:
-            branch_str = ', ' + repr(self.children)
-        else:
-            branch_str = ''
-        return 'Node({0}{1})'.format(self.graph, branch_str)
-
-    def __str__(self):
-        def print_tree(t, indent=0):
-            space = 50 - (t.depth*4 + len(t.graph))
-            if t.selected: select = 1
-            else: select = 0
-            if t.children:
-                tree_str = '    ' * indent + '*' * select + t.graph + " " * space + "(Post_mean: " + str(t.post_mean)[:5] + " Post_var: " + str(t.post_var)[:5] + " score: " + str(t.score)[:5] + ")\n"
-                for child in t.children:
-                    tree_str += print_tree(child, indent + 1)
-            else:
-                tree_str = '    ' * indent + '*' * select + t.graph + " " * space + "(Mean: " + str(t.mean)[:5] + " Std: " + str(t.std)[:5] + " score: " + str(t.score)[:5] + ")\n"
-            return tree_str
-        return print_tree(self).rstrip()
-
-class MCTS():
-    ''' Monte Carlo Tree Search algorithm. 
     Parameters
     ----------
-    predictor: Predictor instance
-        A predictor used to calculate the corresponding value of a given graph. 
-        This predictor should be have the predict() function defined, which returns
-        the mean and covariance matrix of the prediction.
-    seed_graph: graph
-        The seed graph to start the MCTS algorithm from.
-    tree: TreeNode instance
-        The state of the MCTS tree at the beginning of the MCTS iteration.
-    width: integer
-        The number of maximum nodes allowed in one level.
-    iterations: integer
-        The number of MCTS iterations to run in each turn.
-    depth: integer
-        The maximum depth allowed in node selection.
     target: float
-        The target value to achieve.
-    margin: float
-        The margin of error around the target value that can be accepted. 
-    sigma_margin: float
-        The largest degree of uncertainty that can be accepted.
-    exploration_constant: float
-        The degree of exploration; this is a hyperparameter to be tuned.
-    tograph: function
-        A function that converts a string representation to a graph.
-    scoring: string, default = "uct"
-        Either "uct" or "score". Determines the scoring function used.
+        Desired value for the target property.
+    predictor: callable
+        A predictor used to calculate the target property of a given graph.
     '''
-    
-    def __init__(self, predictor, seed_graph, tree, width, iterations, depth, target, margin, sigma_margin, exploration_constant, tograph, scoring='uct'):
-        self.seed_graph = seed_graph
-        self.tree = tree
-        self.iterations = iterations
-        self.depth = depth
-        self.width = width
-        self.target = target
-        self.predictor = predictor
-        self.margin = margin
-        self.sigma_margin = sigma_margin
-        self.exploration_constant = exploration_constant
-        assert scoring in ['mlt', 'uct']
-        self.scoring = scoring
-    
-    def __str__(self):
-        print(self.tree)
-    
+
+    def __init__(self, rewriter, evaluator, score='ucb'):
+        self.rewriter = rewriter
+        self.evaluator = evaluator
+        # self.tree = tree
+        # self.iterations = iterations
+        # self.depth = depth
+        # self.width = width
+        # self.target = target
+        # self.predictor = predictor
+        # self.margin = margin
+        # self.sigma_margin = sigma_margin
+        # self.exploration_constant = exploration_constant
+        # self.scoring = scoring
+
+    # def __str__(self):
+    #     return str(self.tree)
+
+    @staticmethod
+    def argmax(iterable, less):
+        best = None
+        for i in iterable:
+            if best is None or less(best, i):
+                best = i
+        return best
+
+    def select_best_child(self, node):
+        '''Recursively selects the optimal child among the children of a node.
+        '''
+        best = self.argmax(
+            node.children,
+            lambda i, j: self.score(i) < self.score(j)
+        )
+        return best if best.children is None else self.select_best_child(best)
+
+    def expand(self, node):
+        '''Create one or more children if the node is not terminal.'''
+        assert node.children is None, f'Cannot expand non-leaf node {node}.'
+        node.children = self.rewriter(node)
+
+    def simulate(self, node):
+        '''Select one or more children of a node and run simulation.'''
+        mean, cov = self.evaluator(node.children)
+        node.payloads
+
     def check_found(self, child, pred, sigma):
         ''' Checks to see if a node that fits the given constraints has been found.
-        
+
         Parameters
         ----------
         child: TreeNode
@@ -144,7 +68,7 @@ class MCTS():
             Prediction of the node's associated value.
         sigma: float
             The node's associated uncertainty value.
-        
+
         Returns
         -------
         found: boolean
@@ -268,9 +192,34 @@ class MCTS():
             else:
                 # TODO: implement UCT
             node = node.parent
-    
-    def solve(self):
+
+    def __call__(self):
         ''' Run MCTS and select best action. 
+
+        Parameters
+        ----------
+        seed: graph
+            The starting point of the Monte Carlo tree search.
+        iterations: integer
+            The number of MCTS iterations to run in each turn.
+        depth: integer
+            The maximum depth allowed in node selection.
+        branching_factor: integer
+            The maximum number of children for a node.
+        target_confidence: float
+            Only graphs that lies with the given confidence interval 
+            The acceptable margin of error around the desired value for the target
+            property.
+        sigma_margin: float
+            The largest degree of uncertainty that can be accepted.
+        exploration_constant: float
+            A tunable hyperparameter that controls the balance between exploration
+            and exploitation.
+        score: 'uct' or 'l4t'
+            The scoring function to be used for node selection. 'uct' = upper
+            confidence bounds applied to trees. 'l4t' = likelihood applied to
+            trees.
+
 
         Returns
         -------
