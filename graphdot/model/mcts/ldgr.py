@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+# from .tree import Tree
+# from graphdot.minipandas import DataFrame
 from graphdot.util.iterable import argmax
+from .tree import Tree
 
 
-class LikelihoodDrivenGraphRewrite:
+class LikelihoodDrivenTreeSearch:
     '''A varient of Monte Carlo tree search for finding graphs with desired
     propreties.
 
@@ -21,33 +24,60 @@ class LikelihoodDrivenGraphRewrite:
         self.evaluator = evaluator
         self.alpha = alpha
 
+    def __call__(self, seed, target):
+        tree = Tree(
+            parent=[None],
+            children=[None],
+            label=[seed],
+            visits=np.zeros(1)
+        )
+        self.evaluate(tree)
+        # while True:
+        for _ in range(2):
+            self.step(next(tree.iternodes()))
+
+        print(f'Tree\n{str(tree)}')
+
+    def score(self, node):
+        return True
+
+    def evaluate(self, nodes):
+        mean, cov = self.evaluator.predict(nodes.label, return_cov=True)
+        cov.flat[::len(cov) + 1] += self.alpha
+        nodes['mean'] = mean
+        nodes['cov'] = cov
+        nodes['uncertainty'] = cov.diagonal()**0.5
+        nodes.visits += 1
+
     def step(self, root):
         # selection
-        n = self.tree.root
+        n = root
         while n.children is not None:
             n.visits += 1
             n = argmax(
-                n.children,
+                n.children.iternodes(),
                 lambda i, j: self.score(i) < self.score(j)
             )
 
         # expansion
-        n.children = self.rewriter(n)
+        child_graphs = self.rewriter(n)
+        print(f'type(n) {type(n)}')
+        n.children = Tree(
+            parent=[n] * len(child_graphs),
+            children=[None] * len(child_graphs),
+            label=child_graphs,
+            visits=np.zeros(len(child_graphs))
+        )
 
         # simulate
-        n.children.mean, n.children.cov = self.evaluator(n.children)
-        n.children.var = n.children.cov.diagonal()
-        n.children.cov.flat[::len(n.children.cov) + 1] *= 1 + self.alpha
-
-        cov_inv = np.linalg.inv(n.children.cov)
-        n.mean = np.sum(cov_inv @ n.children.mean) / np.sum(cov_inv)
-        n.var = 1 / np.sum(cov_inv)
+        self.evaluate(n.children)
 
         # back-propagate
-        p = n.parent
+        p = n
         while p:
             c = np.copy(p.children.cov)
-            c.flat[::len(c) + 1] += p.children.var
+            c.flat[::len(c) + 1] += p.children.uncertainty**2
             c_inv = np.linalg.inv(c)
             p.mean = np.sum(c_inv @ p.children.mean) / np.sum(c_inv)
-            p.var = 1 / np.sum(c_inv)
+            p.uncertainty = np.sqrt(1 / np.sum(c_inv))
+            p = p.parent

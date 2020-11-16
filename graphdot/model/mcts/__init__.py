@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from .mcts import MCTS
+# from .mcts import MCTS
 
 
-__all__ = ['MCTS']
+# __all__ = ['MCTS']
