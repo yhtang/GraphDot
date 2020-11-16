@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a2 (2020-11-16)
+
+- Enabled Low-rank GPR (Nystrom) training with missing target values.
+
 ## 0.8a1 (2020-10-15)
 
 - Enabled GPR training with missing target values.
