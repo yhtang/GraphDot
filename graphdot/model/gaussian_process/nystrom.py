@@ -164,7 +164,7 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
 
         '''build and store GPR model'''
         self.Kcc_rsqrt = self._corespace(C=self._C)
-        self.Kxc = self._gramian(None, self._X, self._C)
+        self.Kxc = self._gramian(None, self._X, self._C)[self._y_mask, :]
         self.Fxc = self.Kxc @ self.Kcc_rsqrt
         self.Kinv = lr.dot(self.Fxc, rcond=self.beta, mode='clamp').pinv()
         self.Ky = self.Kinv @ self._y
@@ -335,7 +335,11 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         theta = theta if theta is not None else self.kernel.theta
         C = C if C is not None else self._C
         X = X if X is not None else self._X
-        y = y if y is not None else self._y
+        if y is not None:
+            y_mask, y = self.mask(y)
+        else:
+            y = self._y
+            y_mask = self._y_mask
 
         if clone_kernel is True:
             kernel = self.kernel.clone_with_theta(theta)
@@ -348,9 +352,11 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         if eval_gradient is True:
             Kxc, d_Kxc = self._gramian(None, X, C, kernel=kernel, jac=True)
             Kcc, d_Kcc = self._gramian(self.alpha, C, kernel=kernel, jac=True)
+            Kxc, d_Kxc = Kxc[y_mask, :], d_Kxc[y_mask, :, :]
         else:
             Kxc = self._gramian(None, X, C, kernel=kernel)
             Kcc = self._gramian(self.alpha, C, kernel=kernel)
+            Kxc = Kxc[y_mask, :]
 
         t_kernel = time.perf_counter() - t_kernel
 

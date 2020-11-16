@@ -77,6 +77,31 @@ def test_nystrom_large_dataset():
     assert(z_pred == pytest.approx(z, 1e-3, 1e-3))
 
 
+def test_nystrom_fit_masked_target():
+
+    class Kernel:
+        def __call__(self, X, Y=None):
+            return np.exp(-np.subtract.outer(X, Y if Y is not None else X)**2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+    C = np.array([0, 2, 4, 6, 8])
+    X = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    y = np.random.randn(10)
+    bad = [1, 4, 7]
+    y[bad] = None
+    kernel = Kernel()
+    gpr = LowRankApproximateGPR(kernel=kernel, alpha=1e-12)
+    gpr.fit(C, X, y)
+    assert(np.all(np.isfinite(gpr.predict(X))))
+
+    baseline = LowRankApproximateGPR(kernel=kernel, alpha=1e-12)
+    baseline.fit(C, X[~np.isnan(y)], y[~np.isnan(y)])
+    grid = np.linspace(-1, 10, 100)
+    assert(np.allclose(gpr.predict(grid), baseline.predict(grid)))
+
+
 def test_nystrom_log_marginal_likelihood():
 
     class Kernel:
