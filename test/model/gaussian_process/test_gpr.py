@@ -99,15 +99,19 @@ def test_gpr_fit_masked_target():
         def diag(self, X):
             return np.ones_like(X)
 
-    X = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    X = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     y = np.random.randn(10)
     bad = [1, 4, 7]
     y[bad] = None
     kernel = Kernel()
     gpr = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
     gpr.fit(X, y)
-    z = gpr.predict(X)
-    assert(np.all(np.isfinite(z)))
+    assert(np.all(np.isfinite(gpr.predict(X))))
+
+    baseline = GaussianProcessRegressor(kernel=kernel, alpha=1e-12)
+    baseline.fit(X[~np.isnan(y)], y[~np.isnan(y)])
+    grid = np.linspace(-1, 10, 100)
+    assert(np.allclose(gpr.predict(grid), baseline.predict(grid)))
 
 
 def test_gpr_predict_periodic():
