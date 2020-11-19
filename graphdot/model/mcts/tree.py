@@ -7,40 +7,48 @@ class Tree(DataFrame):
 
     class NodeView:
         def __init__(self, tree, i):
-            self._tree = tree
-            self._i = i
+            self.__dict__.update(tree=tree, i=i)
 
         def __getattr__(self, key):
-            if key.startswith('_'):
-                return self.__dict__[key]
-            else:
-                return self._tree[key][self._i]
+            return self.tree[key][self.i]
 
         def __setattr__(self, key, val):
-            if key.startswith('_'):
-                self.__dict__[key] = val
-            else:
-                self._tree[key][self._i] = val
+            self.tree[key][self.i] = val
 
         def __str__(self):
-            return ' '.join([f'{a}:{getattr(self, a)}' for a in self._tree.columns])
+            return ' '.join([
+                f'{key}:{getattr(self, key)}' for key in self.tree.columns
+            ])
 
-    def __init__(self, d={}, **kwargs):
-        d.update(**kwargs)
-        super().__init__(d)
+    def __init__(self, data={}, **kwargs):
+        data.update(**kwargs)
+        super().__init__(data)
 
     def iternodes(self):
         for i in range(len(self)):
             yield Tree.NodeView(self, i)
 
+    def _flatten(self, payloads, level=0):
+        entries = []
+        for children, entry in zip(
+            self.children, zip(*[self[key] for key in payloads])
+        ):
+            entries.append([level, *entry])
+            if children is not None:
+                entries += children._flatten(payloads, level=level + 1)
+        return entries
+
+    @property
+    def flat(self):
+        payloads = [a for a in self.columns if a not in ['parent', 'children']]
+        return DataFrame(
+            {key: val for key, val in zip(
+                ['level'] + payloads,
+                list(zip(*self._flatten(payloads)))
+            )}
+        )
+
     def __str__(self):
         return '\n'.join([
-            # str(t) if c is None else f'{t}\n\tXXX' for t, c in zip(
-                str(t) if c is None else f'{t}\n\t' + '\n\t'.join(str(c).split('\n')) for t, c in zip(
-            # f'{t}' for t, c in zip(
-                self.drop(['parent', 'children']).iternodes(),
-                self.children
-            )
+            '  ' * n.level + str(n) for n in self.flat.itertuples('node')
         ])
-
-        
