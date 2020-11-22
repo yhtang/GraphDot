@@ -6,62 +6,63 @@ from graphdot.util.iterable import argmax
 from .tree import Tree
 
 
-class LikelihoodDrivenTreeSearch:
-    '''A varient of Monte Carlo tree search for finding graphs with desired
-    propreties.
+class LikelihoodDriven:
+    '''A varient of Monte Carlo tree search for optimization in a space of
+    graphs.
 
     Parameters
     ----------
-    target: float
-        Desired value for the target property.
     predictor: callable
         A predictor used to calculate the target property of a given graph.
     '''
 
-    def __init__(self, rewriter, evaluator, exploration_bias=1.0, alpha=1e-10):
+    def __init__(self, rewriter, surrogate, exploration_bias=1.0,
+                 precision=0.01):
         self.rewriter = rewriter
-        self.evaluator = evaluator
+        self.surrogate = surrogate
         self.exploration_bias = exploration_bias
-        self.alpha = alpha
+        self.precision = precision
 
-    def search(self, seed, target):
-        tree = self._spawn(None, [seed])
+    def find(self, xin, target, maxiter=500):
+        tree = self._spawn(None, [xin])
         self._evaluate(tree)
-        for _ in range(20):
-            print(f'{tree}\n\n')
-            self._step(
+        for _ in range(maxiter):
+            self._mcts_step(
                 tree,
-                lambda nodes: self._log_likelihood_ucb(target, nodes)
+                lambda nodes: self._likelihood_ucb(target, nodes)
             )
-        print(f'{tree}\n\n')
         return tree
 
     def _spawn(self, node, leaves):
         return Tree(
             parent=[node] * len(leaves),
             children=[None] * len(leaves),
-            state=leaves,
+            x=leaves,
             visits=np.zeros(len(leaves), dtype=np.int)
         )
 
-    def _log_likelihood_ucb(self, target, nodes):
-        return (
-            norm.pdf(target, nodes.tree_mean, nodes.tree_std)
-            + self.exploration_bias * np.sqrt(
-                np.log(nodes.parent[0].visits) / nodes.visits
-            )
+    def _likelihood(self, target, nodes):
+        return norm.pdf(target, nodes.tree_mean,
+                        np.maximum(self.precision, nodes.tree_std))
+
+    def _confidence_bounds(self, nodes):
+        return self.exploration_bias * np.sqrt(
+            np.log(nodes.parent[0].visits) / nodes.visits
         )
 
+    def _likelihood_ucb(self, target, nodes):
+        return self._likelihood(target, nodes) + self._confidence_bounds(nodes)
+
     def _evaluate(self, nodes):
-        mean, cov = self.evaluator.predict(nodes.state, return_cov=True)
+        mean, cov = self.surrogate.predict(nodes.x, return_cov=True)
         nodes['self_mean'] = mean.copy()
-        nodes['self_std'] = cov.diagonal()**0.5
         nodes['tree_mean'] = mean.copy()
+        nodes['self_std'] = cov.diagonal()**0.5
         nodes['tree_std'] = cov.diagonal()**0.5
         nodes['score'] = np.zeros_like(mean)
         nodes.visits += 1
 
-    def _step(self, tree, score_fn):
+    def _mcts_step(self, tree, score_fn):
         '''selection'''
         n = next(tree.iternodes())
         n.visits += 1
@@ -91,3 +92,21 @@ class LikelihoodDrivenTreeSearch:
             )**0.5
             p.children['score'] = score_fn(p.children)
             p = p.parent
+
+
+# def monte_carlo_tree_search(f, xin, xgen, exploration_bias=1.0,
+#                             precision=0.01, maxiter=500, return_tree=False):
+#     mcts = MonteCarloTreeSearch(
+#         rewriter=xgen,
+#         surrogate=lambda x, return_std: (f(x), np.zeros(len(x))),
+#         exploration_bias=exploration_bias,
+#         precision=precision
+#     )
+#     tree = mcts.find(xin, 0, maxiter=maxiter)
+#     if return_tree is True:
+#         return tree
+#     else:
+#         df = tree.flat.to_pandas()
+#         df['likelihood'] = norm.pdf(0, df.self_mean,
+#                                     np.maximum(precision, df.self_std))
+#         return df.sort_values(['likelihood'], ascending=False)
