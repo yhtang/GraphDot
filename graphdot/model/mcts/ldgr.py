@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-# from .tree import Tree
-# from graphdot.minipandas import DataFrame
+from scipy.stats import norm
 from graphdot.util.iterable import argmax
 from .tree import Tree
 
@@ -19,65 +18,76 @@ class LikelihoodDrivenTreeSearch:
         A predictor used to calculate the target property of a given graph.
     '''
 
-    def __init__(self, rewriter, evaluator, alpha=1e-8):
+    def __init__(self, rewriter, evaluator, exploration_bias=1.0, alpha=1e-10):
         self.rewriter = rewriter
         self.evaluator = evaluator
+        self.exploration_bias = exploration_bias
         self.alpha = alpha
 
-    def __call__(self, seed, target):
-        tree = Tree(
-            parent=[None],
-            children=[None],
-            label=[seed],
-            visits=np.zeros(1)
+    def search(self, seed, target):
+        tree = self._spawn(None, [seed])
+        self._evaluate(tree)
+        for _ in range(20):
+            print(f'{tree}\n\n')
+            self._step(
+                tree,
+                lambda nodes: self._log_likelihood_ucb(target, nodes)
+            )
+        print(f'{tree}\n\n')
+        return tree
+
+    def _spawn(self, node, leaves):
+        return Tree(
+            parent=[node] * len(leaves),
+            children=[None] * len(leaves),
+            state=leaves,
+            visits=np.zeros(len(leaves), dtype=np.int)
         )
-        self.evaluate(tree)
-        # while True:
-        for _ in range(2):
-            self.step(next(tree.iternodes()))
 
-        print(f'Tree\n{str(tree)}')
+    def _log_likelihood_ucb(self, target, nodes):
+        return (
+            norm.pdf(target, nodes.tree_mean, nodes.tree_std)
+            + self.exploration_bias * np.sqrt(
+                np.log(nodes.parent[0].visits) / nodes.visits
+            )
+        )
 
-    def score(self, node):
-        return True
-
-    def evaluate(self, nodes):
-        mean, cov = self.evaluator.predict(nodes.label, return_cov=True)
-        cov.flat[::len(cov) + 1] += self.alpha
-        nodes['mean'] = mean
-        nodes['cov'] = cov
-        nodes['uncertainty'] = cov.diagonal()**0.5
+    def _evaluate(self, nodes):
+        mean, cov = self.evaluator.predict(nodes.state, return_cov=True)
+        nodes['self_mean'] = mean.copy()
+        nodes['self_std'] = cov.diagonal()**0.5
+        nodes['tree_mean'] = mean.copy()
+        nodes['tree_std'] = cov.diagonal()**0.5
+        nodes['score'] = np.zeros_like(mean)
         nodes.visits += 1
 
-    def step(self, root):
-        # selection
-        n = root
+    def _step(self, tree, score_fn):
+        '''selection'''
+        n = next(tree.iternodes())
+        n.visits += 1
         while n.children is not None:
-            n.visits += 1
             n = argmax(
                 n.children.iternodes(),
-                lambda i, j: self.score(i) < self.score(j)
+                lambda i, j: i.score < j.score
             )
+            n.visits += 1
 
-        # expansion
-        child_graphs = self.rewriter(n)
-        print(f'type(n) {type(n)}')
-        n.children = Tree(
-            parent=[n] * len(child_graphs),
-            children=[None] * len(child_graphs),
-            label=child_graphs,
-            visits=np.zeros(len(child_graphs))
-        )
+        '''expansion'''
+        n.children = self._spawn(n, self.rewriter(n))
 
-        # simulate
-        self.evaluate(n.children)
+        '''simulate'''
+        self._evaluate(n.children)
 
-        # back-propagate
+        '''back-propagate'''
         p = n
         while p:
-            c = np.copy(p.children.cov)
-            c.flat[::len(c) + 1] += p.children.uncertainty**2
-            c_inv = np.linalg.inv(c)
-            p.mean = np.sum(c_inv @ p.children.mean) / np.sum(c_inv)
-            p.uncertainty = np.sqrt(1 / np.sum(c_inv))
+            p.tree_mean = np.average(
+                p.children.tree_mean,
+                weights=p.children.tree_std**-2
+            )
+            p.tree_std = np.average(
+                (p.children.tree_mean - p.tree_mean)**2,
+                weights=p.children.tree_std**-2
+            )**0.5
+            p.children['score'] = score_fn(p.children)
             p = p.parent

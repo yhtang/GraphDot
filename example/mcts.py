@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+from scipy.stats import norm
 from graphdot.model.mcts.ldgr import LikelihoodDrivenTreeSearch
 from graphdot.model.gaussian_process import GaussianProcessRegressor
 
@@ -25,28 +26,25 @@ class RandomJitter:
         self.n = n
 
     def __call__(self, x0):
-        print('x0', x0)
-        print('self.s', self.s)
-        print('self.n', self.n)
-        return x0.label + self.s * np.random.randn(self.n)
+        # print('x0', x0)
+        # print('self.s', self.s)
+        # print('self.n', self.n)
+        return x0.state + self.s * np.random.randn(self.n)
 
-
-gpr = GaussianProcessRegressor(kernel=Kernel(1.0))
-rewriter = RandomJitter(0.1, 4)
 
 # function to be learned
 def f(x):
-    return np.sin(x) + 2e-4 * x**3 - 2.0 * np.exp(-x**2)
+    # return np.sin(x) + 2e-4 * x**3 - 2.0 * np.exp(-x**2)
+    return 2 * x
 
 
+gpr = GaussianProcessRegressor(kernel=Kernel(0.5))
+rewriter = RandomJitter(0.333, 9)
 x = np.linspace(0, 3, 7)
 y = f(x)
 gpr.fit(x, y)
-
-
-# rewriter = SMILESRewriter(pool='default')
 mcts = LikelihoodDrivenTreeSearch(rewriter, gpr, alpha=1e-10)
-
-# result = mcts('C', branching_factor=16, target=-824.9)
-
-mcts(1.2, 2.0)
+tree = mcts.search(seed=0.5, target=2.0)
+flattree = tree.flat.to_pandas()
+flattree['likelihood'] = norm.pdf(2.0, flattree.self_mean, flattree.self_std)
+print(flattree.sort_values(['likelihood']))
