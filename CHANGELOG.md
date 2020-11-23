@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a3 (2020-11-23)
+
+- Added an experimental Monte Carlo tree search model.
+
 ## 0.8a2 (2020-11-16)
 
 - Enabled Low-rank GPR (Nystrom) training with missing target values.
