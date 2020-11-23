@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 
-class Rewrite(ABC):
+class Rewriter(ABC):
     ''' Abstract base class for graph rewrite rules. '''
 
     @abstractmethod
@@ -25,5 +25,5 @@ class Rewrite(ABC):
         '''
 
 
-class SMILESRewriter:
+class SMILESRewriter(Rewriter):
     pass

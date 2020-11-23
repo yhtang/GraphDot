@@ -6,7 +6,7 @@ from graphdot.util.iterable import argmax
 from .tree import Tree
 
 
-class LikelihoodDriven:
+class MCTSGraphTransformer:
     '''A varient of Monte Carlo tree search for optimization in a space of
     graphs.
 
@@ -23,21 +23,28 @@ class LikelihoodDriven:
         self.exploration_bias = exploration_bias
         self.precision = precision
 
-    def find(self, xin, target, maxiter=500):
-        tree = self._spawn(None, [xin])
+    def seek(self, g0, target, maxiter=500, return_tree=False):
+        tree = self._spawn(None, [g0])
         self._evaluate(tree)
         for _ in range(maxiter):
             self._mcts_step(
                 tree,
                 lambda nodes: self._likelihood_ucb(target, nodes)
             )
-        return tree
+        if return_tree is True:
+            return tree
+        else:
+            df = tree.flat
+            df['likelihood'] = norm.pdf(
+                target, df.self_mean, np.maximum(self.precision, df.self_std)
+            )
+            return df.to_pandas().sort_values(['likelihood'], ascending=False)
 
     def _spawn(self, node, leaves):
         return Tree(
             parent=[node] * len(leaves),
             children=[None] * len(leaves),
-            x=leaves,
+            g=leaves,
             visits=np.zeros(len(leaves), dtype=np.int)
         )
 
@@ -54,7 +61,7 @@ class LikelihoodDriven:
         return self._likelihood(target, nodes) + self._confidence_bounds(nodes)
 
     def _evaluate(self, nodes):
-        mean, cov = self.surrogate.predict(nodes.x, return_cov=True)
+        mean, cov = self.surrogate.predict(nodes.g, return_cov=True)
         nodes['self_mean'] = mean.copy()
         nodes['tree_mean'] = mean.copy()
         nodes['self_std'] = cov.diagonal()**0.5
