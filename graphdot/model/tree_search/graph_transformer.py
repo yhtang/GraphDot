@@ -7,13 +7,20 @@ from ._tree import Tree
 
 
 class MCTSGraphTransformer:
-    '''A varient of Monte Carlo tree search for optimization in a space of
-    graphs.
+    '''A varient of Monte Carlo tree search for optimization and root-finding
+    in a space of graphs.
 
     Parameters
     ----------
-    predictor: callable
+    rewriter: callable
+        A callable that implements the :py:class:`Rewriter` abstract class.
+    surrogate: object
         A predictor used to calculate the target property of a given graph.
+    exploration_bias: float
+        Tunes the preference of the MCTS model between exploitation and
+        exploration of the search space.
+    precision: float
+        Target precision of MCTS search outcome.
     '''
 
     def __init__(self, rewriter, surrogate, exploration_bias=1.0,
@@ -23,13 +30,41 @@ class MCTSGraphTransformer:
         self.exploration_bias = exploration_bias
         self.precision = precision
 
-    def seek(self, g0, target, maxiter=500, return_tree=False):
+    def seek(self, g0, target, maxiter=500, return_tree=False,
+             random_state=None):
+        '''Transforms an initial graph into one with a specific desired target
+        property value.
+
+        Parameters
+        ----------
+        g0: object
+            A graph to start the tree search with.
+        target: float
+            Target property value of the desired graph.
+        maxiter: int
+            Maximum number of MCTS iterations to perform.
+        return_tree: Boolean
+            Whether or not to return the search tree in its original form or as
+            a flattened dataframe.
+        random_state: int or :py:`np.random.Generator`
+            The seed to the random number generator (RNG), or the RNG itself.
+            If None, the default RNG in numpy will be used.
+
+        Returns
+        -------
+        tree: DataFrame
+            If `return_tree` is True, a hierarchical dataframe representing
+            the search tree will be returned; otherwise, a flattened dataframe
+            will be returned.
+        '''
+        random_state = self._parse_random_state(random_state)
         tree = self._spawn(None, [g0])
         self._evaluate(tree)
         for _ in range(maxiter):
             self._mcts_step(
                 tree,
-                lambda nodes: self._likelihood_ucb(target, nodes)
+                lambda nodes: self._likelihood_ucb(target, nodes),
+                random_state=random_state
             )
         if return_tree is True:
             return tree
@@ -37,6 +72,15 @@ class MCTSGraphTransformer:
             df = tree.flat
             df['likelihood'] = self._likelihood(target, df)
             return df.to_pandas().sort_values(['likelihood'], ascending=False)
+
+    @staticmethod
+    def _parse_random_state(random_state):
+        if isinstance(random_state, np.random.Generator):
+            return random_state
+        elif random_state is not None:
+            return np.random.Generator(np.random.PCG64(random_state))
+        else:
+            return np.random.default_rng()
 
     def _spawn(self, node, leaves):
         return Tree(
@@ -70,7 +114,7 @@ class MCTSGraphTransformer:
         nodes['score'] = np.zeros_like(mean)
         nodes.visits += 1
 
-    def _mcts_step(self, tree, score_fn):
+    def _mcts_step(self, tree, score_fn, random_state):
         '''selection'''
         n = next(tree.iternodes())
         n.visits += 1
@@ -82,7 +126,7 @@ class MCTSGraphTransformer:
             n.visits += 1
 
         '''expansion'''
-        n.children = self._spawn(n, self.rewriter(n))
+        n.children = self._spawn(n, self.rewriter(n, random_state))
 
         '''simulate'''
         self._evaluate(n.children)
@@ -100,21 +144,3 @@ class MCTSGraphTransformer:
             )**0.5
             p.children['score'] = score_fn(p.children)
             p = p.parent
-
-
-# def monte_carlo_tree_search(f, xin, xgen, exploration_bias=1.0,
-#                             precision=0.01, maxiter=500, return_tree=False):
-#     mcts = MonteCarloTreeSearch(
-#         rewriter=xgen,
-#         surrogate=lambda x, return_std: (f(x), np.zeros(len(x))),
-#         exploration_bias=exploration_bias,
-#         precision=precision
-#     )
-#     tree = mcts.find(xin, 0, maxiter=maxiter)
-#     if return_tree is True:
-#         return tree
-#     else:
-#         df = tree.flat.to_pandas()
-#         df['likelihood'] = norm.pdf(0, df.self_mean,
-#                                     np.maximum(precision, df.self_std))
-#         return df.sort_values(['likelihood'], ascending=False)

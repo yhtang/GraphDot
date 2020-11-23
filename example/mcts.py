@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from graphdot.model.tree_search import MCTSGraphTransformer
+from graphdot.model.tree_search import AbstractRewriter
 from graphdot.model.gaussian_process import GaussianProcessRegressor
 
 
@@ -19,29 +20,32 @@ class Kernel:
         return np.ones_like(X)
 
 
-class RandomJitter:
+# Dummy rewriter of a real numbers
+class RandomJitter(AbstractRewriter):
     def __init__(self, s, n):
         self.s = s
         self.n = n
 
-    def __call__(self, x):
-        return x.g + self.s * np.random.randn(self.n)
+    def __call__(self, x, rng):
+        return np.minimum(3, np.maximum(0, rng.normal(x.g, self.s, self.n)))
 
 
-# function to be learned
+# Function to be learned
 def f(x):
     return np.sin(x) + 2e-4 * x**3 - 2.0 * np.exp(-x**2)
     # return 2 * x
 
 
-x = np.linspace(0, 3, 7)
+# GPR surrogate model
+x = np.linspace(0, 3, 13)
 y = f(x)
 gpr = GaussianProcessRegressor(kernel=Kernel(0.5))
 gpr.fit(x, y)
 
+# Run MCTS
 mcts = MCTSGraphTransformer(
     rewriter=RandomJitter(0.333, 9),
     surrogate=gpr,
 )
 # print(mcts.seek(g0=0.5, target=2.0))
-print(mcts.seek(g0=0.5, target=0.0))
+print(mcts.seek(g0=0.5, target=0.0, maxiter=20))

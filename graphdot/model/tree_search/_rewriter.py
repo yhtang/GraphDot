@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 
-class Rewriter(ABC):
+class AbstractRewriter(ABC):
     ''' Abstract base class for graph rewrite rules. '''
 
     @abstractmethod
@@ -13,17 +13,17 @@ class Rewriter(ABC):
         Parameters
         ----------
         g: object
-            An input graph to be rewritten.
+            An input graph to be transformed.
         random_state: int or :py:`np.random.Generator`
             The seed to the random number generator (RNG), or the RNG itself.
             If None, the default RNG in numpy will be used.
 
         Returns
         -------
-        h: object
-            A new graph.
+        H: list
+            A list of new graphs transformed from `g`.
         '''
 
 
-class SMILESRewriter(Rewriter):
+class SMILESRewriter(AbstractRewriter):
     pass
