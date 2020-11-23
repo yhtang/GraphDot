@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.stats import norm
 from graphdot.util.iterable import argmax
-from .tree import Tree
+from ._tree import Tree
 
 
 class MCTSGraphTransformer:
@@ -35,9 +35,7 @@ class MCTSGraphTransformer:
             return tree
         else:
             df = tree.flat
-            df['likelihood'] = norm.pdf(
-                target, df.self_mean, np.maximum(self.precision, df.self_std)
-            )
+            df['likelihood'] = self._likelihood(target, df)
             return df.to_pandas().sort_values(['likelihood'], ascending=False)
 
     def _spawn(self, node, leaves):
@@ -49,8 +47,11 @@ class MCTSGraphTransformer:
         )
 
     def _likelihood(self, target, nodes):
-        return norm.pdf(target, nodes.tree_mean,
-                        np.maximum(self.precision, nodes.tree_std))
+        return norm.pdf(
+            target, nodes.tree_mean, np.maximum(nodes.tree_std, self.precision)
+            # This line below does not work, especially the '+' part:
+            # target, nodes.tree_mean, nodes.tree_std + self.precision
+        )
 
     def _confidence_bounds(self, nodes):
         return self.exploration_bias * np.sqrt(

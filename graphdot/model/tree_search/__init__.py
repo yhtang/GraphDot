@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# from .mcts import MCTS
+from .graph_transformer import MCTSGraphTransformer
 
 
-# __all__ = ['MCTS']
+__all__ = ['MCTSGraphTransformer']
