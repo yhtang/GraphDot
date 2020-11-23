@@ -62,12 +62,13 @@ class DataFrame:
                                 for key in cols], align=True)
         return packed_dtype
 
-    def rows(self):
+    def rows(self, rowname='row'):
         '''Iterate over rows in the form of named tuples while skipping columns
         that do not have valid field names.'''
         visible = [key for key in self._data if key.isidentifier()]
 
-        class RowTuple(namedtuple('RowTuple', visible)):
+        class RowTuple(namedtuple(rowname, visible)):
+
             def __getitem__(self, key):
                 '''To support both member access and index access.'''
                 if isinstance(key, str):
@@ -75,18 +76,20 @@ class DataFrame:
                 else:
                     return super().__getitem__(key)
 
+        RowTuple.__name__ = rowname
+
         # for row in zip(*[self[key] for key in visible]):
         #     yield RowTuple(row)
         for i in range(len(self)):
             yield RowTuple(*[self[key][i] for key in visible])
 
-    def itertuples(self):
+    def itertuples(self, tuplename='tuple'):
         '''Alias of `rows()` for API compatibility with pandas.'''
-        yield from self.rows()
+        yield from self.rows(rowname=tuplename)
 
-    def iterrows(self):
+    def iterrows(self, rowname='row'):
         '''Iterate in (row_id, row_content) tuples.'''
-        yield from enumerate(self.rows())
+        yield from enumerate(self.rows(rowname=rowname))
 
     def iterstates(self, pack=True):
         '''Iterate over rows, use the .state attribute if element is not

@@ -35,3 +35,11 @@ def replace(iterable, old, new):
             yield new
         else:
             yield item
+
+
+def argmax(iterable, less):
+    best = None
+    for i in iterable:
+        if best is None or less(best, i):
+            best = i
+    return best
