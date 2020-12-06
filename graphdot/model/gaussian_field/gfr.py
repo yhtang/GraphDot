@@ -43,35 +43,51 @@ class GaussianFieldRegressor:
         self.smoothing = smoothing
         self.dongle = dongle
 
-    def fit(self, Z=None, y=None, loss=None, options=None):
-        '''Train the Gaussian field model. If the loss is unspecified,
-        average label entropy will be used by default.
+    def fit_predict(self, X, y, loss='average_label_entropy', options=None,
+                    return_influence=False):
+        '''Train the Gaussian field model and make predictions for the
+        unlabeled nodes.
 
         Parameters
         ----------
         X: 2D array or list of objects
-            Feature vectors or other generic representations of labeled data.
+            Feature vectors or other generic representations of input data.
         y: 1D array
-            Labels/target values.
-        append_data: boolean
-            Whether or not to add fitted data to the model
+            Label of each data point. Values of None or NaN indicates
+            missing labels that will be filled in by the model.
+        return_influence: bool
+            If True, also returns the contributions of each labeled sample to
+            each predicted label as an 'influence matrix'.
+
+        Returns
+        -------
+        z: 1D array
+            Node labels with missing ones filled in by prediction.
+        influence_matrix: 2D array
+            Contributions of each labeled sample to each predicted label. Only
+            returned if ``return_influence`` is True.
+        # predictive_uncertainty: 1D array
+        #     Weighted Standard Deviation of the predicted labels.
         '''
-        if len(self.X) == 0:
-            raise RuntimeError("Missing Training Data")
-        if len(self.labels) == 0:
-            raise RuntimeError("Missing Training Labels")
-        if self.weight.theta is not None and self.optimizer:
-            if loss == 'mse':
-                objective = self.squared_error
-            elif loss == 'cross_entropy':
-                objective = self.cross_entropy
-            elif loss == 'laplacian':
-                objective = self.laplacian_error
-            else:
-                objective = self.average_label_entropy
+        assert len(X) == len(y)
+        X = np.asarray(X)
+        y = np.asarray(y, dtype=np.float)
+        labeled = np.isfinite(y)
+
+        if hasattr(self.weight, 'theta') and self.optimizer:
+            try:
+                objective = {
+                    'mse': self.squared_error,
+                    'cross_entropy': self.cross_entropy,
+                    'laplacian': self.laplacian_error,
+                    'average_label_entropy': self.average_label_entropy,
+                }[loss]
+            except KeyError:
+                raise RuntimeError(f'Unknown loss function \'{loss}\'')
+            # TODO: include smoothing and dongle as hyperparameters?
             opt = minimize(
                 fun=lambda theta, objective=objective: objective(
-                    Z, y, theta, eval_gradient=True
+                    self.X, self.y, self.labeled, theta, eval_gradient=True
                 ),
                 method=self.optimizer,
                 x0=self.weight.theta,
@@ -87,34 +103,6 @@ class GaussianFieldRegressor:
                     f'Optimizer did not converge, got:\n'
                     f'{opt}'
                 )
-
-    def predict(self, Z, display=False):
-        '''Predict using the trained Gaussian field model.
-
-        Parameters
-        ----------
-        Z: 2D array or list of objects
-            Feature vectors or other generic representations of unlabeled data.
-
-        display: boolean
-            Whether or not to display the label weightings and predictive
-            uncertainty.
-
-        Returns
-        -------
-        y: 1D array
-            Predicted values of the input data.
-        influence_matrix: 2D array
-            Contributions from each labeled sample for each predicted label.
-        predictive_uncertainty: 1D array
-            Weighted Standard Deviation of the predicted labels.
-        '''
-        if len(self.X) == 0:
-            raise RuntimeError("Missing Training Data")
-        if len(self.labels) == 0:
-            raise RuntimeError("Missing Training Labels")
-        if len(Z) == 0:
-            return []
 
         X = self.X
         labels = self.labels
