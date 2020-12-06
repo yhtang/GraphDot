@@ -43,19 +43,6 @@ class GaussianFieldRegressor:
         self.smoothing = smoothing
         self.dongle = dongle
 
-    def set_model(self, X, labels):
-        '''Input training data into the model
-
-        Parameters
-        ----------
-        X: 2D array or list of objects
-            Feature vectors or other generic representaations of labeled data.
-        labels: 1D array
-            Labels/target values.
-        '''
-        self.X = X
-        self.labels = labels
-
     def fit(self, Z=None, y=None, loss=None, options=None):
         '''Train the Gaussian field model. If the loss is unspecified,
         average label entropy will be used by default.
