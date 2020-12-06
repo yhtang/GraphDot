@@ -12,43 +12,36 @@ class GaussianFieldRegressor:
 
     Parameters
     ----------
-    weight: functor or 'precomputed'
+    weight: callable or 'precomputed'
         A function that implements a weight function that converts distance
-        to graph edge weights. The value of a weight function should generally
-        decay with distance. If weight is 'precomputed', then the result as
-        computed by `metric` will be directly used as weight.
-    optimizer: one of (sstr, True, None, callable)
+        matrices to weight matrices. The value of a weight function should
+        generally decay with distance. If weight is 'precomputed', then the
+        result returned by `metric` will be directly used as weight.
+    optimizer: one of (str, True, None, callable)
         A string or callable that represents one of the optimizers usable in
         the scipy.optimize.minimize method.
         if None, no hyperparameter optimization will be carried out in fitting.
         If True, the optimizer will default to L-BFGS-B.
     smoothing: float in [0, 1)
-        Float that controls the smoothing of the transition matrix. Used for
-        regularization.
-    eps: float in [0, 1)
-        Controls the step size for approximating gradients with finite
-        difference.
-    eta: float in [0, 1)
-        Controls a dongle implementation. When eta > 0, each node will have
-        a copy made attached with an edge weight of eta * the total weight
+        Controls the strength of regularization via the smoothing of the
+        transition matrix.
+    dongle: float in [0, 1)
+        Assumed level of uncertainty in the training labels.
+        When dongle > 0, each node will have
+        a copy made attached with an edge weight of dongle * the total weight
         of all other nodes attached to the original. The model will then
-        treat the original node as an unlabeled node. Used for regularization.
+        treat the original node as an unlabeled node.
     '''
 
-    def __init__(self, weight, optimizer=None, smoothing=1e-3, eps=1e-3, eta=0):
+    def __init__(self, weight, optimizer=None, smoothing=1e-3, dongle=0):
+        assert smoothing >= 0 and smoothing < 1, "Smoothing must be in [0, 1)."
+        assert dongle >= 0 and dongle < 1, "Dongle must be in [0, 1)."
         self.weight = weight
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
-        self.data = None
-        self.labels = None
-        self.eps = eps
-        if smoothing < 0 or smoothing > 1:
-            raise RuntimeError("Smoothing must be between 0 and 1 inclusive.")
         self.smoothing = smoothing
-        if eta < 0 or eta > 1:
-            raise RuntimeError("Eta must be between 0 and 1 inclusive.")
-        self.eta = eta
+        self.dongle = dongle
 
     def set_model(self, X, labels):
         '''Input training data into the model
