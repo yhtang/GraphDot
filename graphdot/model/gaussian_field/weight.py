@@ -14,9 +14,9 @@ class Weight(ABC):
 
         Parameters
         ----------
-        X: list of graphs
+        X: list
             The first dataset to be compared.
-        Y: list of graphs or None
+        Y: list or None
             The second dataset to be compared. If None, X will be compared with
             itself.
         eval_gradient: bool
@@ -32,25 +32,21 @@ class Weight(ABC):
             derivative of the weight matrix with respect to the i-th
             hyperparameter.
         '''
-        pass
 
     @property
     @abstractmethod
     def theta(self):
         '''An ndarray of all the hyperparameters in log scale.'''
-        pass
 
     @theta.setter
     @abstractmethod
     def theta(self, values):
         '''Set the hyperparameters from an array of log-scale values.'''
-        pass
 
     @property
     @abstractmethod
     def bounds(self):
         '''The log-scale bounds of the hyperparameters as a 2D array.'''
-        pass
 
 
 class RBFOverHausdorff(Weight):
