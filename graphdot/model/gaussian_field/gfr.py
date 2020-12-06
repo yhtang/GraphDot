@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import itertools as it
 import numpy as np
 import pandas as pd
-from scipy.sparse.linalg import bicgstab
+from scipy.sparse.linalg import bicgstab, LinearOperator
 from scipy.optimize import minimize
 
 
@@ -104,48 +105,17 @@ class GaussianFieldRegressor:
                     f'{opt}'
                 )
 
-        X = self.X
-        labels = self.labels
-        weight = self.weight
-        smoothing = self.smoothing
-        L = len(X)
-        u = len(Z)
-        n = L + u
+        n = len(X)
+        W = self.weight(X[~labeled], X)
+        D_inv = 1 / W.sum(axis=1)
+        P = self.smoothing / n + (1 - self.smoothing) * (D_inv[:, None] * W)
+        P_uu = P[:, ~labeled]
+        prediction, _ = bicgstab(
+            LinearOperator(P_uu.shape, lambda v: v - P_uu @ v),
+            P[:, labeled] @ y[labeled]
+        )
 
-        if self.eta:
-            if isinstance(Z, pd.DataFrame):
-                data = pd.concat([X, Z], ignore_index=True)
-            elif isinstance(Z, np.ndarray):
-                data = np.concatenate([X, Z])
-            W_uu = weight(data, data)
-            d = np.sum(W_uu[:L], axis=1) - W_uu.diagonal()[:L]
-            W_ul = np.zeros((n, L))
-            np.fill_diagonal(W_ul, self.eta * d/(1 - self.eta))
-            D_uu_inv = np.diag(1/(np.sum(W_ul, axis=1) + np.sum(W_uu, axis=1)))
-            P_uu = smoothing / (n + L) + (1 - smoothing) * D_uu_inv @ W_uu
-            P_ul = smoothing / (n + L) + (1 - smoothing) * D_uu_inv @ W_ul
-
-        else:
-            W_ul = weight(Z, X)
-            W_uu = weight(Z)
-            D_uu_inv = np.diag(1/(np.sum(W_ul, axis=1) + np.sum(W_uu, axis=1)))
-            P_uu = smoothing / n + (1 - smoothing) * D_uu_inv @ W_uu
-            P_ul = smoothing / n + (1 - smoothing) * D_uu_inv @ W_ul
-
-        if self.eta:
-            A = np.eye(n) - P_uu
-        else:
-            A = np.eye(u) - P_uu
-        B = P_ul
-        f_u, _ = bicgstab(A, B @ labels)
-        result = f_u
-        if display:
-            weight_matrix = np.linalg.solve(A, B)
-            influence_matrix = weight_matrix * (2 * labels - 1)
-            raw_mean = weight_matrix * (2 * (labels - f_u[:, None]))**2
-            predictive_uncertainty = np.sum(raw_mean, axis=1)**0.5
-            result = f_u, influence_matrix, predictive_uncertainty
-        return result
+        return z
 
     def squared_error(self, Z, y, theta=None,
                       eval_gradient=False):
