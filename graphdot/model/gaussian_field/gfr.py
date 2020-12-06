@@ -26,23 +26,15 @@ class GaussianFieldRegressor:
     smoothing: float in [0, 1)
         Controls the strength of regularization via the smoothing of the
         transition matrix.
-    dongle: float in [0, 1)
-        Assumed level of uncertainty in the training labels.
-        When dongle > 0, each node will have
-        a copy made attached with an edge weight of dongle * the total weight
-        of all other nodes attached to the original. The model will then
-        treat the original node as an unlabeled node.
     '''
 
-    def __init__(self, weight, optimizer=None, smoothing=1e-3, dongle=0):
+    def __init__(self, weight, optimizer=None, smoothing=1e-3):
         assert smoothing >= 0 and smoothing < 1, "Smoothing must be in [0, 1)."
-        assert dongle >= 0 and dongle < 1, "Dongle must be in [0, 1)."
         self.weight = weight
         self.optimizer = optimizer
         if optimizer is True:
             self.optimizer = 'L-BFGS-B'
         self.smoothing = smoothing
-        self.dongle = dongle
 
     def fit_predict(self, X, y, loss='average_label_entropy', options=None,
                     return_influence=False):
@@ -114,6 +106,16 @@ class GaussianFieldRegressor:
             LinearOperator(P_uu.shape, lambda v: v - P_uu @ v),
             P[:, labeled] @ y[labeled]
         )
+
+        z = y.copy()
+        z[~labeled] = prediction
+
+        # if display:
+        #     weight_matrix = np.linalg.solve(A, B)
+        #     influence_matrix = weight_matrix * (2 * labels - 1)
+        #     raw_mean = weight_matrix * (2 * (labels - f_u[:, None]))**2
+        #     predictive_uncertainty = np.sum(raw_mean, axis=1)**0.5
+        #     result = f_u, influence_matrix, predictive_uncertainty
 
         return z
 
