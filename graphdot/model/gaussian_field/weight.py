@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 from abc import ABC, abstractmethod
 import numpy as np
-from graphdot.util.cookie import VolatileCookie
 
 
 class Weight(ABC):
@@ -49,72 +48,46 @@ class Weight(ABC):
         '''The log-scale bounds of the hyperparameters as a 2D array.'''
 
 
-class RBFOverHausdorff(Weight):
-    '''Compute weights by applying an RBF onto the Hausdorff distance as
-    derived from the graph kernel. Trained using an log scale sigma param.
+class RBFOverDistance(Weight):
+    '''Set weights by applying an RBF onto a distance matrix.
 
     Parameters
     ----------
-    metric: object
-        An object that implements a distance metric between graph
-        objects. This object may have hyperparameters to optimize for and
-        return gradients with respect to.
-    sigma: 1D array
+    metric: callable
+        An object that implements a distance metric.
+    sigma: float
         The log scale hyperparameter for the RBF Kernel.
-    s_bounds: 2D array
+    sigma_bounds: float
         The bounds for sigma.
-    graphs: container of graphs
-        A container of graphs.
-    metric: functor
-        A functor that takes in graphs and outputs a distance matrix.
+    X: list
+        Dataset.
     compute_D_from_graphs: bool
         Whether or not to compute the D matrix during initialization.
     '''
 
-    def __init__(self, sigma, sigma_bounds, graphs, metric,
-                 compute_D_from_graphs=True):
-        if not isinstance(sigma, np.ndarray):
-            RuntimeError("Sigma is not an ndarray.")
+    def __init__(self, metric, sigma, sigma_bounds, caching=False):
         self.sigma = sigma
         self.sigma_bounds = sigma_bounds
-        self.cookie = VolatileCookie()
-        self.D = None
-        if compute_D_from_graphs:
-            self.set_D(graphs, metric)
-
-    def set_D(self, graphs, metric):
-        '''Compute D matrix from given graphs.
-
-        Parameters
-        ----------
-        graphs: container
-            A container of graphs.
-        metric: functor
-            A functor that takes in graphs and outputs a distance matrix
-        '''
-        for index, graph in enumerate(graphs):
-            self.cookie[graph] = index
-        self.D = metric(graphs)
+        self.metric = metric
+        self.caching = caching
 
     def __call__(self, X, Y=None, eval_gradient=False):
-        '''A concrete implementation of the abstract method from the base
-        class.
-
-        Parameters
-        ----------
-        X, Y, eval_gradient: as previously defined.
-            As defined in the base class.
-        '''
-        if self.D is None:
-            raise RuntimeError("D matrix not computed. Call set_D")
-        X_indices = [self.cookie[_] for _ in X]
-        if Y is not None:
-            Y_indices = [self.cookie[_] for _ in Y]
+        if Y is None:
+            if self.caching and hasattr(self, 'dXX'):
+                d = self.dXX
+            else:
+                d = self.metric(X)
+                if self.caching:
+                    self.dXX = d
         else:
-            Y_indices = [self.cookie[_] for _ in X]
-        m = self.D[X_indices][:, Y_indices]
-        s = np.exp(self.theta[-1])
-        w = np.exp(-(m/s)**2)
+            if self.caching and hasattr(self, 'dXY'):
+                d = self.dXY
+            else:
+                d = self.metric(X, Y)
+                if self.caching:
+                    self.dXY = d
+
+        w = np.exp(-d**2 * self.sigma**-2)
         if eval_gradient:
             return w, np.array([m**2/self.sigma[0]**3]) * w
         else:
