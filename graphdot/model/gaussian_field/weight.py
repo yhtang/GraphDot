@@ -89,7 +89,7 @@ class RBFOverDistance(Weight):
 
         w = np.exp(-d**2 * self.sigma**-2)
         if eval_gradient:
-            return w, np.array([m**2/self.sigma[0]**3]) * w
+            return w, np.array([2 * d**2 * w * self.sigma**-3])
         else:
             return w
 
