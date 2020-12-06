@@ -95,18 +95,12 @@ class RBFOverDistance(Weight):
 
     @property
     def theta(self):
-        '''The hyperparameter for the RBF kernel.'''
-        return self.sigma
+        return np.log([self.sigma])
 
     @theta.setter
     def theta(self, values):
-        self.sigma = values
+        self.sigma = np.exp(values)[0]
 
     @property
     def bounds(self):
-        '''The bounds for theta.'''
-        return self.sigma_bounds
-
-    @bounds.setter
-    def bounds(self, values):
-        self.sigma_bounds = values
+        return np.log(self.sigma_bounds)
