@@ -78,17 +78,16 @@ class GaussianFieldRegressor:
         if hasattr(self.weight, 'theta') and self.optimizer:
             try:
                 objective = {
-                    'mse': self.squared_error,
-                    'cross_entropy': self.cross_entropy,
-                    'laplacian': self.laplacian_error,
-                    'average_label_entropy': self.average_label_entropy,
+                    'ale': self.average_label_entropy,
+                    'average-label-entropy': self.average_label_entropy,
+                    'laplacian': self.laplacian,
                 }[loss]
             except KeyError:
                 raise RuntimeError(f'Unknown loss function \'{loss}\'')
             # TODO: include smoothing and dongle as hyperparameters?
             opt = minimize(
                 fun=lambda theta, objective=objective: objective(
-                    self.X, self.y, self.labeled, theta, eval_gradient=True
+                    X, y, theta, eval_gradient=True
                 ),
                 method=self.optimizer,
                 x0=self.weight.theta,
@@ -150,94 +149,36 @@ class GaussianFieldRegressor:
                 )
             return prediction
 
-    def cross_entropy(self, Z, y, theta=None, eval_gradient=False):
-        '''Evaluate the Cross Entropy gradient using the trained Gaussian field
-        model on a dataset.
+    def average_label_entropy(self, X, y, theta=None, eval_gradient=False):
+        '''Evaluate the average label entropy of the Gaussian field model on a
+        dataset.
 
         Parameters
         ----------
         X: 2D array or list of objects
-            Feature vectors or other generic representations of unlabeled data.
-
-        y: 1D array or list of objects
-            Label values for Data.
-
-        theta: 1D array or list of objects
-            Hyperparameters for the weight class
-
-        eval_gradients:
-            Whether or not to evaluate the gradients.
-
-        Returns
-        -------
+            Feature vectors or other generic representations of input data.
         y: 1D array
-            Predicted values of the input data.
-
-        grad: 1D array
-            Gradient with respect to the hyperparameters.
-        '''
-        if len(self.X) == 0:
-            raise RuntimeError("Missing Training Data")
-        if len(self.labels) == 0:
-            raise RuntimeError("Missing Training Labels")
-
-        if theta is not None:
-            self.weight.theta = theta
-
-        f_u = self.predict(Z)
-        err = -y @ np.log(f_u) - (1 - y) @ np.log(1 - f_u)
-        if eval_gradient is True:
-            grad = np.zeros_like(self.weight.theta)
-            for i in range(len(self.weight.theta)):
-                eps = self.eps
-                self.weight.theta[i] += eps
-                f1 = self.cross_entropy(Z, y, theta)
-                self.weight.theta -= 2 * eps
-                f2 = self.cross_entropy(Z, y, theta)
-                self.weight.theta[i] += eps
-                grad[i] = (f1 - f2)/(2 * eps)
-            return err, grad
-        else:
-            return err
-
-    def average_label_entropy(self, Z, y, theta=None,
-                              eval_gradient=False):
-        '''Evaluate the Average Label Entropy gradient using the trained Gaussian
-        field model on a dataset.
-
-        Parameters
-        ----------
-        Z: 2D array or list of objects
-            Feature vectors or other generic representations of unlabeled data.
-
-        y: 1D array or list of objects
-            Label values for Data.
-
-        theta: 1D array or list of objects
-            Hyperparameters for the weight class
-
+            Label of each data point. Values of None or NaN indicates
+            missing labels that will be filled in by the model.
+        theta: 1D array
+            Hyperparameters for the weight class.
         eval_gradients:
-            Whether or not to evaluate the gradients.
+            Whether or not to evaluate the gradient of the average label
+            entropy with respect to weight hyperparameters.
 
         Returns
         -------
-        err: 1D array
-            Average Label Entropy
-
+        average_label_entropy: float
+            The average label entropy of the Gaussian field prediction on the
+            unlabeled nodes.
         grad: 1D array
             Gradient with respect to the hyperparameters.
         '''
-        if len(self.X) == 0:
-            raise RuntimeError("Missing Training Data")
-        if len(self.labels) == 0:
-            raise RuntimeError("Missing Training Labels")
-
         if theta is not None:
             self.weight.theta = theta
 
-        predictions = self.predict(Z)
-        f_u = predictions[-len(Z):]
-        err = (-f_u @ np.log(f_u) - (1 - f_u) @ np.log(1 - f_u))/len(f_u)
+        z = self._predict(X, y)
+        ale = -np.mean(z * np.log(z) + (1 - z) * np.log(1 - z))
         if eval_gradient is True:
             grad = np.zeros_like(self.weight.theta)
             for i in range(len(self.weight.theta)):
@@ -250,9 +191,9 @@ class GaussianFieldRegressor:
                 grad[i] = (f1 - f2)/(2 * eps)
             return err, grad
         else:
-            return err
+            return ale
 
-    def laplacian_error(self, Z=None, y=None, theta=None, eval_gradient=False):
+    def laplacian(self, X, y, theta=None, eval_gradient=False):
         '''Evaluate the Laplacian Error and gradient using the trained Gaussian
         field model on a dataset.
 
@@ -272,22 +213,17 @@ class GaussianFieldRegressor:
         grad: 1D array
             Gradient with respect to the hyperparameters.
         '''
-        if len(self.X) == 0:
-            raise RuntimeError("Missing Training Data")
-        if len(self.labels) == 0:
-            raise RuntimeError("Missing Training Labels")
-        if theta is not None:
-            self.weight.theta = theta
-        smoothing = self.smoothing
-        weight = self.weight
-        labels = self.labels
-        X = self.X
-        W = weight(X)
-        U_ll = np.full((len(labels), len(labels)), 1/len(labels))
-        D_inv = np.diag(1/np.sum(W, axis=1))
-        h = (smoothing * (U_ll @ labels)) + \
-            ((1 - smoothing) * D_inv @ (W @ labels))
-        err = h @ h
+        labeled = np.isfinite(y)
+        y = y[labeled]
+        n = len(y)
+        if self.weight == 'precomputed':
+            W = X[labeled, :][:, labeled]
+        else:
+            W = self.weight(X[labeled])
+        D = W.sum(axis=1)
+        W = (1 - self.smoothing) * W + np.ones((n, n)) * self.smoothing / n
+        h = D * y - W @ y
+        h_norm = np.linalg.norm(h, ord=2)
         if eval_gradient is True:
             grad = np.zeros_like(self.weight.theta)
             for i in range(len(self.weight.theta)):
@@ -300,4 +236,4 @@ class GaussianFieldRegressor:
                 grad[i] = (f1 - f2)/(2 * eps)
             return err, grad
         else:
-            return err
+            return h_norm
