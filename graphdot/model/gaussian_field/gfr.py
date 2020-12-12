@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import itertools as it
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import bicgstab, LinearOperator
