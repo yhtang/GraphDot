@@ -59,37 +59,38 @@ class RBFOverDistance(Weight):
         The log scale hyperparameter for the RBF Kernel.
     sigma_bounds: float
         The bounds for sigma.
-    X: list
-        Dataset.
-    compute_D_from_graphs: bool
-        Whether or not to compute the D matrix during initialization.
+    sticky_cache: bool
+        Whether or not to save the distance matrix upon first evaluation of the
+        weights. This could speedup hyperparameter optimization if the
+        underlying distance matrix remains unchanged during the process.
     '''
 
-    def __init__(self, metric, sigma, sigma_bounds, caching=False):
+    def __init__(self, metric, sigma, sigma_bounds=(1e-3, 1e3),
+                 sticky_cache=False):
         self.sigma = sigma
         self.sigma_bounds = sigma_bounds
         self.metric = metric
-        self.caching = caching
+        self.sticky_cache = sticky_cache
 
     def __call__(self, X, Y=None, eval_gradient=False):
         if Y is None:
-            if self.caching and hasattr(self, 'dXX'):
+            if self.sticky_cache and hasattr(self, 'dXX'):
                 d = self.dXX
             else:
                 d = self.metric(X)
-                if self.caching:
+                if self.sticky_cache:
                     self.dXX = d
         else:
-            if self.caching and hasattr(self, 'dXY'):
+            if self.sticky_cache and hasattr(self, 'dXY'):
                 d = self.dXY
             else:
                 d = self.metric(X, Y)
-                if self.caching:
+                if self.sticky_cache:
                     self.dXY = d
 
-        w = np.exp(-d**2 * self.sigma**-2)
+        w = np.exp(-0.5 * d**2 * self.sigma**-2)
         if eval_gradient:
-            return w, np.array([2 * d**2 * w * self.sigma**-3])
+            return w, np.array([d**2 * w * self.sigma**-3])
         else:
             return w
 
@@ -103,4 +104,4 @@ class RBFOverDistance(Weight):
 
     @property
     def bounds(self):
-        return np.log(self.sigma_bounds)
+        return np.log([self.sigma_bounds])
