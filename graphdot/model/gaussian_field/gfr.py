@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-import pandas as pd
-from scipy.sparse.linalg import bicgstab, LinearOperator
+from scipy.sparse.linalg import cg, LinearOperator
 from scipy.optimize import minimize
+from graphdot.linalg.cholesky import chol_solve
 
 
 class GaussianFieldRegressor:
@@ -73,8 +73,8 @@ class GaussianFieldRegressor:
         assert len(X) == len(y)
         X = np.asarray(X)
         y = np.asarray(y, dtype=np.float)
-        labeled = np.isfinite(y)
 
+        '''The 'fit' part'''
         if hasattr(self.weight, 'theta') and self.optimizer:
             try:
                 objective = {
@@ -105,81 +105,50 @@ class GaussianFieldRegressor:
                     f'{opt}'
                 )
 
-        n = len(X)
-        W = self.weight(X[~labeled], X)
-        D_inv = 1 / W.sum(axis=1)
-        P = self.smoothing / n + (1 - self.smoothing) * (D_inv[:, None] * W)
-        P_uu = P[:, ~labeled]
-        prediction, _ = bicgstab(
-            LinearOperator(P_uu.shape, lambda v: v - P_uu @ v),
-            P[:, labeled] @ y[labeled]
-        )
-
+        '''The 'predict' part'''
         z = y.copy()
-        z[~labeled] = prediction
-
-        # if display:
-        #     weight_matrix = np.linalg.solve(A, B)
-        #     influence_matrix = weight_matrix * (2 * labels - 1)
-        #     raw_mean = weight_matrix * (2 * (labels - f_u[:, None]))**2
-        #     predictive_uncertainty = np.sum(raw_mean, axis=1)**0.5
-        #     result = f_u, influence_matrix, predictive_uncertainty
-
-        return z
-
-    def squared_error(self, Z, y, theta=None,
-                      eval_gradient=False):
-        '''Evaluate the Mean Sqared Error and gradient using the trained Gaussian
-        field model on a dataset.
-
-        Parameters
-        ----------
-        Z: 2D array or list of objects
-            Feature vectors or other generic representations of unlabeled data.
-
-        y: 1D array or list of objects
-            Label values for Data.
-
-        theta: 1D array or list of objects
-            Hyperparameters for the weight class
-
-        eval_gradients:
-            Whether or not to evaluate the gradients.
-
-        Returns
-        -------
-        err: 1D array
-            Mean Squared Error
-
-        grad: 1D array
-            Gradient with respect to the hyperparameters.
-        '''
-
-        if len(self.X) == 0:
-            raise RuntimeError("Missing Training Data")
-        if len(self.labels) == 0:
-            raise RuntimeError("Missing Training Labels")
-        if theta is not None:
-            self.weight.theta = theta
-
-        predictions = self.predict(Z)
-
-        f_u = predictions[-len(Z):]
-        e = f_u - y
-        err = 0.5 * np.sum(e**2)/len(f_u)
-        if eval_gradient is True:
-            grad = np.zeros_like(self.weight.theta)
-            for i in range(len(self.weight.theta)):
-                eps = self.eps
-                self.weight.theta[i] += eps
-                f1 = self.squared_error(Z, y, theta)
-                self.weight.theta -= 2 * eps
-                f2 = self.squared_error(Z, y, theta)
-                self.weight.theta[i] += eps
-                grad[i] = (f1 - f2)/(2 * eps)
-            return err, grad
+        if return_influence is True:
+            z[~np.isfinite(y)], influence = self._predict(
+                X, y, return_influence=True
+            )
+            return z, influence
         else:
-            return err
+            z[~np.isfinite(y)] = self._predict(X, y, return_influence=False)
+            return z
+
+    def _predict(self, X, y, return_influence=False):
+        labeled = np.isfinite(y)
+        n = len(X)
+        if self.weight == 'precomputed':
+            W = X[~labeled, :]
+        else:
+            W = self.weight(X[~labeled], X)
+        D = W.sum(axis=1)
+        W = (1 - self.smoothing) * W + (D * self.smoothing / n)[:, None]
+        W_ul = W[:, labeled]
+        W_uu = W[:, ~labeled]
+        if return_influence is True:
+            try:
+                influence = chol_solve(np.diag(D) - W_uu, W_ul)
+            except np.linalg.LinAlgError:
+                raise RuntimeError(
+                    'The Graph Laplacian is not positive definite. Some'
+                    'weights on edges may be invalid.'
+                )
+            prediction = influence @ y[labeled]
+            return prediction, influence
+        else:
+            prediction, info = cg(
+                LinearOperator(W_uu.shape, lambda v: D * v - W_uu @ v),
+                W_ul @ y[labeled],
+                atol=1e-10
+            )
+            if info != 0:
+                raise RuntimeError(
+                    'BICGStab solver for the harmonic equation'
+                    f'failed with error code {info}'
+                )
+            return prediction
 
     def cross_entropy(self, Z, y, theta=None, eval_gradient=False):
         '''Evaluate the Cross Entropy gradient using the trained Gaussian field
