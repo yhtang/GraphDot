@@ -47,6 +47,15 @@ class GaussianFieldRegressor:
         y: 1D array
             Label of each data point. Values of None or NaN indicates
             missing labels that will be filled in by the model.
+        loss: str
+            The loss function to be used to optimizing the hyperparameters.
+            Options are:
+
+            - 'ale' or 'average-label-entropy': average label entropy. Suitable
+            for binary 0/1 labels.
+            - 'laplacian': measures how well the known labels conform to the
+            graph Laplacian operator. Suitable for continuous labels.
+
         return_influence: bool
             If True, also returns the contributions of each labeled sample to
             each predicted label as an 'influence matrix'.
