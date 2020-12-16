@@ -1,5 +1,12 @@
 # Change log of GraphDot
 
+## 0.8a4 (2020-12-15)
+
+- Added an multiplicative regularization option to GPR, which may perform
+  better when the kernel is not normalized.
+- Fixed a linear algebra type error when the GPR kernel matrix is solved
+  with pseudoinverse.
+
 ## 0.8a3 (2020-11-23)
 
 - Added an experimental Monte Carlo tree search model.
