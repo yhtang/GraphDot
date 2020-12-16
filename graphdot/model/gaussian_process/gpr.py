@@ -94,6 +94,8 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
                 objective = self.log_marginal_likelihood
             elif loss == 'loocv':
                 objective = self.squared_loocv_error
+            else:
+                raise RuntimeError(f'Unknown loss function: {loss}.')
 
             def xgen(n):
                 x0 = self.kernel.theta.copy()
@@ -280,8 +282,10 @@ class GaussianProcessRegressor(GaussianProcessRegressorBase):
         yKy = y @ Ky
 
         if eval_gradient is True:
+            if not isinstance(Kinv, np.ndarray):
+                Kinv = Kinv.todense()
             d_theta = (
-                np.einsum('ij,ijk->k', Kinv.todense(), dK) -
+                np.einsum('ij,ijk->k', Kinv, dK) -
                 np.einsum('i,ijk,j', Ky, dK, Ky)
             )
             retval = (yKy + logdet, d_theta * np.exp(theta))
