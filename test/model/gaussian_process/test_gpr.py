@@ -400,3 +400,113 @@ def test_gpr_fit_loocv_opt(normalize_y, repeat):
     e2 = gpr.squared_loocv_error(X=X, y=y)
     assert(e1 > e2)
     assert(kernel.L == pytest.approx(0.86, 0.01))
+
+
+@pytest.mark.parametrize('loss', ['likelihood', 'loocv'])
+def test_gpr_fit_duplicate_x(loss):
+    '''Training in the precense of duplicate input values.'''
+
+    class Kernel:
+        def __init__(self, L):
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j = np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                return f, np.stack((j, ), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.L = np.exp(t[0])
+
+        @property
+        def bounds(self):
+            return np.log([[0.001, 10.0]])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0)
+            k.theta = theta
+            return k
+
+    X = np.array([0, 1, 1, 2, 3, 3.995, 4, 6, 7, 8, 8.0001, 9])
+    y = np.array([1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1])
+    kernel = Kernel(1.0)
+    gpr = GaussianProcessRegressor(kernel=kernel, alpha=0, optimizer=True)
+    gpr.fit(X, y, tol=1e-5, loss=loss)
+    assert gpr.predict([1]) == pytest.approx(0.5)
+    assert gpr.predict([4]) == pytest.approx(1.0)
+    assert gpr.predict([8]) == pytest.approx(0.0)
+
+
+def test_gpr_regularization():
+    '''Training in the precense of duplicate input values.'''
+
+    class Kernel:
+        def __init__(self, v, L):
+            self.v = v
+            self.L = L
+
+        def __call__(self, X, Y=None, eval_gradient=False):
+            v = self.v
+            L = self.L
+            d = np.subtract.outer(X, Y if Y is not None else X)
+            f = v**2 * np.exp(-0.5 * d**2 / L**2)
+            if eval_gradient is False:
+                return f
+            else:
+                j1 = v**2 * np.exp(-0.5 * d**2 / L**2) * d**2 * L**-3
+                j2 = 2 * v * f
+                return f, np.stack((j1, j2), axis=2)
+
+        def diag(self, X):
+            return np.ones_like(X)
+
+        @property
+        def theta(self):
+            return np.log([self.v, self.L])
+
+        @theta.setter
+        def theta(self, t):
+            self.v, self.L = np.exp(t[:2])
+
+        @property
+        def bounds(self):
+            return np.log([[0.001, 10.0], [0.001, 10.0]])
+
+        def clone_with_theta(self, theta):
+            k = Kernel(1.0, 1.0)
+            k.theta = theta
+            return k
+
+    X = np.array([0, 1, 1, 2])
+    y = np.array([1, 0, 1, 0])
+    gpr1 = GaussianProcessRegressor(
+        kernel=Kernel(100.0, 1.0),
+        alpha=1e-6,
+        optimizer=False,
+        regularization='*'
+    )
+    gpr2 = GaussianProcessRegressor(
+        kernel=Kernel(100.0, 1.0),
+        alpha=1e-4,
+        optimizer=False,
+        regularization='+'
+    )
+    gpr1.fit(X, y, tol=1e-5)
+    gpr2.fit(X, y, tol=1e-5)
+    grid = np.linspace(0, 2, 9)
+    assert np.allclose(
+        gpr1.predict(grid), gpr2.predict(grid), rtol=1e-5, atol=1e-5
+    )

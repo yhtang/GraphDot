@@ -14,9 +14,10 @@ from graphdot.util.printer import markdown as mprint
 class GaussianProcessRegressorBase:
     """Base class for all Gaussian process regression (GPR) models."""
 
-    def __init__(self, kernel, normalize_y=False, kernel_options={}):
+    def __init__(self, kernel, normalize_y, regularization, kernel_options):
         self.kernel = kernel
         self.normalize_y = normalize_y
+        self.regularization = regularization
         self.kernel_options = kernel_options
 
     @property
@@ -62,19 +63,35 @@ class GaussianProcessRegressorBase:
             self._ymean, self._ystd = 0, 1
             self._y = y_masked
 
+    def _regularize(self, K, alpha):
+        if self.regularization in ['+', 'additive']:
+            return K + alpha
+        elif self.regularization in ['*', 'multiplicative']:
+            return K * (1 + alpha)
+        else:
+            raise RuntimeError(
+                f'Unknown regularization method {self.regularization}.'
+            )
+
     def _gramian(self, alpha, X, Y=None, kernel=None, jac=False, diag=False):
         kernel = kernel or self.kernel
         if Y is None:
             if diag is True:
-                return kernel.diag(X, **self.kernel_options) + alpha
+                return self._regularize(
+                    kernel.diag(X, **self.kernel_options), alpha
+                )
             else:
                 if jac is True:
                     K, J = kernel(X, eval_gradient=True, **self.kernel_options)
-                    K.flat[::len(K) + 1] += alpha
+                    K.flat[::len(K) + 1] = self._regularize(
+                        K.flat[::len(K) + 1], alpha
+                    )
                     return K, J
                 else:
                     K = kernel(X, **self.kernel_options)
-                    K.flat[::len(K) + 1] += alpha
+                    K.flat[::len(K) + 1] = self._regularize(
+                        K.flat[::len(K) + 1], alpha
+                    )
                     return K
         else:
             if diag is True:

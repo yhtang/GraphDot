@@ -12,7 +12,12 @@ np.random.seed(0)
 
 @pytest.mark.parametrize('normalize_y', [False, True])
 def test_gpr_store_X_y(normalize_y):
-    gpr = GaussianProcessRegressorBase(kernel=None, normalize_y=normalize_y)
+    gpr = GaussianProcessRegressorBase(
+        kernel=None,
+        normalize_y=normalize_y,
+        regularization='+',
+        kernel_options={}
+    )
     with pytest.raises(AttributeError):
         gpr.X
     with pytest.raises(AttributeError):
@@ -56,6 +61,9 @@ def test_gpr_gramian():
 
     gpr = GaussianProcessRegressorBase(
         kernel=Kernel(),
+        normalize_y=False,
+        regularization='+',
+        kernel_options={}
     )
 
     n = 5
@@ -88,7 +96,12 @@ def test_kernel_options():
         'a': 1,
         'b': False
     }
-    gpr = GaussianProcessRegressorBase(kernel=kernel, kernel_options=options)
+    gpr = GaussianProcessRegressorBase(
+        kernel=kernel,
+        normalize_y=False,
+        regularization='+',
+        kernel_options=options
+    )
     X = np.ones(n)
     Y = np.zeros(n)
 
@@ -145,6 +158,8 @@ def test_gpr_save_load(normalize_y):
     gpr = GaussianProcessRegressorBase(
         kernel=kernel,
         normalize_y=normalize_y,
+        regularization='+',
+        kernel_options={}
     )
     gpr.X = X
     gpr.y = y
@@ -155,7 +170,12 @@ def test_gpr_save_load(normalize_y):
         gpr.save(cwd, file)
         assert(os.path.exists(target_path))
 
-        gpr_saved = GaussianProcessRegressorBase(kernel=kernel)
+        gpr_saved = GaussianProcessRegressorBase(
+            kernel=kernel,
+            normalize_y=normalize_y,
+            regularization='+',
+            kernel_options={}
+        )
         gpr_saved.load(cwd, file)
 
         assert(gpr._ymean == pytest.approx(gpr_saved._ymean))
