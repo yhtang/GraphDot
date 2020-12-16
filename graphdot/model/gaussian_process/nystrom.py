@@ -37,16 +37,22 @@ class LowRankApproximateGPR(GaussianProcessRegressorBase):
         become 0 and 1, respectively. Recommended for cases where zero-mean,
         unit-variance kernels are used. The normalization will be
         reversed when the GP predictions are returned.
+    regularization: '+' or 'additive' or '*' or 'multiplicative'
+        Determines the method of regularization. If '+' or 'additive',
+        ``alpha`` is added to the diagonals of the kernel matrix. If '*' or
+        'multiplicative', a factor of ``1 + alpha`` will be multiplied with
+        each diagonal element.
     kernel_options: dict, optional
         A dictionary of additional options to be passed along when applying the
         kernel to data.
     """
 
-    def __init__(self, kernel, alpha=1e-7, beta=1e-7,
-                 optimizer=None, normalize_y=False, kernel_options={}):
+    def __init__(self, kernel, alpha=1e-7, beta=1e-7, optimizer=None,
+                 normalize_y=False, regularization='+', kernel_options={}):
         super().__init__(
             kernel,
             normalize_y=normalize_y,
+            regularization=regularization,
             kernel_options=kernel_options
         )
         self.alpha = alpha
