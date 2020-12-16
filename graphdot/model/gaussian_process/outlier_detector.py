@@ -50,7 +50,8 @@ class GPROutlierDetector(GaussianProcessRegressorBase):
         super().__init__(
             kernel,
             normalize_y=normalize_y,
-            kernel_options=kernel_options
+            kernel_options=kernel_options,
+            regularization='+'
         )
         self.sigma_bounds = sigma_bounds
         self.beta = beta
