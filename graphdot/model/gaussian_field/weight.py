@@ -73,6 +73,13 @@ class RBFOverDistance(Weight):
         self.sticky_cache = sticky_cache
 
     def __call__(self, X, Y=None, eval_gradient=False):
+        '''
+        Parameters
+        ----------
+        eval_gradient: bool
+            If true, also return the gradient of the weights with respect to
+            the **log-scale** hyperparameters.
+        '''
         if Y is None:
             if self.sticky_cache and hasattr(self, 'dXX'):
                 d = self.dXX
@@ -89,8 +96,9 @@ class RBFOverDistance(Weight):
                     self.dXY = d
 
         w = np.exp(-0.5 * d**2 * self.sigma**-2)
+        j = d**2 * w * self.sigma**-3
         if eval_gradient:
-            return w, np.array([d**2 * w * self.sigma**-3])
+            return w, np.stack([j], axis=2) * np.exp(self.theta)[None, None, :]
         else:
             return w
 
