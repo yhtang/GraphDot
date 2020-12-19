@@ -36,7 +36,7 @@ class CholSolver:
         )
 
     def todense(self):
-        return self @ np.eye(len(self.L))
+        return self @ np.eye(*self.L.shape)
 
     def diagonal(self):
         return self.todense().diagonal()
