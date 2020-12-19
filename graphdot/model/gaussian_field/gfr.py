@@ -201,21 +201,17 @@ class GaussianFieldRegressor:
         if theta is not None:
             self.weight.theta = theta
 
-        z = self._predict(X, y)
-        ale = -np.mean(z * np.log(z) + (1 - z) * np.log(1 - z))
         if eval_gradient is True:
-            grad = np.zeros_like(self.weight.theta)
-            for i in range(len(self.weight.theta)):
-                eps = self.eps
-                self.weight.theta[i] += eps
-                f1 = self.average_label_entropy(Z, y, theta)
-                self.weight.theta -= 2 * eps
-                f2 = self.average_label_entropy(Z, y, theta)
-                self.weight.theta[i] += eps
-                grad[i] = (f1 - f2)/(2 * eps)
-            return err, grad
+            z, dz = self._predict_gradient(X, y)
         else:
-            return ale
+            z = self._predict(X, y)
+        loss = -np.mean(z * np.log(z) + (1 - z) * np.log(1 - z))
+        if eval_gradient is True:
+            dloss = np.log(z) - np.log(1 - z)
+            grad = -np.mean(dloss[:, None] * dz, axis=0)
+            return loss, grad
+        else:
+            return loss
 
     def laplacian(self, X, y, theta=None, eval_gradient=False):
         '''Evaluate the Laplacian Error and gradient using the trained Gaussian
