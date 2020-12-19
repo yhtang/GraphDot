@@ -9,16 +9,17 @@ from graphdot.model.gaussian_field import RBFOverDistance
 
 def test_rbf_over_distance():
 
+    sigma = 1.0
     weight = RBFOverDistance(
         metric=lambda X, Y=None:
             metric(X, X) if Y is None else metric(X, Y),
-        sigma=1.0,
+        sigma=sigma,
         sigma_bounds=(0.1, 2.0)
     )
 
     assert isinstance(weight.theta, np.ndarray)
     assert weight.theta.ndim == 1
-    assert weight.theta[0] == np.log(1.0)
+    assert weight.theta[0] == np.log(sigma)
     weight.theta = [0.1]
     assert weight.theta[0] == pytest.approx(0.1)
 
@@ -33,14 +34,21 @@ def test_rbf_over_distance():
         assert np.allclose(weight(X), np.ones((1, 1)))
         assert np.allclose(weight(X, Y), np.ones((1, 1)) * np.exp(-0.5))
 
-    '''test gradient'''
+
+@pytest.mark.parametrize('sigma', [0.5, 1.0, 2.0])
+def test_rbf_over_distance_gradient(sigma):
     eps = 1e-4
     X = np.random.randn(4, 3)
-    for i, _ in enumerate(weight.theta):
-        weight.theta = [0]
-        w, dw = weight(X, eval_gradient=True)
-        theta_pos = np.copy(weight.theta)
-        theta_neg = np.copy(weight.theta)
+    weight = RBFOverDistance(
+        metric=lambda X, Y=None:
+            metric(X, X) if Y is None else metric(X, Y),
+        sigma=sigma,
+    )
+    _, dw = weight(X, eval_gradient=True)
+    theta0 = np.copy(weight.theta)
+    for i, _ in enumerate(theta0):
+        theta_pos = np.copy(theta0)
+        theta_neg = np.copy(theta0)
         theta_pos[i] += eps
         theta_neg[i] -= eps
         weight.theta = theta_pos
@@ -49,7 +57,7 @@ def test_rbf_over_distance():
         w_neg = weight(X)
         assert np.allclose(
             (w_pos - w_neg) / (2 * eps),
-            dw,
+            dw[:, :, i],
             rtol=1e-5,
             atol=1e-5
         )
