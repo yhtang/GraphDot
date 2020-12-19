@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from scipy.sparse.linalg import cg, LinearOperator
+from scipy.sparse.linalg import LinearOperator
 from scipy.optimize import minimize
-from graphdot.linalg.cholesky import chol_solve
+from graphdot.linalg.cholesky import CholSolver
+from graphdot.linalg.cg import CGSolver
 
 
 class GaussianFieldRegressor:
@@ -116,8 +117,9 @@ class GaussianFieldRegressor:
             return z
 
     def _predict(self, X, y, return_influence=False):
-        labeled = np.isfinite(y)
         n = len(X)
+        labeled = np.isfinite(y)
+        f_l = y[labeled]
         if self.weight == 'precomputed':
             W = X[~labeled, :]
         else:
@@ -126,28 +128,50 @@ class GaussianFieldRegressor:
         W = (1 - self.smoothing) * W + (D * self.smoothing / n)[:, None]
         W_ul = W[:, labeled]
         W_uu = W[:, ~labeled]
+
+        L_inv = CGSolver(
+            LinearOperator(W_uu.shape, lambda v: D * v - W_uu @ v),
+            atol=1e-6
+        )
+
         if return_influence is True:
-            try:
-                influence = chol_solve(np.diag(D) - W_uu, W_ul)
-            except np.linalg.LinAlgError:
-                raise RuntimeError(
-                    'The Graph Laplacian is not positive definite. Some'
-                    'weights on edges may be invalid.'
-                )
-            prediction = influence @ y[labeled]
-            return prediction, influence
+            influence = L_inv @ W_ul
+            f_u = influence @ f_l
+            return f_u, influence
         else:
-            prediction, info = cg(
-                LinearOperator(W_uu.shape, lambda v: D * v - W_uu @ v),
-                W_ul @ y[labeled],
-                atol=1e-10
+            f_u = L_inv @ (W_ul @ f_l)
+            return f_u
+
+    def _predict_gradient(self, X, y):
+        n = len(X)
+        labeled = np.isfinite(y)
+        f_l = y[labeled]
+        W, dW = self.weight(X[~labeled], X, eval_gradient=True)
+        D = W.sum(axis=1)
+        W = (1 - self.smoothing) * W + (D * self.smoothing / n)[:, None]
+        dW = (1 - self.smoothing) * dW
+        W_ul, dW_ul = W[:, labeled], dW[:, labeled, :]
+        W_uu, dW_uu = W[:, ~labeled], dW[:, ~labeled, :]
+
+        try:
+            L_inv = CholSolver(np.diag(D) - W_uu).todense()
+        except np.linalg.LinAlgError:
+            raise RuntimeError(
+                'The Graph Laplacian is not positive definite. Some'
+                'weights on edges may be invalid.'
             )
-            if info != 0:
-                raise RuntimeError(
-                    'BICGStab solver for the harmonic equation'
-                    f'failed with error code {info}'
-                )
-            return prediction
+
+        r = W_ul @ f_l
+        f_u = L_inv @ r
+        p1 = np.einsum('im,mj,j->im', L_inv, L_inv, -r, optimize=True)
+        dfu_dWuu = p1[:, :, None] + np.einsum('im,nj,j->imn', L_inv, L_inv, r)
+        dfu_dWul = p1[:, :, None] + np.einsum('im,n->imn', L_inv, f_l)
+        df_u = (
+            np.einsum('imn,mnj->ij', dfu_dWuu, dW_uu) +
+            np.einsum('imn,mnj->ij', dfu_dWul, dW_ul)
+        )
+
+        return f_u, df_u
 
     def average_label_entropy(self, X, y, theta=None, eval_gradient=False):
         '''Evaluate the average label entropy of the Gaussian field model on a
