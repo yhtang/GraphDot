@@ -4,7 +4,6 @@ import numpy as np
 from scipy.sparse.linalg import LinearOperator
 from scipy.optimize import minimize
 from graphdot.linalg.cholesky import CholSolver
-from graphdot.linalg.cg import CGSolver
 
 
 class GaussianFieldRegressor:
@@ -129,10 +128,13 @@ class GaussianFieldRegressor:
         W_ul = W[:, labeled]
         W_uu = W[:, ~labeled]
 
-        L_inv = CGSolver(
-            LinearOperator(W_uu.shape, lambda v: D * v - W_uu @ v),
-            atol=1e-6
-        )
+        try:
+            L_inv = CholSolver(np.diag(D) - W_uu)
+        except np.linalg.LinAlgError:
+            raise RuntimeError(
+                'The Graph Laplacian is not positive definite. Some'
+                'weights on edges may be invalid.'
+            )
 
         if return_influence is True:
             influence = L_inv @ W_ul
@@ -245,15 +247,6 @@ class GaussianFieldRegressor:
         h = D * y - W @ y
         h_norm = np.linalg.norm(h, ord=2)
         if eval_gradient is True:
-            grad = np.zeros_like(self.weight.theta)
-            for i in range(len(self.weight.theta)):
-                eps = self.eps
-                self.weight.theta[i] += eps
-                f1 = self.laplacian_error(theta)
-                self.weight.theta -= 2 * eps
-                f2 = self.laplacian_error(theta)
-                self.weight.theta[i] += eps
-                grad[i] = (f1 - f2)/(2 * eps)
-            return err, grad
+            pass
         else:
             return h_norm
