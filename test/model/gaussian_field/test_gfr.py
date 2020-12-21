@@ -229,7 +229,6 @@ def test_average_label_entropy_gradient(n, k, d, smoothing):
         assert delta == pytest.approx(dloss[i], rel=1e-5, abs=1e-8)
 
 
-
 def test_laplacian():
 
     g = GaussianFieldRegressor(weight='precomputed', smoothing=0)

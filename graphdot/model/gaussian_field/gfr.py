@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from scipy.sparse.linalg import LinearOperator
 from scipy.optimize import minimize
 from graphdot.linalg.cholesky import CholSolver
 
@@ -237,7 +236,6 @@ class GaussianFieldRegressor:
 
         labeled = np.isfinite(y)
         y = y[labeled]
-        n = len(y)
         if self.weight == 'precomputed':
             W = X[labeled, :][:, labeled]
         else:
