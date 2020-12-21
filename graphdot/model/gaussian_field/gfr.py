@@ -212,7 +212,7 @@ class GaussianFieldRegressor:
         else:
             return loss
 
-    def laplacian(self, X, y, theta=None, eval_gradient=False):
+    def laplacian(self, X, y, theta=None):
         '''Evaluate the Laplacian Error and gradient using the trained Gaussian
         field model on a dataset.
 
@@ -232,6 +232,9 @@ class GaussianFieldRegressor:
         grad: 1D array
             Gradient with respect to the hyperparameters.
         '''
+        if theta is not None:
+            self.weight.theta = theta
+
         labeled = np.isfinite(y)
         y = y[labeled]
         n = len(y)
@@ -243,7 +246,4 @@ class GaussianFieldRegressor:
         D = W.sum(axis=1)
         h = D * y - W @ y
         h_norm = np.linalg.norm(h, ord=2)
-        if eval_gradient is True:
-            pass
-        else:
-            return h_norm
+        return h_norm
