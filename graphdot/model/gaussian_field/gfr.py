@@ -28,7 +28,7 @@ class GaussianFieldRegressor:
     '''
 
     def __init__(self, weight, optimizer=None, smoothing=1e-3):
-        assert smoothing >= 0 and smoothing < 1, "Smoothing must be in [0, 1)."
+        assert smoothing >= 0, "Smoothing must be no less than 0."
         self.weight = weight
         self.optimizer = optimizer
         if optimizer is True:
@@ -116,15 +116,14 @@ class GaussianFieldRegressor:
             return z
 
     def _predict(self, X, y, return_influence=False):
-        n = len(X)
         labeled = np.isfinite(y)
         f_l = y[labeled]
         if self.weight == 'precomputed':
             W = X[~labeled, :]
         else:
             W = self.weight(X[~labeled], X)
+        W += self.smoothing
         D = W.sum(axis=1)
-        W = (1 - self.smoothing) * W + (D * self.smoothing / n)[:, None]
         W_ul = W[:, labeled]
         W_uu = W[:, ~labeled]
 
@@ -145,13 +144,11 @@ class GaussianFieldRegressor:
             return f_u
 
     def _predict_gradient(self, X, y):
-        n = len(X)
         labeled = np.isfinite(y)
         f_l = y[labeled]
         W, dW = self.weight(X[~labeled], X, eval_gradient=True)
+        W += self.smoothing
         D = W.sum(axis=1)
-        W = (1 - self.smoothing) * W + (D * self.smoothing / n)[:, None]
-        dW = (1 - self.smoothing) * dW
         W_ul, dW_ul = W[:, labeled], dW[:, labeled, :]
         W_uu, dW_uu = W[:, ~labeled], dW[:, ~labeled, :]
 
@@ -242,8 +239,8 @@ class GaussianFieldRegressor:
             W = X[labeled, :][:, labeled]
         else:
             W = self.weight(X[labeled])
+        W += self.smoothing
         D = W.sum(axis=1)
-        W = (1 - self.smoothing) * W + np.ones((n, n)) * self.smoothing / n
         h = D * y - W @ y
         h_norm = np.linalg.norm(h, ord=2)
         if eval_gradient is True:

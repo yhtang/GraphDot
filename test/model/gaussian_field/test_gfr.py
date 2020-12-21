@@ -162,7 +162,8 @@ def test_average_label_entropy():
 @pytest.mark.parametrize('n', [4, 7, 9, 16, 25])
 @pytest.mark.parametrize('k', [2, 3, 5, 8])
 @pytest.mark.parametrize('d', [1, 2, 4, 7, 20])
-def test_average_label_entropy_gradient(n, k, d):
+@pytest.mark.parametrize('smoothing', [0, 0.1, 0.5])
+def test_average_label_entropy_gradient(n, k, d, smoothing):
 
     class OneOverRn:
         '''
@@ -208,7 +209,7 @@ def test_average_label_entropy_gradient(n, k, d):
 
     gfr = GaussianFieldRegressor(
         weight=OneOverRn(a=1.0, b=1.0),
-        smoothing=0
+        smoothing=smoothing
     )
     X = np.random.randn(n, d)
     y = np.random.rand(n)
