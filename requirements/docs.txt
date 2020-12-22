@@ -3,7 +3,7 @@ numpy
 pandas
 networkx
 ase
-pymatgen
+pymatgen<=2019
 pysmiles
 mendeleev
 sphinx
