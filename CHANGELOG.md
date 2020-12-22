@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.8a5 (2020-12-21)
+
+- Added a downloader for the QM7 dataset.
+- Prototype implementation of a Gaussian field harmonic function regressor.
+
 ## 0.8a4 (2020-12-15)
 
 - Added an multiplicative regularization option to GPR, which may perform

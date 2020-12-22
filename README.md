@@ -12,7 +12,7 @@ For more details, please checkout the latest documentation on [readthedocs](http
 
 # Copyright
 
-GraphDot Copyright (c) 2019, The Regents of the University of California,
+GraphDot Copyright (c) 2019-2020, The Regents of the University of California,
 through Lawrence Berkeley National Laboratory (subject to receipt of any
 required approvals from the U.S. Dept. of Energy).  All rights reserved.
 
