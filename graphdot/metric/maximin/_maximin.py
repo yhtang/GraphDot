@@ -182,7 +182,7 @@ class MaxiMin(MarginalizedGraphKernel):
         if gradient is not None:
             gradient = gradient.reshape(
                 (*output_shape, self.n_dims), order='F'
-            )[:, self.active_theta_mask]
+            )[:, :, self.active_theta_mask]
         timer.toc('collecting result')
 
         if timing:
