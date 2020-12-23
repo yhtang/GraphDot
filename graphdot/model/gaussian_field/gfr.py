@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from graphdot.linalg.cholesky import CholSolver
+from graphdot.util.printer import markdown as mprint
 
 
 class GaussianFieldRegressor:
@@ -34,8 +35,8 @@ class GaussianFieldRegressor:
             self.optimizer = 'L-BFGS-B'
         self.smoothing = smoothing
 
-    def fit_predict(self, X, y, loss='average_label_entropy', options=None,
-                    return_influence=False):
+    def fit_predict(self, X, y, loss='average-label-entropy', options=None,
+                    return_influence=False, verbose=False):
         '''Train the Gaussian field model and make predictions for the
         unlabeled nodes.
 
@@ -83,7 +84,10 @@ class GaussianFieldRegressor:
                 }[loss]
             except KeyError:
                 raise RuntimeError(f'Unknown loss function \'{loss}\'')
-            # TODO: include smoothing and dongle as hyperparameters?
+
+            if verbose is True:
+                mprint.table_start()
+
             opt = minimize(
                 fun=lambda theta, objective=objective: objective(
                     X, y, theta, eval_gradient=True
