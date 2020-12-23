@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import time
 import numpy as np
 from scipy.optimize import minimize
 from graphdot.linalg.cholesky import CholSolver
@@ -90,7 +91,7 @@ class GaussianFieldRegressor:
 
             opt = minimize(
                 fun=lambda theta, objective=objective: objective(
-                    X, y, theta, eval_gradient=True
+                    X, y, theta, eval_gradient=True, verbose=verbose
                 ),
                 method=self.optimizer,
                 x0=self.weight.theta,
@@ -147,6 +148,7 @@ class GaussianFieldRegressor:
             return f_u
 
     def _predict_gradient(self, X, y):
+        t_metric = time.perf_counter()
         labeled = np.isfinite(y)
         f_l = y[labeled]
         W, dW = self.weight(X[~labeled], X, eval_gradient=True)
@@ -154,7 +156,9 @@ class GaussianFieldRegressor:
         D = W.sum(axis=1)
         W_ul, dW_ul = W[:, labeled], dW[:, labeled, :]
         W_uu, dW_uu = W[:, ~labeled], dW[:, ~labeled, :]
+        t_metric = time.perf_counter() - t_metric
 
+        t_solve = time.perf_counter()
         try:
             L_inv = CholSolver(np.diag(D) - W_uu).todense()
         except np.linalg.LinAlgError:
@@ -162,25 +166,23 @@ class GaussianFieldRegressor:
                 'The Graph Laplacian is not positive definite. Some'
                 'weights on edges may be invalid.'
             )
+        t_solve = time.perf_counter() - t_solve
 
-        r = W_ul @ f_l
-        f_u = L_inv @ r
-        print('A')
-        p1 = L_inv * (L_inv @ -r)[None, :]
-        print('B')
-        dfu_dWuu = p1[:, :, None] + np.einsum('im,n->imn', L_inv, L_inv @ r)
-        print('C')
-        dfu_dWul = p1[:, :, None] + np.einsum('im,n->imn', L_inv, f_l)
-        print('D')
+        t_chain = time.perf_counter()
+        f_u = L_inv @ (W_ul @ f_l)
+        dL_inv = L_inv * f_u
         df_u = (
-            np.einsum('imn,mnj->ij', dfu_dWuu, dW_uu) +
-            np.einsum('imn,mnj->ij', dfu_dWul, dW_ul)
+            np.einsum('im,n,mnj->ij', L_inv, f_u, dW_uu, optimize=True)
+            + np.einsum('im,n,mnj->ij', L_inv, f_l, dW_ul, optimize=True)
+            - np.einsum('imn,mnj->ij', dL_inv[:, :, None], dW_uu)
+            - np.einsum('imn,mnj->ij', dL_inv[:, :, None], dW_ul)
         )
-        print('E')
+        t_chain = time.perf_counter() - t_chain
 
-        return f_u, df_u
+        return f_u, df_u, t_metric, t_solve, t_chain
 
-    def average_label_entropy(self, X, y, theta=None, eval_gradient=False):
+    def average_label_entropy(self, X, y, theta=None, eval_gradient=False,
+                              verbose=False):
         '''Evaluate the average label entropy of the Gaussian field model on a
         dataset.
 
@@ -209,16 +211,29 @@ class GaussianFieldRegressor:
             self.weight.theta = theta
 
         if eval_gradient is True:
-            z, dz = self._predict_gradient(X, y)
+            z, dz, t_metric, t_solve, t_chain = self._predict_gradient(
+                X, y
+            )
         else:
             z = self._predict(X, y)
         loss = -np.mean(z * np.log(z) + (1 - z) * np.log(1 - z))
         if eval_gradient is True:
             dloss = np.log(z) - np.log(1 - z)
             grad = -np.mean(dloss[:, None] * dz, axis=0)
-            return loss, grad
+            retval = (loss, grad)
         else:
-            return loss
+            retval = loss
+
+        if verbose and eval_gradient is True:
+            mprint.table(
+                ('Avg.Entropy', '%12.5g', loss),
+                ('Gradient', '%12.5g', np.linalg.norm(grad)),
+                ('Metric time', '%12.2g', t_metric),
+                ('Solver time', '%12.2g', t_solve),
+                ('BackProp time', '%14.2g', t_chain),
+            )
+
+        return retval
 
     def laplacian(self, X, y, theta=None):
         '''Evaluate the Laplacian Error and gradient using the trained Gaussian
