@@ -165,13 +165,18 @@ class GaussianFieldRegressor:
 
         r = W_ul @ f_l
         f_u = L_inv @ r
-        p1 = np.einsum('im,mj,j->im', L_inv, L_inv, -r, optimize=True)
-        dfu_dWuu = p1[:, :, None] + np.einsum('im,nj,j->imn', L_inv, L_inv, r)
+        print('A')
+        p1 = L_inv * (L_inv @ -r)[None, :]
+        print('B')
+        dfu_dWuu = p1[:, :, None] + np.einsum('im,n->imn', L_inv, L_inv @ r)
+        print('C')
         dfu_dWul = p1[:, :, None] + np.einsum('im,n->imn', L_inv, f_l)
+        print('D')
         df_u = (
             np.einsum('imn,mnj->ij', dfu_dWuu, dW_uu) +
             np.einsum('imn,mnj->ij', dfu_dWul, dW_ul)
         )
+        print('E')
 
         return f_u, df_u
 
