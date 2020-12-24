@@ -27,7 +27,7 @@ def test_scratch(cls):
 def test_scratch_allocation(cls, size, ntemp):
     scratch = cls(size, ntemp)
     assert(scratch.nmax >= size)
-    assert(scratch.nmax * scratch.ncol >= size * ntemp)
+    assert(scratch.nmax * scratch.ndim >= size * ntemp)
     assert(scratch.ptr != 0)
     assert(scratch.state)
     with pytest.raises(AttributeError):

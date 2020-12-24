@@ -19,7 +19,7 @@ struct job_t {
 struct pcg_scratch_t {
 
     float * __restrict ptr;
-    int stride;
+    std::size_t stride;
 
     pcg_scratch_t(pcg_scratch_t const & other) = default;
  
@@ -33,6 +33,48 @@ struct pcg_scratch_t {
     __device__ __inline__ float & z(int i) { return z()[i]; }
     __device__ __inline__ float & p(int i) { return p()[i]; }
     __device__ __inline__ float & Ap(int i) { return Ap()[i]; }
+};
+
+// template<class StartingProbability, class NodeKernel, class EdgeKernel>
+// struct jacobian_scratch_t {
+//     constexpr static int _offset_p = 0;
+//     constexpr static int _offset_q = _offset_p + StartingProbability::jac_dims;
+//     constexpr static int _offset_v = _offset_q + 1;
+//     constexpr static int _offset_e = _offset_v + NodeKernel::jac_dims;
+//     constexpr static int size      = _offset_e + EdgeKernel::jac_dims;
+
+//     float * __restrict _data;
+//     std::size_t stride;
+
+//     __host__ __device__ __inline__
+//     jacobian_t(float * data) : _data(data) {}
+
+//     __device__ __inline__ auto & operator [] (int i) {return _data[i];}
+//     __device__ __inline__ auto & d_p(int i) {return _data[_offset_p + i];}
+//     __device__ __inline__ auto & d_q(int i) {return _data[_offset_q + i];}
+//     __device__ __inline__ auto & d_e(int i) {return _data[_offset_e + i];}
+//     __device__ __inline__ auto & d_v(int i) {return _data[_offset_v + i];}
+// };
+
+template<class StartingProbability, class NodeKernel, class EdgeKernel>
+struct jacobian_t {
+    constexpr static int _offset_p = 0;
+    constexpr static int _offset_q = _offset_p + StartingProbability::jac_dims;
+    constexpr static int _offset_v = _offset_q + 1;
+    constexpr static int _offset_e = _offset_v + NodeKernel::jac_dims;
+    constexpr static int size      = _offset_e + EdgeKernel::jac_dims;
+
+    array<float, size> _data;
+
+    template<class T>
+    __host__ __device__ __inline__
+    jacobian_t(T const value) : _data(value) {}
+
+    __device__ __inline__ auto & operator [] (int i) {return _data[i];}
+    __device__ __inline__ auto & d_p(int i) {return _data[_offset_p + i];}
+    __device__ __inline__ auto & d_q(int i) {return _data[_offset_q + i];}
+    __device__ __inline__ auto & d_e(int i) {return _data[_offset_e + i];}
+    __device__ __inline__ auto & d_v(int i) {return _data[_offset_v + i];}
 };
 
 /*-----------------------------------------------------------------------------
@@ -757,27 +799,6 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         __syncthreads();
         #endif
     }
-
-    template<class StartingProbability, class NodeKernel, class EdgeKernel>
-    struct jacobian_t {
-        constexpr static int _offset_p = 0;
-        constexpr static int _offset_q = _offset_p + StartingProbability::jac_dims;
-        constexpr static int _offset_v = _offset_q + 1;
-        constexpr static int _offset_e = _offset_v + NodeKernel::jac_dims;
-        constexpr static int size      = _offset_e + EdgeKernel::jac_dims;
-
-        array<float, size> _data;
-
-        template<class T>
-        __host__ __device__ __inline__
-        jacobian_t(T const value) : _data(value) {}
-
-        __device__ __inline__ auto & operator [] (int i) {return _data[i];}
-        __device__ __inline__ auto & d_p(int i) {return _data[_offset_p + i];}
-        __device__ __inline__ auto & d_q(int i) {return _data[_offset_q + i];}
-        __device__ __inline__ auto & d_e(int i) {return _data[_offset_e + i];}
-        __device__ __inline__ auto & d_v(int i) {return _data[_offset_v + i];}
-    };
 
     template<class StartingProbability, class NodeKernel, class EdgeKernel>
     __inline__ __device__ static auto derivative(

@@ -17,7 +17,7 @@ class Scratch:
         self.data = gpuarray.empty(self.nrow * self.ncol, dtype)
 
 
-@cpptype(ptr=np.uintp, nmax=np.int64)
+@cpptype(ptr=np.uintp)
 class PCGScratch(Scratch):
 
     def __init__(self, capacity, n_temporaries=5):
@@ -26,6 +26,10 @@ class PCGScratch(Scratch):
     @property
     def nmax(self):
         return self.nrow
+
+    @property
+    def ndim(self):
+        return self.ncol
 
     @property
     def ptr(self):

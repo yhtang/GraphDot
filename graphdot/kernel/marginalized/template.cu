@@ -28,7 +28,7 @@ __constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
 extern "C" {
     __global__ void graph_kernel_solver(
         graph_t const   * graphs,
-        scratch_t       * scratches,
+        scratch_t       * scratch_pcg,
         uint2           * jobs,
         uint            * starts,
         float32         * gramian,
@@ -45,7 +45,7 @@ extern "C" {
         __shared__ uint i_job;
 
         const int lane = graphdot::cuda::laneid();
-        auto scratch = scratches[blockIdx.x];
+        auto scratch = scratch_pcg[blockIdx.x];
 
         while (true) {
             if (threadIdx.x == 0) i_job = atomicInc(i_job_global, 0xFFFFFFFF);

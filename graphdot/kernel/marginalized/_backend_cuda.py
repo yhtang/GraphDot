@@ -15,7 +15,7 @@ from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
 from ._backend import Backend
-from ._scratch import PCGScratch
+from ._scratch import PCGScratch, JacobianScratch
 from ._octilegraph import OctileGraph
 
 
@@ -50,6 +50,7 @@ class CUDABackend(Backend):
         self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
         self.device = self.ctx.get_device()
         self.scratch_pcg = None
+        self.scratch_jac = None
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -84,6 +85,25 @@ class CUDABackend(Backend):
             )
             self.ctx.synchronize()
         return self.scratch_pcg_d
+
+    @functools.lru_cache(1)
+    def _allocate_jac_scratch(self, count, nmax, ndim):
+        if (self.scratch_jac is None or
+                len(self.scratch_jac) < count or
+                self.scratch_jac[0].nmax < nmax or
+                self.scratch_jac[0].ndim < ndim):
+            self.ctx.synchronize()
+            self.scratch_jac = [
+                JacobianScratch(nmax, ndim) for _ in range(count)
+            ]
+            self.scratch_jac_d = umarray(
+                np.array(
+                    [s.state for s in self.scratch_jac],
+                    JacobianScratch.dtype
+                )
+            )
+            self.ctx.synchronize()
+        return self.scratch_jac_d
 
     def _register_graph(self, graph):
         if self.uuid not in graph.cookie:
@@ -261,16 +281,22 @@ class CUDABackend(Backend):
 
         ''' allocate scratch buffers '''
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        if traits.eval_gradient is True:
+        if traits.eval_gradient is True and traits.nodal is not False:
             scratch_pcg = self._allocate_pcg_scratch(
                 launch_block_count,
                 2 * max_graph_size**2
+            )
+            scratch_jac = self._allocate_jac_scratch(
+                launch_block_count,
+                max_graph_size**2,
+                nJ
             )
         else:
             scratch_pcg = self._allocate_pcg_scratch(
                 launch_block_count,
                 max_graph_size**2
             )
+            scratch_jac = np.uintp(0)
 
         ''' copy micro kernel parameters to GPU '''
         p_node_kernel, _ = self.module.get_global('node_kernel')
@@ -291,6 +317,7 @@ class CUDABackend(Backend):
         kernel(
             graphs_d,
             scratch_pcg,
+            scratch_jac,
             jobs,
             starts,
             gramian,
