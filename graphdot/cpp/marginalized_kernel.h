@@ -825,8 +825,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         const int n2             = g2.n_node;
         const int N              = n1 * n2;
 
-        const float rrq          = 1.0f / (1.0f - q);
-        const float rrq3         = rrq * rrq * rrq;
+        const float Q          = 1.0f / (1.0f - q);
+        const float Q3         = Q * Q * Q;
 
         jacobian_t<StartingProbability, NodeKernel, EdgeKernel> jacobian(0);
 
@@ -861,7 +861,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
                 jacobian.d_p(j) += (dp1[j] * p2 + p1 * dp2[j]) * r;
             }
 
-            jacobian.d_q(0) += 2 * rrq * p1 * p2 * YDq - 2 * rrq3 * Yp * dox / v * YDq;
+            jacobian.d_q(0) += 2 * Q * p1 * p2 * YDq - 2 * Q3 * Yp * dox / v * YDq;
 
             #pragma unroll (dv.size)
             for(int j = 0; j < dv.size; ++j) {

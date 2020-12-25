@@ -15,7 +15,7 @@ from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
 from ._backend import Backend
-from ._scratch import PCGScratch, JacobianScratch
+from ._scratch import PCGScratch
 from ._octilegraph import OctileGraph
 
 
@@ -74,11 +74,13 @@ class CUDABackend(Backend):
             )
 
     @functools.lru_cache(1)
-    def _allocate_pcg_scratch(self, count, nmax):
+    def _allocate_pcg_scratch(self, count, nmax, n_temporaries):
         if (self.scratch_pcg is None or len(self.scratch_pcg) < count or
                 self.scratch_pcg[0].nmax < nmax):
             self.ctx.synchronize()
-            self.scratch_pcg = [PCGScratch(nmax) for _ in range(count)]
+            self.scratch_pcg = [
+                PCGScratch(nmax, n_temporaries) for _ in range(count)
+            ]
             self.scratch_pcg_d = umarray(
                 np.array([s.state for s in self.scratch_pcg], PCGScratch.dtype)
             )
@@ -287,6 +289,11 @@ class CUDABackend(Backend):
         cuda.memcpy_htod(p_p_start, np.array([p.state], dtype=p.dtype))
 
         timer.toc('calculating launch configuration')
+
+        print('----------------------------------')
+        print(self.source)
+        print('----------------------------------')
+
 
         ''' GPU kernel execution '''
         timer.tic('GPU kernel execution')

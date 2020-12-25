@@ -115,7 +115,7 @@ extern "C" {
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     int i1 = i / n2;
                     int i2 = i % n2;
-                    K(I1 + i1 + i2 * n1) =
+                    K(I1 + i1 + i2 * n2) =
                         scratch.x(i) * p_start(g1.node[i1]) * p_start(g2.node[i2]);
                 }
             #elif ?{traits.nodal is True}
@@ -174,16 +174,14 @@ extern "C" {
             #if ?{traits.eval_gradient is True}
 
                 // setup Jacobian matrix view
-                #if ?{traits.eval_gradient is True}
-                    #if ?{traits.diagonal is True}
-                        auto J = graphdot::tensor_view(gradient, nX, nJ);
-                    #else
-                        auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
-                    #endif
+                #if ?{traits.diagonal is True}
+                    auto J = graphdot::tensor_view(gradient, nX, nJ);
+                #else
+                    auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
                 #endif
 
                 // compute the Jacobian
-                auto jacobian = solver_t::derivative<?{traits.nodal is not False}>(
+                auto jacobian = solver_t::derivative(
                     p_start,
                     node_kernel,
                     edge_kernel,
@@ -200,16 +198,16 @@ extern "C" {
                         for(int i1 = threadIdx.x; i < n1; i += blockDim.x) {
                             #pragma unroll (jacobian.size)
                             for(int j = 0; j < jacobian.size; ++j) {
-                                J(I1 + i1, j) = jacobian(i1, i1, j);
+                                J(I1 + i1, j) = jacobian(i1 + i1 * n1, j);
                             }
                         }
                     #else
                         for(int i = threadIdx.x; i < N; i += blockDim.x) {
-                            i1 = i / n2;
-                            i2 = i % n2;
+                            int i1 = i / n2;
+                            int i2 = i % n2;
                             #pragma unroll (jacobian.size)
                             for(int j = 0; j < jacobian.size; ++j) {
-                                const auto r = jacobian(i1, i2, j);
+                                const auto r = jacobian(i, j);
                                 J(I1 + i1, I2 + i2, j) = r;
                                 #if ?{traits.symmetric is True}
                                     if (job.x != job.y) J(I2 + i2, I1 + i1, j) = r;
@@ -221,14 +219,14 @@ extern "C" {
                 #elif ?{traits.nodal is False}
 
                     #if ?{traits.diagonal is True}
-                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            J(I1, i) = 0;
+                        for (int j = threadIdx.x; j < jacobian.size; j += blockDim.x) {
+                            J(I1, j) = 0;
                         }
                     #else
-                        for (int i = threadIdx.x; i < jacobian.size; i += blockDim.x) {
-                            J(I1, I2, i) = 0;
+                        for (int j = threadIdx.x; j < jacobian.size; j += blockDim.x) {
+                            J(I1, I2, j) = 0;
                             #if ?{traits.symmetric is True}
-                                if (job.x != job.y) J(I2, I1, i) = 0;
+                                if (job.x != job.y) J(I2, I1, j) = 0;
                             #endif
                         }
                     #endif
@@ -237,20 +235,20 @@ extern "C" {
 
                     #if ?{traits.diagonal is True}
                         #pragma unroll (jacobian.size)
-                        for(int i = 0; i < jacobian.size; ++i) {
-                            auto j = graphdot::cuda::warp_sum(jacobian[i]);
+                        for(int j = 0; j < jacobian.size; ++j) {
+                            auto jac = graphdot::cuda::warp_sum(jacobian[j]);
                             if (lane == 0) {
-                                atomicAdd(J.at(I1, i), j);
+                                atomicAdd(J.at(I1, j), jac);
                             };
                         }
                     #else
                         #pragma unroll (jacobian.size)
-                        for(int i = 0; i < jacobian.size; ++i) {
-                            auto j = graphdot::cuda::warp_sum(jacobian[i]);
+                        for(int j = 0; j < jacobian.size; ++j) {
+                            auto jac = graphdot::cuda::warp_sum(jacobian[j]);
                             if (lane == 0) {
-                                atomicAdd(J.at(I1, I2, i), j);
+                                atomicAdd(J.at(I1, I2, i), jac);
                                 #if ?{traits.symmetric is True}
-                                    if (job.x != job.y) atomicAdd(J.at(I2, I1, i), j);
+                                    if (job.x != job.y) atomicAdd(J.at(I2, I1, j), jac);
                                 #endif
                             };
                         }
