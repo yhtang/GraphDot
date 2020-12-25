@@ -79,15 +79,6 @@ extern "C" {
                 #endif
             #endif
 
-            // setup Jacobian matrix view
-            #if ?{traits.eval_gradient is True}
-                #if ?{traits.diagonal is True}
-                    auto J = graphdot::tensor_view(gradient, nX, nJ);
-                #else
-                    auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
-                #endif
-            #endif
-
             // solve the MLGK equation
             #if ?{traits.eval_gradient is True}
                 solver_t::compute_duo(
@@ -141,7 +132,7 @@ extern "C" {
                         #if ?{traits.symmetric is True}
                             if (job.x != job.y) K(I2 + i2, I1 + i1) = r;
                         #endif
-                    }    
+                    }
                 #endif
             #elif ?{traits.nodal is False}
                 // wipe output buffer for atomic accumulations
@@ -179,10 +170,20 @@ extern "C" {
                 }
             #endif
 
-            // optionally evaluate the gradient
+            // Evaluate the gradient with respect to hyperparameters
             #if ?{traits.eval_gradient is True}
 
-                auto jacobian = solver_t::derivative(
+                // setup Jacobian matrix view
+                #if ?{traits.eval_gradient is True}
+                    #if ?{traits.diagonal is True}
+                        auto J = graphdot::tensor_view(gradient, nX, nJ);
+                    #else
+                        auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
+                    #endif
+                #endif
+
+                // compute the Jacobian
+                auto jacobian = solver_t::derivative<?{traits.nodal is not False}>(
                     p_start,
                     node_kernel,
                     edge_kernel,
