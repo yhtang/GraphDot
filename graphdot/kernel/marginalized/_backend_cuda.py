@@ -73,13 +73,23 @@ class CUDABackend(Backend):
                 'try to normalize automatically with `Graph.normalize_types`.'
             )
 
-    @functools.lru_cache(1)
-    def _allocate_pcg_scratch(self, count, nmax, n_temporaries):
-        if (self.scratch_pcg is None or len(self.scratch_pcg) < count or
-                self.scratch_pcg[0].nmax < nmax):
+    def _allocate_pcg_scratch(self, number, max_graph_size, traits):
+        if traits.eval_gradient is True:
+            length = 2 * max_graph_size**2
+            if traits.nodal in [True, 'block']:
+                n_temporaries = 6
+            else:
+                n_temporaries = 5
+        else:
+            length = max_graph_size**2
+            n_temporaries = 5
+
+        if (self.scratch_pcg is None or len(self.scratch_pcg) < number or
+                self.scratch_pcg[0].nmax < length or
+                self.scratch_pcg[0].ndim < n_temporaries):
             self.ctx.synchronize()
             self.scratch_pcg = [
-                PCGScratch(nmax, n_temporaries) for _ in range(count)
+                PCGScratch(length, n_temporaries) for _ in range(number)
             ]
             self.scratch_pcg_d = umarray(
                 np.array([s.state for s in self.scratch_pcg], PCGScratch.dtype)
@@ -263,18 +273,9 @@ class CUDABackend(Backend):
 
         ''' allocate scratch buffers '''
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        if traits.eval_gradient is True and traits.nodal is not False:
-            scratch_pcg = self._allocate_pcg_scratch(
-                launch_block_count,
-                2 * max_graph_size**2,
-                n_temporaries=6
-            )
-        else:
-            scratch_pcg = self._allocate_pcg_scratch(
-                launch_block_count,
-                max_graph_size**2,
-                n_temporaries=5
-            )
+        scratch_pcg = self._allocate_pcg_scratch(
+            launch_block_count, max_graph_size, traits
+        )
 
         ''' copy micro kernel parameters to GPU '''
         p_node_kernel, _ = self.module.get_global('node_kernel')
@@ -289,11 +290,6 @@ class CUDABackend(Backend):
         cuda.memcpy_htod(p_p_start, np.array([p.state], dtype=p.dtype))
 
         timer.toc('calculating launch configuration')
-
-        print('----------------------------------')
-        print(self.source)
-        print('----------------------------------')
-
 
         ''' GPU kernel execution '''
         timer.tic('GPU kernel execution')

@@ -180,19 +180,9 @@ extern "C" {
                     auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
                 #endif
 
-                // compute the Jacobian
-                auto jacobian = solver_t::derivative(
-                    p_start,
-                    node_kernel,
-                    edge_kernel,
-                    g1, g2,
-                    scratch,
-                    shmem,
-                    q
-                );
-                __syncthreads();
-
                 #if ?{traits.nodal is True}
+
+                    // NOT IMPLEMENTED
 
                     #if ?{traits.diagonal is True}
                         for(int i1 = threadIdx.x; i < n1; i += blockDim.x) {
@@ -217,6 +207,18 @@ extern "C" {
                     #endif
 
                 #elif ?{traits.nodal is False}
+
+                    // compute the Jacobian
+                    auto jacobian = solver_t::derivative(
+                        p_start,
+                        node_kernel,
+                        edge_kernel,
+                        g1, g2,
+                        scratch,
+                        shmem,
+                        q
+                    );
+                    __syncthreads();
 
                     #if ?{traits.diagonal is True}
                         for (int j = threadIdx.x; j < jacobian.size; j += blockDim.x) {
@@ -246,7 +248,7 @@ extern "C" {
                         for(int j = 0; j < jacobian.size; ++j) {
                             auto jac = graphdot::cuda::warp_sum(jacobian[j]);
                             if (lane == 0) {
-                                atomicAdd(J.at(I1, I2, i), jac);
+                                atomicAdd(J.at(I1, I2, j), jac);
                                 #if ?{traits.symmetric is True}
                                     if (job.x != job.y) atomicAdd(J.at(I2, I1, j), jac);
                                 #endif

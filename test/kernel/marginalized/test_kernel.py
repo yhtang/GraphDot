@@ -285,8 +285,7 @@ def test_mlgk_gradient(caseitem):
             dLogt_dt = 1 / np.exp(theta)[i]
             dR_dt = dR_dLogt * dLogt_dt
 
-            for a, b in zip(dR[:, :, i].ravel(), dR_dt.ravel()):
-                assert(a == pytest.approx(b, rel=0.05, abs=0.05))
+            assert np.allclose(dR[:, :, i], dR_dt, rtol=0.05, atol=0.05)
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
