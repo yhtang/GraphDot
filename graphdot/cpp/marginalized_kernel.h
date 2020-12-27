@@ -2,6 +2,7 @@
 #define GRAPHDOT_MARGINALIZED_KERNEL_H_
 
 #include <algorithm>
+#include <type_traits>
 #include "util_cuda.h"
 #include "graph.h"
 #include "fmath.h"
@@ -29,12 +30,14 @@ struct pcg_scratch_t {
     __device__ __inline__ float * p() { return ptr + stride * 3; }
     __device__ __inline__ float * Ap() { return ptr + stride * 4; }
     __device__ __inline__ float * x0() { return ptr + stride * 5; }  // optional
+    __device__ __inline__ float * x1() { return ptr + stride * 6; }  // optional
     __device__ __inline__ float & x(int i) { return x()[i]; }
     __device__ __inline__ float & r(int i) { return r()[i]; }
     __device__ __inline__ float & z(int i) { return z()[i]; }
     __device__ __inline__ float & p(int i) { return p()[i]; }
     __device__ __inline__ float & Ap(int i) { return Ap()[i]; }
     __device__ __inline__ float & x0(int i) { return x0()[i]; }  // optional
+    __device__ __inline__ float & x1(int i) { return x1()[i]; }  // optional
 };
 
 // template<class StartingProbability, class NodeKernel, class EdgeKernel>
@@ -207,7 +210,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         }
     }
 
-    template<class NodeKernel, class EdgeKernel, class InitialGuess>
+    template<class NodeKernel, class EdgeKernel>
     __inline__ __device__ static void compute(
         NodeKernel const node_kernel,
         EdgeKernel const edge_kernel,
@@ -217,7 +220,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         char * const   cache,
         const float    q,
         const float    q0,
-        InitialGuess const guess) {
+        const bool     nonzero_initial_guess) {
 
         using namespace graphdot::cuda;
 
@@ -374,6 +377,18 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         };
 
         // initialization
+
+        // uses r to temporarily hold A.x0
+        if (nonzero_initial_guess) {
+            A_dot(scratch.r(), scratch.x());
+        } else {
+            // directly set x to 0 and bypass evaluating A.x0
+            for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                scratch.x(i) = 0;  // x0 === 0
+                scratch.r(i) = 0;
+            }
+        }
+
         for (int i = threadIdx.x; i < N; i += blockDim.x) {
             const int   i1 = i / n2;
             const int   i2 = i % n2;
@@ -381,18 +396,16 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             const float d2 = g2.degree[i2];
             const float dx = d1 * d2 / ipow<2>(1 - q);
             const float vx = node_kernel(g1.node[i1], g2.node[i2]);
-
             // b  = Dx . qx
-            const auto b = dx * q * q / (q0 * q0);
             // r0 = b - A . x0
-            const auto r0 = b; 
+            const auto b = dx * q * q / (q0 * q0);
+            const auto r0 = b - scratch.r(i);  // recall that r holds A.x0
             // z0 = M^-1 . r0
             //    = (Dx . Vx^-1)^-1 . r0
             //    = r0 .* Vx ./ Dx
             const auto z0 = r0 * vx / dx;
             const auto p0 = z0;
 
-            scratch.x(i) = 0;  // x0 === 0
             scratch.r(i) = r0;
             scratch.z(i) = z0;
             scratch.p(i) = p0;

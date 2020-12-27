@@ -75,10 +75,11 @@ class CUDABackend(Backend):
 
     def _allocate_pcg_scratch(self, number, max_graph_size, traits):
         if traits.eval_gradient is True:
-            length = 2 * max_graph_size**2
             if traits.nodal in [True, 'block']:
-                n_temporaries = 6
+                length = max_graph_size**2
+                n_temporaries = 7
             else:
+                length = max_graph_size**2 * 2
                 n_temporaries = 5
         else:
             length = max_graph_size**2

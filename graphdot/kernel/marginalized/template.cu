@@ -80,7 +80,7 @@ extern "C" {
             #endif
 
             // solve the MLGK equation
-            #if ?{traits.eval_gradient is True}
+            #if ?{traits.eval_gradient is True and traits.nodal is False}
                 solver_t::compute_duo(
                     node_kernel,
                     edge_kernel,
@@ -96,7 +96,8 @@ extern "C" {
                     g1, g2,
                     scratch,
                     shmem,
-                    q, q0);
+                    q, q0,
+                    false);
             #endif
             __syncthreads();
 

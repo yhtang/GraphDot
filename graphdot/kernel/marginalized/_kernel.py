@@ -335,7 +335,7 @@ class MarginalizedGraphKernel:
             np.cumsum(sizes**2, out=starts[1:])
             output_length = int(starts[-1])
         else:
-            raise(ValueError("Invalid 'nodal' option '%s'" % nodal))
+            raise ValueError("Invalid 'nodal' option '%s'" % nodal)
         gramian = backend.empty(output_length, np.float32)
         if traits.eval_gradient is True:
             gradient = backend.empty(self.n_dims * output_length, np.float32)
