@@ -14,6 +14,7 @@ from graphdot.codegen import Template
 from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
+from graphdot.util.iterable import flatten, fold_like
 from ._backend import Backend
 from ._scratch import PCGScratch
 from ._octilegraph import OctileGraph
@@ -143,7 +144,7 @@ class CUDABackend(Backend):
         return self._module
 
     @staticmethod
-    def gencode_kernel(kernel, name):
+    def gencode_kernel(kernel, name, theta_grid=False):
         fun, jac = kernel.gen_expr('x1', 'x2')
 
         return Template(r'''
@@ -168,13 +169,14 @@ class CUDABackend(Backend):
             }
         };
 
-        __constant__ ${name}_t ${name};
+        __constant__ ${name}_t ${name}[${n}];
         ''').render(
             name=name,
             jac_dims=len(jac),
             theta_t=decltype(kernel),
             expr=fun,
             jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
+            n=1 + 2 * (len(list(flatten(kernel.theta))) if theta_grid else 0)
         )
 
     @staticmethod
@@ -209,8 +211,21 @@ class CUDABackend(Backend):
             jac_dims=len(jac),
             theta_t=decltype(pfunc),
             expr=fun,
-            jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
+            jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)]
         )
+
+    @staticmethod
+    def pack_state(object, diff_grid=False, diff_eps=1e-2):
+        pack = [object.state]
+        if diff_grid is True:
+            theta = np.log(list(flatten(object.theta)))
+            for i, _ in enumerate(theta):
+                t1, t2 = np.copy(theta), np.copy(theta)
+                t1[i] += diff_eps
+                t2[i] -= diff_eps
+                pack.append(fold_like(np.exp(t1), object.theta))
+                pack.append(fold_like(np.exp(t2), object.theta))
+        return pack
 
     def __call__(self, graphs, node_kernel, edge_kernel, p, q, jobs, starts,
                  gramian, gradient, nX, nY, nJ, traits, timer):
@@ -243,8 +258,12 @@ class CUDABackend(Backend):
             edge_kernel = TensorProduct(weight=Product(),
                                         label=edge_kernel)
 
-        node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')
-        edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel')
+        use_theta_grid = all([
+            traits.eval_gradient is True,
+            traits.nodal in [True, 'block']
+        ])
+        node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel', use_theta_grid)
+        edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel', use_theta_grid)
         p_start_src = self.gencode_probability(p, 'p_start')
 
         with self.template.context(traits=traits) as template:
@@ -280,15 +299,28 @@ class CUDABackend(Backend):
 
         ''' copy micro kernel parameters to GPU '''
         p_node_kernel, _ = self.module.get_global('node_kernel')
-        cuda.memcpy_htod(p_node_kernel, np.array([node_kernel.state],
-                                                 dtype=node_kernel.dtype))
+        cuda.memcpy_htod(
+            p_node_kernel,
+            np.array(
+                self.pack_state(node_kernel, diff_grid=use_theta_grid),
+                dtype=node_kernel.dtype
+            )
+        )
 
         p_edge_kernel, _ = self.module.get_global('edge_kernel')
-        cuda.memcpy_htod(p_edge_kernel, np.array([edge_kernel.state],
-                                                 dtype=edge_kernel.dtype))
+        cuda.memcpy_htod(
+            p_edge_kernel,
+            np.array(
+                self.pack_state(edge_kernel, diff_grid=use_theta_grid),
+                dtype=edge_kernel.dtype
+            )
+        )
 
         p_p_start, _ = self.module.get_global('p_start')
-        cuda.memcpy_htod(p_p_start, np.array([p.state], dtype=p.dtype))
+        cuda.memcpy_htod(
+            p_p_start,
+            np.array(self.pack_state(p), dtype=p.dtype)
+        )
 
         timer.toc('calculating launch configuration')
 

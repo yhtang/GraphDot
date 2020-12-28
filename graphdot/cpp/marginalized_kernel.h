@@ -444,7 +444,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTr      = sum1;
             rTz_next = sum2;
 
-            if (sqrtf(rTr) < 1e-10f * N) break;
+            if (sqrtf(rTr) < 1e-8f * N) break;
 
             // beta = rTz_next / rTz;
             auto beta = rTz_next / rTz;
