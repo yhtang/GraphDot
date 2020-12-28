@@ -101,6 +101,17 @@ extern "C" {
             #endif
             __syncthreads();
 
+            // save the raw solution as initial guess for finite difference scheme
+            #if ?{traits.eval_gradient is True and traits.nodal is True}
+
+                auto const x0 = scratch.ext(0);
+                for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                    x0[i] = scratch.x(i);
+                }
+                __syncthreads();
+                
+            #endif
+
             // apply min-path truncation
             #if ?{traits.lmin == 1}
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -183,27 +194,65 @@ extern "C" {
 
                 #if ?{traits.nodal is True}
 
-                    // NOT IMPLEMENTED
+                    constexpr static int _offset_p = 0;
+                    constexpr static int _offset_q = _offset_p + p_start.jac_dims;
+                    constexpr static int _offset_v = _offset_q + 1;
+                    constexpr static int _offset_e = _offset_v + node_kernel.jac_dims;
+
+                    constexpr static float eps_logq = 1e-2;
+
+                    auto const diff = scratch.ext(1);
+
+                    for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                        scratch.x(i) = x0[i];
+                    }
+                    __syncthreads();
+    
+                    solver_t::compute(
+                        node_kernel,
+                        edge_kernel,
+                        g1, g2,
+                        scratch,
+                        shmem,
+                        expf(logf(q) + eps_logq), expf(logf(q0) + eps_logq),
+                        true);
+                    __syncthreads();
+
+                    for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                        diff[i] = scratch.x(i);
+                        scratch.x(i) = x0[i];
+                    }
+                    __syncthreads();
+
+                    solver_t::compute(
+                        node_kernel,
+                        edge_kernel,
+                        g1, g2,
+                        scratch,
+                        shmem,
+                        expf(logf(q) - eps_logq), expf(logf(q0) - eps_logq),
+                        true);
+                    __syncthreads();
+        
+                    for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                        diff[i] -= scratch.x(i);
+                    }
 
                     #if ?{traits.diagonal is True}
+                        const auto j = 0;
                         for(int i1 = threadIdx.x; i < n1; i += blockDim.x) {
-                            #pragma unroll (jacobian.size)
-                            for(int j = 0; j < jacobian.size; ++j) {
-                                J(I1 + i1, j) = jacobian(i1 + i1 * n1, j);
-                            }
+                            J(I1 + i1, j) = diff[i1 + i1 * n1] / (2 * eps_logq);
                         }
                     #else
+                        const auto j = 0;
                         for(int i = threadIdx.x; i < N; i += blockDim.x) {
                             int i1 = i / n2;
                             int i2 = i % n2;
-                            #pragma unroll (jacobian.size)
-                            for(int j = 0; j < jacobian.size; ++j) {
-                                const auto r = jacobian(i, j);
-                                J(I1 + i1, I2 + i2, j) = r;
-                                #if ?{traits.symmetric is True}
-                                    if (job.x != job.y) J(I2 + i2, I1 + i1, j) = r;
-                                #endif
-                            }
+                            const auto r = diff[i] / (2 * eps_logq);
+                            J(I1 + i1, I2 + i2, j) = r;
+                            #if ?{traits.symmetric is True}
+                                if (job.x != job.y) J(I2 + i2, I1 + i1, j) = r;
+                            #endif
                         }
                     #endif
 

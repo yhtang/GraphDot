@@ -29,37 +29,13 @@ struct pcg_scratch_t {
     __device__ __inline__ float * z() { return ptr + stride * 2; }
     __device__ __inline__ float * p() { return ptr + stride * 3; }
     __device__ __inline__ float * Ap() { return ptr + stride * 4; }
-    __device__ __inline__ float * x0() { return ptr + stride * 5; }  // optional
-    __device__ __inline__ float * x1() { return ptr + stride * 6; }  // optional
+    __device__ __inline__ float * ext(int k) { return ptr + stride * (5 + k); }  // optional
     __device__ __inline__ float & x(int i) { return x()[i]; }
     __device__ __inline__ float & r(int i) { return r()[i]; }
     __device__ __inline__ float & z(int i) { return z()[i]; }
     __device__ __inline__ float & p(int i) { return p()[i]; }
     __device__ __inline__ float & Ap(int i) { return Ap()[i]; }
-    __device__ __inline__ float & x0(int i) { return x0()[i]; }  // optional
-    __device__ __inline__ float & x1(int i) { return x1()[i]; }  // optional
 };
-
-// template<class StartingProbability, class NodeKernel, class EdgeKernel>
-// struct jacobian_scratch_t {
-//     constexpr static int _offset_p = 0;
-//     constexpr static int _offset_q = _offset_p + StartingProbability::jac_dims;
-//     constexpr static int _offset_v = _offset_q + 1;
-//     constexpr static int _offset_e = _offset_v + NodeKernel::jac_dims;
-//     constexpr static int size      = _offset_e + EdgeKernel::jac_dims;
-
-//     float * __restrict _data;
-//     std::size_t stride;
-
-//     __host__ __device__ __inline__
-//     jacobian_t(float * data) : _data(data) {}
-
-//     __device__ __inline__ auto & operator [] (int i) {return _data[i];}
-//     __device__ __inline__ auto & d_p(int i) {return _data[_offset_p + i];}
-//     __device__ __inline__ auto & d_q(int i) {return _data[_offset_q + i];}
-//     __device__ __inline__ auto & d_e(int i) {return _data[_offset_e + i];}
-//     __device__ __inline__ auto & d_v(int i) {return _data[_offset_v + i];}
-// };
 
 template<class StartingProbability, class NodeKernel, class EdgeKernel>
 struct jacobian_t {
@@ -481,6 +457,11 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             rTz = rTz_next;
         }
+
+        if (threadIdx.x == 0) {
+            printf ("Initial guess: %d, Converged after %d iterations\n", nonzero_initial_guess, k);
+        }
+        __syncthreads();
 
         #if 0
         __syncthreads();
