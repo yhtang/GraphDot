@@ -144,7 +144,7 @@ class CUDABackend(Backend):
         return self._module
 
     @staticmethod
-    def gencode_kernel(kernel, name, theta_grid=False):
+    def gencode_kernel(kernel, name):
         fun, jac = kernel.gen_expr('x1', 'x2')
 
         return Template(r'''
@@ -169,14 +169,14 @@ class CUDABackend(Backend):
             }
         };
 
-        __constant__ ${name}_t ${name}[${n}];
+        __constant__ ${name}_t ${name}[${n_theta_grid}];
         ''').render(
             name=name,
             jac_dims=len(jac),
             theta_t=decltype(kernel),
             expr=fun,
             jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
-            n=1 + 2 * (len(list(flatten(kernel.theta))) if theta_grid else 0)
+            n_theta_grid=1 + 2 * len(list(flatten(kernel.theta)))
         )
 
     @staticmethod
@@ -262,8 +262,8 @@ class CUDABackend(Backend):
             traits.eval_gradient is True,
             traits.nodal in [True, 'block']
         ])
-        node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel', use_theta_grid)
-        edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel', use_theta_grid)
+        node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')
+        edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel')
         p_start_src = self.gencode_probability(p, 'p_start')
 
         with self.template.context(traits=traits) as template:
@@ -318,8 +318,7 @@ class CUDABackend(Backend):
 
         p_p_start, _ = self.module.get_global('p_start')
         cuda.memcpy_htod(
-            p_p_start,
-            np.array(self.pack_state(p), dtype=p.dtype)
+            p_p_start, np.array(self.pack_state(p), dtype=p.dtype)
         )
 
         timer.toc('calculating launch configuration')

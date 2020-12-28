@@ -444,7 +444,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTr      = sum1;
             rTz_next = sum2;
 
-            if (sqrtf(rTr) < 1e-8f * N) break;
+            if (sqrtf(rTr) < 1e-10f * N) break;
 
             // beta = rTz_next / rTz;
             auto beta = rTz_next / rTz;
@@ -458,33 +458,35 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTz = rTz_next;
         }
 
+        #if 0
         if (threadIdx.x == 0) {
             printf ("Initial guess: %d, Converged after %d iterations\n", nonzero_initial_guess, k);
         }
         __syncthreads();
+        #endif
 
         #if 0
-        __syncthreads();
-        float R = 0;
-        for (int i = threadIdx.x; i < N; i += blockDim.x) {
-            R += scratch.x (i);
-        }
-        R = warp_sum (R);
-        __shared__ float block_R;
-        if (threadIdx.x == 0) block_R = 0;
-        __syncthreads();
-        if (laneid() == 0) atomicAdd (&block_R, R);
-        __syncthreads();
-        if (threadIdx.x == 0) {
-            printf ("sum(R) = %.7f\n", block_R);
-            printf ("Converged after %d iterations\n", k);
-            #if 0
-            for (int ij = 0; ij < N; ++ij) {
-                printf ("solution x[%d] = %.7f\n", ij, scratch.x (ij));
+            __syncthreads();
+            float R = 0;
+            for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                R += scratch.x (i);
             }
-            #endif
-        }
-        __syncthreads();
+            R = warp_sum (R);
+            __shared__ float block_R;
+            if (threadIdx.x == 0) block_R = 0;
+            __syncthreads();
+            if (laneid() == 0) atomicAdd (&block_R, R);
+            __syncthreads();
+            if (threadIdx.x == 0) {
+                printf ("sum(R) = %.7f\n", block_R);
+                printf ("Converged after %d iterations\n", k);
+                #if 0
+                for (int ij = 0; ij < N; ++ij) {
+                    printf ("solution x[%d] = %.7f\n", ij, scratch.x (ij));
+                }
+                #endif
+            }
+            __syncthreads();
         #endif
     }
 
