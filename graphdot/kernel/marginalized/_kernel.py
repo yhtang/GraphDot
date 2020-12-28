@@ -35,6 +35,9 @@ class MarginalizedGraphKernel:
     q_bounds: pair of floats
         The lower and upper bound that the stopping probability can vary during
         hyperparameter optimization.
+    eps: float
+        The step size used for finite difference approximation of the gradient.
+        Only used for nodal matrices (``nodal=True``).
     dtype: numpy dtype
         The data type of the kernel matrix to be returned.
     backend: 'auto' or 'cuda' or an instance of
@@ -55,12 +58,14 @@ class MarginalizedGraphKernel:
         return traits
 
     def __init__(self, node_kernel, edge_kernel, p=1.0, q=0.01,
-                 q_bounds=(1e-4, 1 - 1e-4), dtype=np.float, backend='auto'):
+                 q_bounds=(1e-4, 1 - 1e-4), eps=1e-2, dtype=np.float,
+                 backend='auto'):
         self.node_kernel = node_kernel
         self.edge_kernel = edge_kernel
         self.p = self._get_starting_probability(p)
         self.q = q
         self.q_bounds = q_bounds
+        self.eps = eps
         self.element_dtype = dtype
 
         self.backend = backend_factory(backend)
@@ -220,6 +225,7 @@ class MarginalizedGraphKernel:
             self.edge_kernel,
             self.p,
             self.q,
+            self.eps,
             jobs,
             starts,
             gramian,
@@ -352,6 +358,7 @@ class MarginalizedGraphKernel:
             self.edge_kernel,
             self.p,
             self.q,
+            self.eps,
             jobs,
             starts,
             gramian,

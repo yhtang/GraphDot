@@ -39,7 +39,8 @@ extern "C" {
         const uint        nY,
         const uint        nJ,
         const float32     q,
-        const float32     q0
+        const float32     q0,
+        const float32     eps_diff
     ) {
         extern __shared__ char shmem[];
         __shared__ uint i_job;
@@ -112,14 +113,18 @@ extern "C" {
                 
             #endif
 
-            // apply min-path truncation
-            #if ?{traits.lmin == 1}
-                for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                    int i1 = i / n2;
-                    int i2 = i % n2;
-                    scratch.x(i) -= node_kernel[0](g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
-                }
-            #endif
+            auto const postproc = [&](auto *x){
+                // apply min-path truncation
+                #if ?{traits.lmin == 1}
+                    for (int i = threadIdx.x; i < N; i += blockDim.x) {
+                        int i1 = i / n2;
+                        int i2 = i % n2;
+                        x[i] -= node_kernel[0](g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+                    }
+                #endif
+            };
+
+            postproc(scratch.x());
             __syncthreads();
 
             // write kernel matrix elements to output
@@ -199,18 +204,17 @@ extern "C" {
                     constexpr static int _offset_v = _offset_q + 1;
                     constexpr static int _offset_e = _offset_v + node_kernel[0].jac_dims;
 
-                    constexpr static float eps_diff = 1e-2;
-
                     auto const diff = scratch.ext(1);
 
-                    //P: ----------------------------------------------------------
+                    // dp must be done first, otherwise scratch.x will be wiped
+                    // by dq, dv, and de.
 
                     #if ?{traits.diagonal is True}
                         for (int i1 = threadIdx.x; i1 < n1; i1 += blockDim.x) {
                             auto p1 = p_start(g1.node[i1]);
                             auto dp1 = p_start._j_a_c_o_b_i_a_n_(g1.node[i1]);
                             for(int j = 0; j < p_start.jac_dims; ++j) {
-                                J(I1 + i1, _offset_p + j) = x0[i1 + i1 * n1] * 2 * p1 * dp1[j]
+                                J(I1 + i1, _offset_p + j) = scratch.x(i1 + i1 * n1) * 2 * p1 * dp1[j]
                             }
                         }
                     #else

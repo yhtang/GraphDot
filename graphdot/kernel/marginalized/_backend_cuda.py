@@ -227,8 +227,8 @@ class CUDABackend(Backend):
                 pack.append(fold_like(np.exp(t2), object.theta))
         return pack
 
-    def __call__(self, graphs, node_kernel, edge_kernel, p, q, jobs, starts,
-                 gramian, gradient, nX, nY, nJ, traits, timer):
+    def __call__(self, graphs, node_kernel, edge_kernel, p, q, eps, jobs,
+                 starts, gramian, gradient, nX, nY, nJ, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
         timer.tic('transferring graphs to GPU')
 
@@ -302,7 +302,10 @@ class CUDABackend(Backend):
         cuda.memcpy_htod(
             p_node_kernel,
             np.array(
-                self.pack_state(node_kernel, diff_grid=use_theta_grid),
+                self.pack_state(
+                    node_kernel,
+                    diff_grid=use_theta_grid, diff_eps=eps
+                ),
                 dtype=node_kernel.dtype
             )
         )
@@ -311,14 +314,17 @@ class CUDABackend(Backend):
         cuda.memcpy_htod(
             p_edge_kernel,
             np.array(
-                self.pack_state(edge_kernel, diff_grid=use_theta_grid),
+                self.pack_state(
+                    edge_kernel,
+                    diff_grid=use_theta_grid, diff_eps=eps
+                ),
                 dtype=edge_kernel.dtype
             )
         )
 
         p_p_start, _ = self.module.get_global('p_start')
         cuda.memcpy_htod(
-            p_p_start, np.array(self.pack_state(p), dtype=p.dtype)
+            p_p_start, np.array([p.state], dtype=p.dtype)
         )
 
         timer.toc('calculating launch configuration')
@@ -339,6 +345,7 @@ class CUDABackend(Backend):
             np.uint32(nJ),
             np.float32(q),
             np.float32(q),  # placeholder for q0
+            np.float32(eps),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,
