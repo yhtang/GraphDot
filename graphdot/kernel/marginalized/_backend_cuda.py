@@ -233,8 +233,8 @@ class CUDABackend(Backend):
                 pack.append(_nudge_theta(object, i, -diff_eps))
         return pack
 
-    def __call__(self, graphs, node_kernel, edge_kernel, p, q, eps, jobs,
-                 starts, gramian, gradient, nX, nY, nJ, traits, timer):
+    def __call__(self, graphs, node_kernel, edge_kernel, p, q, eps, ftol, gtol,
+                 jobs, starts, gramian, gradient, nX, nY, nJ, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
         timer.tic('transferring graphs to GPU')
 
@@ -347,6 +347,8 @@ class CUDABackend(Backend):
             np.float32(q),
             np.float32(q),  # placeholder for q0
             np.float32(eps),
+            np.float32(ftol),
+            np.float32(gtol),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,

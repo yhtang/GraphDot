@@ -196,7 +196,8 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         char * const   cache,
         const float    q,
         const float    q0,
-        const bool     nonzero_initial_guess) {
+        const bool     nonzero_initial_guess,
+        const float    tol) {
 
         using namespace graphdot::cuda;
 
@@ -445,7 +446,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTr      = sum1;
             rTz_next = sum2;
 
-            if (sqrtf(rTr) < 1e-10f * N) break;
+            if (sqrtf(rTr) < tol * N) break;
 
             // beta = rTz_next / rTz;
             auto beta = rTz_next / rTz;
@@ -459,7 +460,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTz = rTz_next;
         }
 
-        #if 0
+        #if 1
         if (threadIdx.x == 0) {
             printf ("Initial guess: %d, Converged after %d iterations\n", nonzero_initial_guess, k);
         }

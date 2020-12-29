@@ -40,7 +40,9 @@ extern "C" {
         const uint        nJ,
         const float32     q,
         const float32     q0,
-        const float32     eps_diff
+        const float32     eps_diff,
+        const float32     ftol,
+        const float32     gtol
     ) {
         extern __shared__ char shmem[];
         __shared__ uint i_job;
@@ -98,7 +100,8 @@ extern "C" {
                     scratch,
                     shmem,
                     q, q0,
-                    false);
+                    false,
+                    ftol);
             #endif
             __syncthreads();
 
@@ -249,7 +252,8 @@ extern "C" {
                         scratch,
                         shmem,
                         expf(logf(q) + eps_diff), expf(logf(q0) + eps_diff),
-                        true);
+                        true,
+                        gtol);
                     __syncthreads();
 
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -265,11 +269,12 @@ extern "C" {
                         scratch,
                         shmem,
                         expf(logf(q) - eps_diff), expf(logf(q0) - eps_diff),
-                        true);
+                        true,
+                        gtol);
                     __syncthreads();
         
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                        diff[i] = (diff[i] - scratch.x(i)) / (2 * eps_diff) / q;
+                        diff[i] = (diff[i] - scratch.x(i)) / (2 * eps_diff * q);
                     }
 
                     #if ?{traits.diagonal is True}
@@ -288,6 +293,7 @@ extern "C" {
                             #endif
                         }
                     #endif
+                    __syncthreads();
 
                     // dv ------------------------------------------------------
 
@@ -306,7 +312,8 @@ extern "C" {
                             scratch,
                             shmem,
                             q, q0,
-                            true);
+                            true,
+                            gtol);
                         __syncthreads();
     
                         for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -322,7 +329,8 @@ extern "C" {
                             scratch,
                             shmem,
                             q, q0,
-                            true);
+                            true,
+                            gtol);
                         __syncthreads();
             
                         for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -344,6 +352,7 @@ extern "C" {
                                 #endif
                             }
                         #endif
+                        __syncthreads();
                     }
 
                     // de ------------------------------------------------------
@@ -363,7 +372,8 @@ extern "C" {
                             scratch,
                             shmem,
                             q, q0,
-                            true);
+                            true,
+                            gtol);
                         __syncthreads();
 
                         for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -379,7 +389,8 @@ extern "C" {
                             scratch,
                             shmem,
                             q, q0,
-                            true);
+                            true,
+                            gtol);
                         __syncthreads();
 
                         for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -401,6 +412,7 @@ extern "C" {
                                 #endif
                             }
                         #endif
+                        __syncthreads();
                     }
 
                     //----------------------------------------------------------
