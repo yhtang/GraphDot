@@ -169,14 +169,15 @@ class CUDABackend(Backend):
             }
         };
 
-        __constant__ ${name}_t ${name}[${n_theta_grid}];
+        __constant__ ${name}_t ${name}[1 + 2 * ${n_theta}];
+        __constant__ float32 ${name}_flat_theta[${n_theta}];
         ''').render(
             name=name,
             jac_dims=len(jac),
             theta_t=decltype(kernel),
             expr=fun,
             jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
-            n_theta_grid=1 + 2 * len(list(flatten(kernel.theta)))
+            n_theta=len(list(flatten(kernel.theta)))
         )
 
     @staticmethod
@@ -216,15 +217,19 @@ class CUDABackend(Backend):
 
     @staticmethod
     def pack_state(object, diff_grid=False, diff_eps=1e-2):
+        def _nudge_theta(object, i, delta):
+            o = copy.deepcopy(object)
+            t = logtheta.copy()
+            t[i] += delta
+            o.theta = fold_like(np.exp(t), o.theta)
+            return o.state                
+
         pack = [object.state]
         if diff_grid is True:
-            theta = np.log(list(flatten(object.theta)))
-            for i, _ in enumerate(theta):
-                t1, t2 = np.copy(theta), np.copy(theta)
-                t1[i] += diff_eps
-                t2[i] -= diff_eps
-                pack.append(fold_like(np.exp(t1), object.theta))
-                pack.append(fold_like(np.exp(t2), object.theta))
+            logtheta = np.log(list(flatten(object.theta)))
+            for i, _ in enumerate(logtheta):
+                pack.append(_nudge_theta(object, i, diff_eps))
+                pack.append(_nudge_theta(object, i, -diff_eps))
         return pack
 
     def __call__(self, graphs, node_kernel, edge_kernel, p, q, eps, jobs,
@@ -298,29 +303,24 @@ class CUDABackend(Backend):
         )
 
         ''' copy micro kernel parameters to GPU '''
-        p_node_kernel, _ = self.module.get_global('node_kernel')
-        cuda.memcpy_htod(
-            p_node_kernel,
-            np.array(
-                self.pack_state(
-                    node_kernel,
-                    diff_grid=use_theta_grid, diff_eps=eps
-                ),
-                dtype=node_kernel.dtype
+        for name, uker in [('node_kernel', node_kernel),
+                           ('edge_kernel', edge_kernel)]:
+            p_uker, _ = self.module.get_global(name)
+            p_flat_theta, _ = self.module.get_global(f'{name}_flat_theta')
+            cuda.memcpy_htod(
+                p_uker,
+                np.array(
+                    self.pack_state(
+                        uker, diff_grid=use_theta_grid, diff_eps=eps
+                    ),
+                    dtype=uker.dtype
+                )
             )
-        )
 
-        p_edge_kernel, _ = self.module.get_global('edge_kernel')
-        cuda.memcpy_htod(
-            p_edge_kernel,
-            np.array(
-                self.pack_state(
-                    edge_kernel,
-                    diff_grid=use_theta_grid, diff_eps=eps
-                ),
-                dtype=edge_kernel.dtype
+            cuda.memcpy_htod(
+                p_flat_theta,
+                np.fromiter(flatten(uker.theta), dtype=np.float32)
             )
-        )
 
         p_p_start, _ = self.module.get_global('p_start')
         cuda.memcpy_htod(
