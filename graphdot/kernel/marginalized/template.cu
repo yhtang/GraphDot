@@ -83,8 +83,8 @@ extern "C" {
             // solve the MLGK equation
             #if ?{traits.eval_gradient is True and traits.nodal is False}
                 solver_t::compute_duo(
-                    node_kernel[0],
-                    edge_kernel[0],
+                    node_kernel,
+                    edge_kernel,
                     p_start,
                     g1, g2,
                     scratch,
@@ -92,8 +92,8 @@ extern "C" {
                     q, q0);
             #else
                 solver_t::compute(
-                    node_kernel[0],
-                    edge_kernel[0],
+                    node_kernel,
+                    edge_kernel,
                     g1, g2,
                     scratch,
                     shmem,
@@ -119,7 +119,7 @@ extern "C" {
                     for (int i = threadIdx.x; i < N; i += blockDim.x) {
                         int i1 = i / n2;
                         int i2 = i % n2;
-                        x[i] -= node_kernel[0](g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
+                        x[i] -= node_kernel(g1.node[i1], g2.node[i2]) * q * q / (q0 * q0);
                     }
                 #endif
             };
@@ -202,7 +202,7 @@ extern "C" {
                     constexpr static int _offset_p = 0;
                     constexpr static int _offset_q = _offset_p + p_start.jac_dims;
                     constexpr static int _offset_v = _offset_q + 1;
-                    constexpr static int _offset_e = _offset_v + node_kernel[0].jac_dims;
+                    constexpr static int _offset_e = _offset_v + node_kernel.jac_dims;
 
                     auto const diff = scratch.ext(1);
 
@@ -243,8 +243,8 @@ extern "C" {
                     __syncthreads();
     
                     solver_t::compute(
-                        node_kernel[0],
-                        edge_kernel[0],
+                        node_kernel,
+                        edge_kernel,
                         g1, g2,
                         scratch,
                         shmem,
@@ -259,8 +259,8 @@ extern "C" {
                     __syncthreads();
 
                     solver_t::compute(
-                        node_kernel[0],
-                        edge_kernel[0],
+                        node_kernel,
+                        edge_kernel,
                         g1, g2,
                         scratch,
                         shmem,
@@ -291,7 +291,7 @@ extern "C" {
 
                     // dv ------------------------------------------------------
 
-                    for(int j = 0; j < node_kernel[0].jac_dims; ++j) {
+                    for(int j = 0; j < node_kernel.jac_dims; ++j) {
                         auto const diff = scratch.ext(1);
 
                         for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -300,8 +300,8 @@ extern "C" {
                         __syncthreads();
         
                         solver_t::compute(
-                            node_kernel[j * 2 + 1],
-                            edge_kernel[0],
+                            node_kernel_diff_grid[j * 2],
+                            edge_kernel,
                             g1, g2,
                             scratch,
                             shmem,
@@ -316,8 +316,8 @@ extern "C" {
                         __syncthreads();
     
                         solver_t::compute(
-                            node_kernel[j * 2 + 2],
-                            edge_kernel[0],
+                            node_kernel_diff_grid[j * 2 + 1],
+                            edge_kernel,
                             g1, g2,
                             scratch,
                             shmem,
@@ -348,7 +348,7 @@ extern "C" {
 
                     // de ------------------------------------------------------
 
-                    for(int j = 0; j < edge_kernel[0].jac_dims; ++j) {
+                    for(int j = 0; j < edge_kernel.jac_dims; ++j) {
                         auto const diff = scratch.ext(1);
 
                         for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -357,8 +357,8 @@ extern "C" {
                         __syncthreads();
         
                         solver_t::compute(
-                            node_kernel[0],
-                            edge_kernel[j * 2 + 1],
+                            node_kernel,
+                            edge_kernel_diff_grid[j * 2],
                             g1, g2,
                             scratch,
                             shmem,
@@ -373,8 +373,8 @@ extern "C" {
                         __syncthreads();
 
                         solver_t::compute(
-                            node_kernel[0],
-                            edge_kernel[j * 2 + 2],
+                            node_kernel,
+                            edge_kernel_diff_grid[j * 2 + 1],
                             g1, g2,
                             scratch,
                             shmem,
@@ -410,8 +410,8 @@ extern "C" {
                     // compute the Jacobian
                     auto jacobian = solver_t::derivative(
                         p_start,
-                        node_kernel[0],
-                        edge_kernel[0],
+                        node_kernel,
+                        edge_kernel,
                         g1, g2,
                         scratch,
                         shmem,

@@ -169,8 +169,9 @@ class CUDABackend(Backend):
             }
         };
 
-        __constant__ ${name}_t ${name}[1 + 2 * ${n_theta}];
-        __constant__ float32 ${name}_flat_theta[${n_theta}];
+        __constant__ ${name}_t ${name};
+        __constant__ ${name}_t ${name}_diff_grid[2 * ${n_theta}];
+        __constant__ float32   ${name}_flat_theta[${n_theta}];
         ''').render(
             name=name,
             jac_dims=len(jac),
@@ -305,22 +306,22 @@ class CUDABackend(Backend):
         ''' copy micro kernel parameters to GPU '''
         for name, uker in [('node_kernel', node_kernel),
                            ('edge_kernel', edge_kernel)]:
-            p_uker, _ = self.module.get_global(name)
-            p_flat_theta, _ = self.module.get_global(f'{name}_flat_theta')
-            cuda.memcpy_htod(
-                p_uker,
-                np.array(
-                    self.pack_state(
-                        uker, diff_grid=use_theta_grid, diff_eps=eps
-                    ),
-                    dtype=uker.dtype
-                )
+            states = np.array(
+                self.pack_state(uker, diff_grid=use_theta_grid, diff_eps=eps),
+                dtype=uker.dtype
             )
 
-            cuda.memcpy_htod(
-                p_flat_theta,
-                np.fromiter(flatten(uker.theta), dtype=np.float32)
-            )
+            p_uker, _ = self.module.get_global(name)
+            cuda.memcpy_htod(p_uker, states[:1])
+
+            if use_theta_grid:
+                p_diff_grid, _ = self.module.get_global(f'{name}_diff_grid')
+                p_flat_theta, _ = self.module.get_global(f'{name}_flat_theta')
+                cuda.memcpy_htod(p_diff_grid, states[1:])
+                cuda.memcpy_htod(
+                    p_flat_theta,
+                    np.fromiter(flatten(uker.theta), dtype=np.float32)
+                )
 
         p_p_start, _ = self.module.get_global('p_start')
         cuda.memcpy_htod(
