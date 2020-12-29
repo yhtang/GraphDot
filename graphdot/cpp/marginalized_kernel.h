@@ -392,7 +392,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
         // CG loop
         int k;
-        for (k = 0; k < N; ++k) {
+        for (k = 0; k < N && rTz != 0.f; ++k) {
 
             A_dot(scratch.Ap(), scratch.p());
 
@@ -400,6 +400,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             // alpha = rTr / dot( p, Ap );
             auto pAp   = block_vdotv(scratch.p(), scratch.Ap(), N);
+            if (pAp == 0.f) break;
             auto alpha = rTz / pAp;
 
             // x = x + alpha * p;
@@ -558,7 +559,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
         auto rTz = block_vdotv(scratch.r(), scratch.z(), 2 * N);
 
         int k;
-        for (k = 0; k < N; ++k) {
+        for (k = 0; k < N && rTz != 0.f; ++k) {
             // Ap = A * p, diagonal part
             // diag(A . p0) = Dx . Vx^-1 . p0
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
@@ -720,6 +721,7 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
 
             // alpha = rTr / dot( p, Ap );
             auto pAp   = block_vdotv(scratch.p(), scratch.Ap(), 2 * N);
+            if (pAp == 0.f) break;
             auto alpha = rTz / pAp;
 
             // x = x + alpha * p;
