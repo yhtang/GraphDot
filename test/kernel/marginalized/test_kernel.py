@@ -242,7 +242,8 @@ def test_mlgk_cross_similarity(caseitem):
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
-def test_mlgk_gradient(caseitem):
+@pytest.mark.parametrize('nodal', [True, False])
+def test_mlgk_gradient(caseitem, nodal):
     '''derivative w.r.t. hyperparameters'''
 
     _, case = caseitem
@@ -256,7 +257,7 @@ def test_mlgk_gradient(caseitem):
 
         np.set_printoptions(precision=4, linewidth=999, suppress=True)
 
-        R, dR = mlgk(G, nodal=False, eval_gradient=True)
+        R, dR = mlgk(G, nodal=nodal, eval_gradient=True)
 
         assert(len(dR.shape) == 3)
         assert(R.shape[0] == dR.shape[0])
@@ -272,12 +273,12 @@ def test_mlgk_gradient(caseitem):
             t = np.copy(theta)
             t[i] += eps
             mlgk.theta = t
-            Rr = mlgk(G)
+            Rr = mlgk(G, nodal=nodal)
 
             t = np.copy(theta)
             t[i] -= eps
             mlgk.theta = t
-            Rl = mlgk(G)
+            Rl = mlgk(G, nodal=nodal)
 
             mlgk.theta = theta
 
@@ -340,7 +341,8 @@ def test_mlgk_diag(caseitem):
 
 
 @pytest.mark.parametrize('caseitem', case_dict.items())
-def test_mlgk_diag_gradient(caseitem):
+@pytest.mark.parametrize('nodal', [True, False])
+def test_mlgk_diag_gradient(caseitem, nodal):
     '''derivative w.r.t. hyperparameters'''
 
     _, case = caseitem
@@ -352,7 +354,7 @@ def test_mlgk_diag_gradient(caseitem):
 
         mlgk = MarginalizedGraphKernel(knode, kedge, q=q)
 
-        R, dR = mlgk.diag(G, nodal=False, eval_gradient=True)
+        R, dR = mlgk.diag(G, nodal=nodal, eval_gradient=True)
 
         assert(len(dR.shape) == 2)
         assert(R.shape[0] == dR.shape[0])
@@ -367,12 +369,12 @@ def test_mlgk_diag_gradient(caseitem):
             t = np.copy(theta)
             t[i] += eps
             mlgk.theta = t
-            Rr = mlgk.diag(G, nodal=False, eval_gradient=False)
+            Rr = mlgk.diag(G, nodal=nodal, eval_gradient=False)
 
             t = np.copy(theta)
             t[i] -= eps
             mlgk.theta = t
-            Rl = mlgk.diag(G, nodal=False, eval_gradient=False)
+            Rl = mlgk.diag(G, nodal=nodal, eval_gradient=False)
 
             mlgk.theta = theta
 
