@@ -334,7 +334,6 @@ extern "C" {
                                 J(I1 + i1, _offset_v + j) = diff[i1 + i1 * n1] * graphdot::ipow<2>(p_start(g1.node[i1]));
                             }
                         #else
-                            const auto j = 0;
                             for(int i = threadIdx.x; i < N; i += blockDim.x) {
                                 int i1 = i / n2;
                                 int i2 = i % n2;
@@ -392,7 +391,6 @@ extern "C" {
                                 J(I1 + i1, _offset_e + j) = diff[i1 + i1 * n1] * graphdot::ipow<2>(p_start(g1.node[i1]));
                             }
                         #else
-                            const auto j = 0;
                             for(int i = threadIdx.x; i < N; i += blockDim.x) {
                                 int i1 = i / n2;
                                 int i2 = i % n2;
