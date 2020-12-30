@@ -58,7 +58,7 @@ class MarginalizedGraphKernel:
         return traits
 
     def __init__(self, node_kernel, edge_kernel, p=1.0, q=0.01,
-                 q_bounds=(1e-4, 1 - 1e-4), eps=1e-2, ftol=1e-10, gtol=1e-6,
+                 q_bounds=(1e-4, 1 - 1e-4), eps=1e-2, ftol=1e-8, gtol=1e-6,
                  dtype=np.float, backend='auto'):
         self.node_kernel = node_kernel
         self.edge_kernel = edge_kernel

@@ -119,7 +119,9 @@ class CUDABackend(Backend):
                          '-lineinfo',
                          ] + self.nvcc_extra,
                 no_extern_c=True,
-                include_dirs=cpp.__path__)
+                include_dirs=cpp.__path__,
+                # keep=True
+            )
         return module, [str(rec.message) for rec in w]
 
     @property
@@ -223,7 +225,7 @@ class CUDABackend(Backend):
             t = logtheta.copy()
             t[i] += delta
             o.theta = fold_like(np.exp(t), o.theta)
-            return o.state                
+            return o.state
 
         pack = [object.state]
         if diff_grid is True:

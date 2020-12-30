@@ -460,35 +460,32 @@ template<class Graph> struct labeled_compact_block_dynsched_pcg {
             rTz = rTz_next;
         }
 
-        #if 1
-        if (threadIdx.x == 0) {
-            printf ("Initial guess: %d, Converged after %d iterations\n", nonzero_initial_guess, k);
-        }
-        __syncthreads();
-        #endif
-
         #if 0
-            __syncthreads();
-            float R = 0;
-            for (int i = threadIdx.x; i < N; i += blockDim.x) {
-                R += scratch.x (i);
-            }
-            R = warp_sum (R);
-            __shared__ float block_R;
-            if (threadIdx.x == 0) block_R = 0;
-            __syncthreads();
-            if (laneid() == 0) atomicAdd (&block_R, R);
-            __syncthreads();
             if (threadIdx.x == 0) {
-                printf ("sum(R) = %.7f\n", block_R);
-                printf ("Converged after %d iterations\n", k);
-                #if 0
-                for (int ij = 0; ij < N; ++ij) {
-                    printf ("solution x[%d] = %.7f\n", ij, scratch.x (ij));
-                }
-                #endif
+                printf(
+                    "Initial guess: %d, Converged after %d iterations\n",
+                    nonzero_initial_guess, k
+                );
             }
-            __syncthreads();
+            // float R = 0;
+            // for (int i = threadIdx.x; i < N; i += blockDim.x) {
+            //     R += scratch.x (i);
+            // }
+            // R = warp_sum (R);
+            // __shared__ float block_R;
+            // if (threadIdx.x == 0) block_R = 0;
+            // __syncthreads();
+            // if (laneid() == 0) atomicAdd (&block_R, R);
+            // __syncthreads();
+            // if (threadIdx.x == 0) {
+            //     printf("sum(R) = %.7f\n", block_R);
+            //     #if 0
+            //     for (int ij = 0; ij < N; ++ij) {
+            //         printf ("solution x[%d] = %.7f\n", ij, scratch.x (ij));
+            //     }
+            //     #endif
+            // }
+            // __syncthreads();
         #endif
     }
 
