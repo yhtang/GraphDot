@@ -14,8 +14,9 @@ from graphdot.codegen import Template
 from graphdot.codegen.cpptool import decltype
 from graphdot.cuda.array import umempty, umzeros, umarray
 from graphdot.microkernel import TensorProduct, Product
+from graphdot.util.iterable import flatten, fold_like
 from ._backend import Backend
-from ._scratch import BlockScratch
+from ._scratch import PCGScratch
 from ._octilegraph import OctileGraph
 
 
@@ -49,8 +50,7 @@ class CUDABackend(Backend):
         self.uuid = uuid.uuid4()
         self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
         self.device = self.ctx.get_device()
-        self.scratch = None
-        self.scratch_capacity = 0
+        self.scratch_pcg = None
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -74,15 +74,30 @@ class CUDABackend(Backend):
                 'try to normalize automatically with `Graph.normalize_types`.'
             )
 
-    def _allocate_scratch(self, count, capacity):
-        if (self.scratch is None or len(self.scratch) < count or
-                self.scratch[0].capacity < capacity):
+    def _allocate_pcg_scratch(self, number, max_graph_size, traits):
+        if traits.eval_gradient is True:
+            if traits.nodal in [True, 'block']:
+                length = max_graph_size**2
+                n_temporaries = 7
+            else:
+                length = max_graph_size**2 * 2
+                n_temporaries = 5
+        else:
+            length = max_graph_size**2
+            n_temporaries = 5
+
+        if (self.scratch_pcg is None or len(self.scratch_pcg) < number or
+                self.scratch_pcg[0].nmax < length or
+                self.scratch_pcg[0].ndim < n_temporaries):
             self.ctx.synchronize()
-            self.scratch = [BlockScratch(capacity) for _ in range(count)]
-            self.scratch_d = umarray(np.array([s.state for s in self.scratch],
-                                              BlockScratch.dtype))
-            self.scratch_capacity = self.scratch[0].capacity
+            self.scratch_pcg = [
+                PCGScratch(length, n_temporaries) for _ in range(number)
+            ]
+            self.scratch_pcg_d = umarray(
+                np.array([s.state for s in self.scratch_pcg], PCGScratch.dtype)
+            )
             self.ctx.synchronize()
+        return self.scratch_pcg_d
 
     def _register_graph(self, graph):
         if self.uuid not in graph.cookie:
@@ -104,7 +119,9 @@ class CUDABackend(Backend):
                          '-lineinfo',
                          ] + self.nvcc_extra,
                 no_extern_c=True,
-                include_dirs=cpp.__path__)
+                include_dirs=cpp.__path__,
+                # keep=True
+            )
         return module, [str(rec.message) for rec in w]
 
     @property
@@ -155,12 +172,15 @@ class CUDABackend(Backend):
         };
 
         __constant__ ${name}_t ${name};
+        __constant__ ${name}_t ${name}_diff_grid[2 * ${n_theta}];
+        __constant__ float32   ${name}_flat_theta[${n_theta}];
         ''').render(
             name=name,
             jac_dims=len(jac),
             theta_t=decltype(kernel),
             expr=fun,
             jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
+            n_theta=len(list(flatten(kernel.theta)))
         )
 
     @staticmethod
@@ -195,11 +215,28 @@ class CUDABackend(Backend):
             jac_dims=len(jac),
             theta_t=decltype(pfunc),
             expr=fun,
-            jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)],
+            jac=[f'j[{i}] = {expr}' for i, expr in enumerate(jac)]
         )
 
-    def __call__(self, graphs, node_kernel, edge_kernel, p, q, jobs, starts,
-                 gramian, gradient, nX, nY, nJ, traits, timer):
+    @staticmethod
+    def pack_state(object, diff_grid=False, diff_eps=1e-2):
+        def _nudge_theta(object, i, delta):
+            o = copy.deepcopy(object)
+            t = logtheta.copy()
+            t[i] += delta
+            o.theta = fold_like(np.exp(t), o.theta)
+            return o.state
+
+        pack = [object.state]
+        if diff_grid is True:
+            logtheta = np.log(list(flatten(object.theta)))
+            for i, _ in enumerate(logtheta):
+                pack.append(_nudge_theta(object, i, diff_eps))
+                pack.append(_nudge_theta(object, i, -diff_eps))
+        return pack
+
+    def __call__(self, graphs, node_kernel, edge_kernel, p, q, eps, ftol, gtol,
+                 jobs, starts, gramian, gradient, nX, nY, nJ, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
         timer.tic('transferring graphs to GPU')
 
@@ -229,6 +266,10 @@ class CUDABackend(Backend):
             edge_kernel = TensorProduct(weight=Product(),
                                         label=edge_kernel)
 
+        use_theta_grid = all([
+            traits.eval_gradient is True,
+            traits.nodal in [True, 'block']
+        ])
         node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')
         edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel')
         p_start_src = self.gencode_probability(p, 'p_start')
@@ -252,23 +293,42 @@ class CUDABackend(Backend):
         timer.tic('calculating launch configuration')
         launch_block_count = (self.device.MULTIPROCESSOR_COUNT
                               * self.block_per_sm)
-        shmem_bytes_per_warp = self.module.get_global('shmem_bytes_per_warp')[1]
+        shmem_bytes_per_warp = self.module.get_global(
+            'shmem_bytes_per_warp'
+        )[1]
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
+        ''' allocate scratch buffers '''
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        self._allocate_scratch(launch_block_count, 2 * max_graph_size**2)
+        scratch_pcg = self._allocate_pcg_scratch(
+            launch_block_count, max_graph_size, traits
+        )
 
-        p_node_kernel, _ = self.module.get_global('node_kernel')
-        cuda.memcpy_htod(p_node_kernel, np.array([node_kernel.state],
-                                                 dtype=node_kernel.dtype))
+        ''' copy micro kernel parameters to GPU '''
+        for name, uker in [('node_kernel', node_kernel),
+                           ('edge_kernel', edge_kernel)]:
+            states = np.array(
+                self.pack_state(uker, diff_grid=use_theta_grid, diff_eps=eps),
+                dtype=uker.dtype
+            )
 
-        p_edge_kernel, _ = self.module.get_global('edge_kernel')
-        cuda.memcpy_htod(p_edge_kernel, np.array([edge_kernel.state],
-                                                 dtype=edge_kernel.dtype))
+            p_uker, _ = self.module.get_global(name)
+            cuda.memcpy_htod(p_uker, states[:1])
+
+            if use_theta_grid:
+                p_diff_grid, _ = self.module.get_global(f'{name}_diff_grid')
+                p_flat_theta, _ = self.module.get_global(f'{name}_flat_theta')
+                cuda.memcpy_htod(p_diff_grid, states[1:])
+                cuda.memcpy_htod(
+                    p_flat_theta,
+                    np.fromiter(flatten(uker.theta), dtype=np.float32)
+                )
 
         p_p_start, _ = self.module.get_global('p_start')
-        cuda.memcpy_htod(p_p_start, np.array([p.state], dtype=p.dtype))
+        cuda.memcpy_htod(
+            p_p_start, np.array([p.state], dtype=p.dtype)
+        )
 
         timer.toc('calculating launch configuration')
 
@@ -276,7 +336,7 @@ class CUDABackend(Backend):
         timer.tic('GPU kernel execution')
         kernel(
             graphs_d,
-            self.scratch_d,
+            scratch_pcg,
             jobs,
             starts,
             gramian,
@@ -288,6 +348,9 @@ class CUDABackend(Backend):
             np.uint32(nJ),
             np.float32(q),
             np.float32(q),  # placeholder for q0
+            np.float32(eps),
+            np.float32(ftol),
+            np.float32(gtol),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,

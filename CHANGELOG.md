@@ -1,5 +1,11 @@
 # Change log of GraphDot
 
+## 0.8a6 (2020-12-29)
+
+- Optimized the evaluation of the gradient of the loss function for the
+  Gaussian field regressor.
+- Implemented a finite-difference based graph kernel nodal gradient.
+
 ## 0.8a5 (2020-12-21)
 
 - Added a downloader for the QM7 dataset.
