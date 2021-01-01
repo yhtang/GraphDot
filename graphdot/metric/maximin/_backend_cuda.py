@@ -10,6 +10,7 @@ from graphdot.cuda.array import umempty, umzeros
 from graphdot.microkernel import TensorProduct, Product
 from graphdot.kernel.marginalized._backend_cuda import CUDABackend
 from graphdot.kernel.marginalized._octilegraph import OctileGraph
+from graphdot.util.iterable import flatten
 
 
 class MaxiMinBackend(CUDABackend):
@@ -22,8 +23,18 @@ class MaxiMinBackend(CUDABackend):
     def template(self):
         return Template(os.path.join(os.path.dirname(__file__), '_backend.cu'))
 
-    def __call__(self, graphs, diags, node_kernel, edge_kernel, p, q, jobs,
-                 starts, gramian, gradient, nX, nY, nJ, traits, timer):
+    def allocate_pcg_scratch(self, number, max_graph_size):
+        self.scratch_pcg, self.scratch_pcg_d = self._allocate_scratch(
+            self.scratch_pcg, self.scratch_pcg_d,
+            number,
+            length=max_graph_size**2,
+            n_temporaries=8
+        )
+        return self.scratch_pcg_d
+
+    def __call__(self, graphs, diags, node_kernel, edge_kernel, p, q, eps,
+                 ftol, gtol, jobs, starts, gramian, active, gradient, nX, nY, nJ,
+                 traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
         timer.tic('transferring graphs to GPU')
 
@@ -53,6 +64,7 @@ class MaxiMinBackend(CUDABackend):
             edge_kernel = TensorProduct(weight=Product(),
                                         label=edge_kernel)
 
+        use_theta_grid = traits.eval_gradient is True
         node_kernel_src = self.gencode_kernel(node_kernel, 'node_kernel')
         edge_kernel_src = self.gencode_kernel(edge_kernel, 'edge_kernel')
         p_start_src = self.gencode_probability(p, 'p_start')
@@ -77,23 +89,40 @@ class MaxiMinBackend(CUDABackend):
         launch_block_count = (self.device.MULTIPROCESSOR_COUNT
                               * self.block_per_sm)
         shmem_bytes_per_warp = self.module.get_global(
-            'shmem_bytes_per_warp')[1]
+            'shmem_bytes_per_warp'
+        )[1]
         shmem_bytes_per_block = (shmem_bytes_per_warp * self.block_size
                                  // self.device.WARP_SIZE)
 
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        self._allocate_scratch(launch_block_count, 2 * max_graph_size**2)
+        scratch_pcg = self.allocate_pcg_scratch(
+            launch_block_count, max_graph_size
+        )
 
-        p_node_kernel, _ = self.module.get_global('node_kernel')
-        cuda.memcpy_htod(p_node_kernel, np.array([node_kernel.state],
-                                                 dtype=node_kernel.dtype))
+        ''' copy micro kernel parameters to GPU '''
+        for name, uker in [('node_kernel', node_kernel),
+                           ('edge_kernel', edge_kernel)]:
+            states = np.array(
+                self.pack_state(uker, diff_grid=use_theta_grid, diff_eps=eps),
+                dtype=uker.dtype
+            )
 
-        p_edge_kernel, _ = self.module.get_global('edge_kernel')
-        cuda.memcpy_htod(p_edge_kernel, np.array([edge_kernel.state],
-                                                 dtype=edge_kernel.dtype))
+            p_uker, _ = self.module.get_global(name)
+            cuda.memcpy_htod(p_uker, states[:1])
+
+            if use_theta_grid:
+                p_diff_grid, _ = self.module.get_global(f'{name}_diff_grid')
+                p_flat_theta, _ = self.module.get_global(f'{name}_flat_theta')
+                cuda.memcpy_htod(p_diff_grid, states[1:])
+                cuda.memcpy_htod(
+                    p_flat_theta,
+                    np.fromiter(flatten(uker.theta), dtype=np.float32)
+                )
 
         p_p_start, _ = self.module.get_global('p_start')
-        cuda.memcpy_htod(p_p_start, np.array([p.state], dtype=p.dtype))
+        cuda.memcpy_htod(
+            p_p_start, np.array([p.state], dtype=p.dtype)
+        )
 
         timer.toc('calculating launch configuration')
 
@@ -102,10 +131,11 @@ class MaxiMinBackend(CUDABackend):
         kernel(
             graphs_d,
             diags,
-            self.scratch_d,
+            scratch_pcg,
             jobs,
             starts,
             gramian,
+            active,
             gradient if gradient is not None else np.uintp(0),
             i_job_global,
             np.uint32(len(jobs)),
@@ -114,6 +144,9 @@ class MaxiMinBackend(CUDABackend):
             np.uint32(nJ),
             np.float32(q),
             np.float32(q),  # placeholder for q0
+            np.float32(eps),
+            np.float32(ftol),
+            np.float32(gtol),
             grid=(launch_block_count, 1, 1),
             block=(self.block_size, 1, 1),
             shared=shmem_bytes_per_block,

@@ -51,6 +51,7 @@ class CUDABackend(Backend):
         self.ctx = kwargs.pop('cuda_context', graphdot.cuda.defctx)
         self.device = self.ctx.get_device()
         self.scratch_pcg = None
+        self.scratch_pcg_d = None
 
         self.block_per_sm = kwargs.pop('block_per_sm', 8)
         self.block_size = kwargs.pop('block_size', 128)
@@ -74,7 +75,22 @@ class CUDABackend(Backend):
                 'try to normalize automatically with `Graph.normalize_types`.'
             )
 
-    def _allocate_pcg_scratch(self, number, max_graph_size, traits):
+    def _allocate_scratch(self, scratch, scratch_d, number, length,
+                          n_temporaries):
+        if (scratch is None or len(scratch) < number or
+                scratch[0].nmax < length or
+                scratch[0].ndim < n_temporaries):
+            self.ctx.synchronize()
+            scratch = [
+                PCGScratch(length, n_temporaries) for _ in range(number)
+            ]
+            scratch_d = umarray(
+                np.array([s.state for s in scratch], PCGScratch.dtype)
+            )
+            self.ctx.synchronize()
+        return scratch, scratch_d
+
+    def allocate_pcg_scratch(self, number, max_graph_size, traits):
         if traits.eval_gradient is True:
             if traits.nodal in [True, 'block']:
                 length = max_graph_size**2
@@ -86,17 +102,10 @@ class CUDABackend(Backend):
             length = max_graph_size**2
             n_temporaries = 5
 
-        if (self.scratch_pcg is None or len(self.scratch_pcg) < number or
-                self.scratch_pcg[0].nmax < length or
-                self.scratch_pcg[0].ndim < n_temporaries):
-            self.ctx.synchronize()
-            self.scratch_pcg = [
-                PCGScratch(length, n_temporaries) for _ in range(number)
-            ]
-            self.scratch_pcg_d = umarray(
-                np.array([s.state for s in self.scratch_pcg], PCGScratch.dtype)
-            )
-            self.ctx.synchronize()
+        self.scratch_pcg, self.scratch_pcg_d = self._allocate_scratch(
+            self.scratch_pcg, self.scratch_pcg_d, number, length,
+            n_temporaries
+        )
         return self.scratch_pcg_d
 
     def _register_graph(self, graph):
@@ -301,7 +310,7 @@ class CUDABackend(Backend):
 
         ''' allocate scratch buffers '''
         max_graph_size = np.max([len(g.nodes) for g in graphs])
-        scratch_pcg = self._allocate_pcg_scratch(
+        scratch_pcg = self.allocate_pcg_scratch(
             launch_block_count, max_graph_size, traits
         )
 
