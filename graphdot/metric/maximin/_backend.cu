@@ -73,16 +73,17 @@ extern "C" {
             auto const diag1 = diags[job.x];
             auto const diag2 = diags[job.y];
 
-            // setup metric matrix view
+            //------------------------------------------------------------------
+            // I. Evaluate the graph kernel between two graphs.
+            //------------------------------------------------------------------
+
+            // I.1. Set up view to the distance matrix output buffer.
+            // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
             auto K = graphdot::tensor_view(gramian, nX, nY);
             auto A = graphdot::tensor_view(active, nX, nY);
 
-            // setup Jacobian matrix view
-            #if ?{traits.eval_gradient is True}
-                auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
-            #endif
-
-            // solve the MLGK equation
+            // I.2. Solve the primary MLGK equation.
+            // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
             solver_t::compute(
                 node_kernel,
                 edge_kernel,
@@ -94,7 +95,10 @@ extern "C" {
                 ftol);
             __syncthreads();
 
-            // Computing the MaxMin distance
+            // I.3. Postprocessing
+            // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+            // I.3.1. Zero-out reduction buffers for maxi-mini operations.
             auto d12 = scratch.ext(0);
             auto d21 = scratch.ext(1);
             auto pairwise_dist = scratch.ext(2);
@@ -115,10 +119,12 @@ extern "C" {
             auto const kernel_induced_distance = [](auto k12, auto k1, auto k2){
                 return sqrtf(max(1e-15f, 2.f - 2.f * k12 * rsqrtf(k1 * k2)));
             };
-            // auto const kernel_square_distance = [](auto k12, auto k1, auto k2){
-            //     // TODO: what about r1^2 + r2^2 - 2 * k?                
-            //     return max(0.f, 2.f - 2.f * k12 * rsqrtf(k1 * k2));
-            // };
+            /*
+            auto const kernel_square_distance = [](auto k12, auto k1, auto k2){
+                // TODO: what about r1^2 + r2^2 - 2 * k?                
+                return max(0.f, 2.f - 2.f * k12 * rsqrtf(k1 * k2));
+            };
+            */
 
             auto const normalized_kernel_grad = [](
                 auto k12, auto dk12, auto k1, auto dk1, auto k2, auto dk2
@@ -126,6 +132,9 @@ extern "C" {
                 return dk12 * rsqrtf(k1 * k2) - 0.5f * k12 * rsqrtf(graphdot::ipow<3>(k1 * k2)) * (dk1 * k2 + k1 * dk2);
             };
 
+            // I.3.2. Compute kernel-induced pairwise distances and perform
+            //        minimum reductions along rows follwoed by maximum
+            //        reductions along columns
             for (int i = threadIdx.x; i < N; i += blockDim.x) {
                 int i1 = i / n2;
                 int i2 = i % n2;
@@ -146,7 +155,7 @@ extern "C" {
             }
             __syncthreads();
 
-            // write to output buffer
+            // I.3.3. Write to output buffer.
             auto dh = max(*d12, *d21);
             if (threadIdx.x == 0) {
                 K(I1, I2) = dh;
@@ -161,25 +170,38 @@ extern "C" {
             }
             __syncthreads();
 
+            //------------------------------------------------------------------
+            // II. Evaluate the gradient of the maximin distance with respect to
+            //     hyperparameters
+            //------------------------------------------------------------------
+
             #if ?{traits.eval_gradient is True}
 
+                // II.1. Set up views to output buffer and temporaries
+                // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                auto J = graphdot::tensor_view(gradient, nX, nY, nJ);
                 auto const x0 = scratch.ext(0);
                 auto const diff = scratch.ext(1);
 
-                // I.3.1. Save the raw solution as initial guess for finite
+                // II.2. Save the raw solution as initial guess for finite
                 //        difference scheme
-
+                // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
                 for (int i = threadIdx.x; i < N; i += blockDim.x) {
                     x0[i] = scratch.x(i);
                 }
                 __syncthreads();
 
+                // II.3. Calculate the gradients and save to the output.
+                // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
                 auto const active_i = A(I1, I2);
 
                 constexpr static int _offset_p = 0;
                 constexpr static int _offset_q = _offset_p + p_start.jac_dims;
                 constexpr static int _offset_v = _offset_q + 1;
                 constexpr static int _offset_e = _offset_v + node_kernel.jac_dims;
+
+                // II.3.1 Except for p, calculate the gradients of the graph
+                //        kernel first on the 'hotspot' node pair.
 
                 // dp must be done first, otherwise scratch.x will be wiped
                 // by dq, dv, and de.
@@ -344,7 +366,8 @@ extern "C" {
                     __syncthreads();
                 }
 
-                // === convert dk to dd ===
+                // II.3.2 Calculate the gradients of the distance from those of
+                //        the kernel.
 
                 if (threadIdx.x == 0) {
                     int i1 = active_i / n2;
