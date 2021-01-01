@@ -81,7 +81,7 @@ class MaxiMinBackend(CUDABackend):
 
         ''' JIT '''
         timer.tic('JIT')
-        kernel = self.module.get_function('graph_kernel_solver')
+        kernel = self.module.get_function('graph_maximin_distance')
         timer.toc('JIT')
 
         ''' calculate launch configuration '''
