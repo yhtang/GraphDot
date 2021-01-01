@@ -122,15 +122,8 @@ class MaxiMin(MarginalizedGraphKernel):
                 self.n_dims * int(np.prod(output_shape)), np.float32
             )
             r, dr = diag
-            print(f'r\n{r}')
-            print(f'dr\n{dr}')
             diags = [backend.array(np.r_[r[b:e], dr[b:e, :].ravel('F')])
                      for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
-            print('=====================')
-            print('diags')
-            for d in diags:
-                print(d)
-                print('=====================')
         else:
             gradient = None
             diags = [backend.array(diag[b:e])

@@ -97,7 +97,7 @@ extern "C" {
             // Computing the MaxMin distance
             auto d12 = scratch.ext(0);
             auto d21 = scratch.ext(1);
-            auto square_dist = scratch.ext(2);
+            auto pairwise_dist = scratch.ext(2);
             A(I1, I2) = 0;
             for(int i = threadIdx.x; i < max(n1, n2); i += blockDim.x) {
                 d12[i] = std::numeric_limits<float32>::max();
@@ -112,14 +112,13 @@ extern "C" {
                 return x * p_start(g1.node[i1]) * p_start(g2.node[i2]);
             };
 
-            // auto const kernel_induced_distance = [](auto k12, auto k1, auto k2){
-            //     // TODO: what about r1^2 + r2^2 - 2 * k?                
-            //     return sqrtf(max(0.f, 2 - 2 * k12 * rsqrtf(k1 * k2)));
-            // };
-            auto const kernel_square_distance = [](auto k12, auto k1, auto k2){
-                // TODO: what about r1^2 + r2^2 - 2 * k?                
-                return max(0.f, 2.f - 2.f * k12 * rsqrtf(k1 * k2));
+            auto const kernel_induced_distance = [](auto k12, auto k1, auto k2){
+                return sqrtf(max(1e-15f, 2.f - 2.f * k12 * rsqrtf(k1 * k2)));
             };
+            // auto const kernel_square_distance = [](auto k12, auto k1, auto k2){
+            //     // TODO: what about r1^2 + r2^2 - 2 * k?                
+            //     return max(0.f, 2.f - 2.f * k12 * rsqrtf(k1 * k2));
+            // };
 
             auto const normalized_kernel_grad = [](
                 auto k12, auto dk12, auto k1, auto dk1, auto k2, auto dk2
@@ -131,10 +130,11 @@ extern "C" {
                 int i1 = i / n2;
                 int i2 = i % n2;
                 auto k12 = postproc(scratch.x(i), i1, i2);
-                auto dsqr = kernel_square_distance(k12, diag1[i1], diag2[i2]);
-                square_dist[i] = dsqr;
-                atomicMin(d12 + i1, dsqr);
-                atomicMin(d21 + i2, dsqr);
+                // auto dsqr = kernel_square_distance(k12, diag1[i1], diag2[i2]);
+                auto d = kernel_induced_distance(k12, diag1[i1], diag2[i2]);
+                pairwise_dist[i] = d;
+                atomicMin(d12 + i1, d);
+                atomicMin(d21 + i2, d);
             }
             __syncthreads();
 
@@ -155,7 +155,7 @@ extern "C" {
                 }
             }
             for(int i = threadIdx.x; i < N; i += blockDim.x) {
-                if (square_dist[i] == dh) {
+                if (pairwise_dist[i] == dh) {
                     atomicMax(A.at(I1, I2), i);
                 }
             }
@@ -192,7 +192,7 @@ extern "C" {
                     auto k1 = diag1[i1];
                     auto k2 = diag2[i2];
                     auto k12 = postproc(scratch.x(active_i), i1, i2);
-                    // auto d = kernel_induced_distance(k12, k1, k2);
+                    auto d = kernel_induced_distance(k12, k1, k2);
                     auto dk1 = graphdot::tensor_view(diag1 + n1, n1, nJ);
                     auto dk2 = graphdot::tensor_view(diag2 + n2, n2, nJ);
                     auto p1 = p_start(g1.node[i1]);
@@ -207,14 +207,8 @@ extern "C" {
                     for(int j = 0; j < p_start.jac_dims; ++j) {
                         auto dk12 = x * (p1 * dp2[j] + p2 * dp1[j]);
                         auto dk = normalized_kernel_grad(k12, dk12, k1, dk1(i1, _offset_p + j), k2, dk2(i2, _offset_p + j));
-                        printf("dk/dp JOB %d,%d active %d i1 %d i2 %d dk12 %f dk1 %f dk2 %f\n",
-                            job.x, job.y,
-                            active_i, i1, i2,
-                            dk12,
-                            dk1(i1, _offset_p + j),
-                            dk2(i2, _offset_p + j)
-                        );
-                        auto grad = -2 * dk;
+                        // auto grad = -2 * dk;  // for square distance
+                        auto grad = -dk / d;
                         J(I1, I2, _offset_p + j) = grad;
                         #if ?{traits.symmetric is True}
                             if (job.x != job.y) J(I2, I1, _offset_p + j) = grad;
@@ -358,7 +352,7 @@ extern "C" {
                     auto k12 = postproc(scratch.x(active_i), i1, i2);
                     auto k1 = diag1[i1];
                     auto k2 = diag2[i2];
-                    // auto d = kernel_induced_distance(k12, k1, k2);
+                    auto d = kernel_induced_distance(k12, k1, k2);
                     auto dk1 = graphdot::tensor_view(diag1 + n1, n1, nJ);
                     auto dk2 = graphdot::tensor_view(diag2 + n2, n2, nJ);
                     auto p1 = p_start(g1.node[i1]);
@@ -366,8 +360,8 @@ extern "C" {
                     for(int j = _offset_q; j < nJ; ++j) {
                         auto dk12 = J(I1, I2, j) * p1 * p2;
                         auto dk = normalized_kernel_grad(k12, dk12, k1, dk1(i1, j), k2, dk2(i2, j));
-                        // auto grad = -dk / d;
-                        auto grad = -2 * dk;
+                        auto grad = -dk / d;
+                        // auto grad = -2 * dk;  // for square distance
                         J(I1, I2, j) = grad;
                         if (?{traits.symmetric is True} && job.x != job.y) {
                             J(I2, I1, j) = grad;
