@@ -33,8 +33,8 @@ class MaxiMinBackend(CUDABackend):
         return self.scratch_pcg_d
 
     def __call__(self, graphs, diags, node_kernel, edge_kernel, p, q, eps,
-                 ftol, gtol, jobs, starts, gramian, active, gradient, nX, nY, nJ,
-                 traits, timer):
+                 ftol, gtol, jobs, starts, gramian, active, gradient, nX, nY,
+                 nJ, traits, timer):
         ''' transfer graphs and starting probabilities to GPU '''
         timer.tic('transferring graphs to GPU')
 
