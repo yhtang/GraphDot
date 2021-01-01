@@ -103,6 +103,9 @@ extern "C" {
             auto d21 = scratch.ext(1);
             auto pairwise_dist = scratch.ext(2);
             A(I1, I2) = 0;
+            if (?{traits.symmetric is True} && job.x != job.y) {
+                A(I2, I1) = 0;
+            }
             for(int i = threadIdx.x; i < max(n1, n2); i += blockDim.x) {
                 d12[i] = std::numeric_limits<float32>::max();
                 d21[i] = std::numeric_limits<float32>::max();
@@ -166,6 +169,11 @@ extern "C" {
             for(int i = threadIdx.x; i < N; i += blockDim.x) {
                 if (pairwise_dist[i] == dh) {
                     atomicMax(A.at(I1, I2), i);
+                    if (?{traits.symmetric is True} && job.x != job.y) {
+                        int i1 = i / n2;
+                        int i2 = i % n2;        
+                        atomicMax(A.at(I2, I1), i2 * n1 + i1);
+                    }    
                 }
             }
             __syncthreads();
