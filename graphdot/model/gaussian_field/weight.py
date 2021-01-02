@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from abc import ABC, abstractmethod
+import copy
 import numpy as np
 
 
@@ -47,6 +48,11 @@ class Weight(ABC):
     def bounds(self):
         '''The log-scale bounds of the hyperparameters as a 2D array.'''
 
+    def clone_with_theta(self, theta):
+        clone = copy.deepcopy(self)
+        clone.theta = theta
+        return clone
+
 
 class RBFOverDistance(Weight):
     '''Set weights by applying an RBF onto a distance matrix.
@@ -65,12 +71,10 @@ class RBFOverDistance(Weight):
         underlying distance matrix remains unchanged during the process.
     '''
 
-    def __init__(self, metric, sigma, sigma_bounds=(1e-3, 1e3),
-                 sticky_cache=False):
+    def __init__(self, metric, sigma, sigma_bounds=(1e-3, 1e3)):
         self.sigma = sigma
         self.sigma_bounds = sigma_bounds
         self.metric = metric
-        self.sticky_cache = sticky_cache
 
     def __call__(self, X, Y=None, eval_gradient=False):
         '''
@@ -81,24 +85,77 @@ class RBFOverDistance(Weight):
             the **log-scale** hyperparameters.
         '''
         if Y is None:
-            if self.sticky_cache and hasattr(self, 'dXX'):
-                d = self.dXX
-            else:
-                d = self.metric(X)
-                if self.sticky_cache:
-                    self.dXX = d
+            Z = (X,)
         else:
-            if self.sticky_cache and hasattr(self, 'dXY'):
-                d = self.dXY
-            else:
-                d = self.metric(X, Y)
-                if self.sticky_cache:
-                    self.dXY = d
+            Z = (X, Y)
 
-        w = np.exp(-0.5 * d**2 * self.sigma**-2)
-        j = d**2 * w * self.sigma**-3
+        if eval_gradient is True:
+            D, dD = self.metric(*Z, eval_gradient=True)
+        else:
+            D = self.metric(*Z)
+
+        W = np.exp(-0.5 * D**2 * self.sigma**-2)
         if eval_gradient:
-            return w, np.stack([j], axis=2) * np.exp(self.theta)[None, None, :]
+            dsigma = D**2 * W * self.sigma**-3
+            dtheta = (-D * W * self.sigma**-2)[:, :, None] * dD
+            dW = np.concatenate(
+                [dsigma.reshape(*dsigma.shape, 1), dtheta], axis=2
+            )
+            return W, dW
+        else:
+            return W
+
+    @property
+    def theta(self):
+        return np.concatenate((np.log([self.sigma]), self.metric.theta))
+
+    @theta.setter
+    def theta(self, values):
+        self.sigma = np.exp(values[0])
+        self.metric.theta = values[1:]
+
+    @property
+    def bounds(self):
+        return np.vstack((
+            np.log([self.sigma_bounds]),
+            self.metric.bounds
+        ))
+
+
+class RBFOverFixedDistance(Weight):
+    '''Set weights by applying an (optimizable) RBF onto a fixed distance
+    matrix.
+
+    Parameters
+    ----------
+    metric: callable
+        An object that implements a distance metric.
+    sigma: float
+        The log scale hyperparameter for the RBF Kernel.
+    sigma_bounds: float
+        The bounds for sigma.
+    '''
+
+    def __init__(self, D, sigma, sigma_bounds=(1e-3, 1e3),
+                 sticky_cache=False):
+        self.sigma = sigma
+        self.sigma_bounds = sigma_bounds
+        self.D = D
+
+    def __call__(self, X, Y=None, eval_gradient=False):
+        '''
+        Parameters
+        ----------
+        eval_gradient: bool
+            If true, also return the gradient of the weights with respect to
+            the **log-scale** hyperparameters.
+        '''
+        Y = X if Y is None else Y
+        d = self.D[X, :][:, Y]
+        w = np.exp(-0.5 * d**2 * self.sigma**-2)
+        if eval_gradient:
+            j = d**2 * w * self.sigma**-3
+            return w, np.stack([j], axis=2)
         else:
             return w
 
