@@ -221,7 +221,7 @@ class GaussianFieldRegressor:
         loss = -np.mean(z * np.log(z) + (1 - z) * np.log(1 - z))
         if eval_gradient is True:
             dloss = np.log(z) - np.log(1 - z)
-            grad = -np.mean(dloss[:, None] * dz, axis=0) * np.exp(self.weight.theta)
+            grad = -np.mean(dloss * dz.T, axis=1) * np.exp(self.weight.theta)
             retval = (loss, grad)
         else:
             retval = loss
