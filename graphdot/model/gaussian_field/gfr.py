@@ -100,6 +100,8 @@ class GaussianFieldRegressor:
                 tol=1e-5,
                 options=options
             )
+            if verbose:
+                print(f'Optimization result:\n{opt}')
             if opt.success:
                 self.weight.theta = opt.x
             else:
