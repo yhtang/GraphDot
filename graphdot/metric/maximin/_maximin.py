@@ -31,7 +31,8 @@ class MaxiMin(MarginalizedGraphKernel):
         super().__init__(*args, **kwargs)
         self.maximin_backend = MaxiMinBackend()
 
-    def __call__(self, X, Y=None, eval_gradient=False, lmin=0, timing=False):
+    def __call__(self, X, Y=None, eval_gradient=False, lmin=0,
+                 return_hotspot=False, timing=False):
         '''Computes the distance matrix and optionally its gradient with respect
         to hyperparameters.
 
@@ -45,17 +46,33 @@ class MaxiMin(MarginalizedGraphKernel):
         eval_gradient: bool
             If True, returns the gradient of the weight matrix alongside the
             matrix itself.
+        lmin: 0 or 1
+            Number of steps to skip in each random walk path before similarity
+            is computed.
+            (lmin + 1) corresponds to the starting value of l in the summation
+            of Eq. 1 in Tang & de Jong, 2019 https://doi.org/10.1063/1.5078640
+            (or the first unnumbered equation in Section 3.3 of Kashima, Tsuda,
+            and Inokuchi, 2003).
+        return_hotspot: bool
+            Whether or not to return the indices of the node pairs that
+            determines the maximin distance between the graphs. Generally,
+            these hotspots represent the location of the largest difference
+            between the graphs.
         options: keyword arguments
             Additional arguments to be passed to the underlying kernel.
 
         Returns
         -------
-        M: 2D ndarray
+        distance: 2D matrix
             A distance matrix between the data points.
-        dM: 3D ndarray
+        hotspot: a pair of 2D integer matrices
+            Indices of the hotspot node pairs between the graphs. Only
+            returned if the ``return_hotspot`` argument is True.
+        gradient: 3D tensor
             A tensor where the i-th frontal slide [:, :, i] contain the partial
             derivative of the distance matrix with respect to the i-th
-            hyperparameter.
+            hyperparameter. Only returned if the ``eval_gradient`` argument
+            is True.
         '''
         timer = Timer()
         backend = self.maximin_backend
@@ -103,9 +120,7 @@ class MaxiMin(MarginalizedGraphKernel):
             starts_nodal = backend.zeros(len(X) + 1, dtype=np.uint32)
             sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
             np.cumsum(sizes, out=starts_nodal[1:])
-            diag = backend.array(
-                self.diag(X, eval_gradient=False, nodal=True, lmin=lmin)
-            )
+            diag = super().diag(X, eval_gradient, nodal=True, lmin=lmin)
         else:
             output_shape = (len(X), len(Y))
             XY = np.concatenate((X, Y))
@@ -115,20 +130,22 @@ class MaxiMin(MarginalizedGraphKernel):
             starts_nodal = backend.zeros(len(XY) + 1, dtype=np.uint32)
             sizes = np.array([len(g.nodes) for g in XY], dtype=np.uint32)
             np.cumsum(sizes, out=starts_nodal[1:])
-            diag = backend.array(
-                self.diag(XY, eval_gradient=False, nodal=True, lmin=lmin)
-            )
+            diag = super().diag(XY, eval_gradient, nodal=True, lmin=lmin)
 
-        gramian = backend.empty(int(np.prod(output_shape)), np.float32)
-        if traits.eval_gradient is True:
+        distance = backend.empty(int(np.prod(output_shape)), np.float32)
+        hotspot = backend.empty(int(np.prod(output_shape)), np.int32)
+        if eval_gradient is True:
             gradient = backend.empty(
                 self.n_dims * int(np.prod(output_shape)), np.float32
             )
+            r, dr = diag
+            diags = [backend.array(np.r_[r[b:e], dr[b:e, :].ravel('F')])
+                     for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
         else:
             gradient = None
+            diags = [backend.array(diag[b:e])
+                     for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
 
-        diags = [backend.array(diag[b:e])
-                 for b, e in zip(starts_nodal[:-1], starts_nodal[1:])]
         diags_d = backend.empty(len(diags), dtype=np.uintp)
         diags_d[:] = [int(d.base) for d in diags]
 
@@ -143,9 +160,13 @@ class MaxiMin(MarginalizedGraphKernel):
             self.edge_kernel,
             self.p,
             self.q,
+            self.eps,
+            self.ftol,
+            self.gtol,
             jobs,
             starts,
-            gramian,
+            distance,
+            hotspot,
             gradient,
             output_shape[0],
             output_shape[1] if len(output_shape) >= 2 else 1,
@@ -157,22 +178,29 @@ class MaxiMin(MarginalizedGraphKernel):
 
         ''' collect result '''
         timer.tic('collecting result')
-        gramian = gramian.reshape(*output_shape, order='F')
+        distance = distance.reshape(*output_shape, order='F')
         if gradient is not None:
             gradient = gradient.reshape(
                 (*output_shape, self.n_dims), order='F'
-            )
+            )[:, :, self.active_theta_mask]
         timer.toc('collecting result')
 
         if timing:
             timer.report(unit='ms')
         timer.reset()
 
-        if traits.eval_gradient is True:
-            raise
-            return (
-                gramian.astype(self.element_dtype),
-                gradient.astype(self.element_dtype)
-            )
+        retval = [distance.astype(self.element_dtype)]
+        if return_hotspot is True:
+            if Y is None:
+                n = np.array([len(g.nodes) for g in X], dtype=np.uint32)
+            else:
+                n = np.array([len(g.nodes) for g in Y], dtype=np.uint32)
+            hotspot = hotspot.reshape(*output_shape, order='F')
+            retval.append((hotspot // n, hotspot % n))
+        if eval_gradient is True:
+            retval.append(gradient.astype(self.element_dtype))
+
+        if len(retval) == 1:
+            return retval[0]
         else:
-            return gramian.astype(self.element_dtype)
+            return tuple(retval)

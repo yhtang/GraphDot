@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from sympy.codegen import ast
-from sympy.printing.cxxcode import CXX11CodePrinter
+from sympy.printing.cxx import CXX11CodePrinter
 
 
 class CUDACXX11CodePrinter(CXX11CodePrinter):

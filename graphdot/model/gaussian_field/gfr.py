@@ -100,6 +100,8 @@ class GaussianFieldRegressor:
                 tol=1e-5,
                 options=options
             )
+            if verbose:
+                print(f'Optimization result:\n{opt}')
             if opt.success:
                 self.weight.theta = opt.x
             else:
@@ -123,13 +125,12 @@ class GaussianFieldRegressor:
         labeled = np.isfinite(y)
         f_l = y[labeled]
         if self.weight == 'precomputed':
-            W = X[~labeled, :]
+            W_uu = X[~labeled, :][:, ~labeled] + self.smoothing
+            W_ul = X[~labeled, :][:, labeled] + self.smoothing
         else:
-            W = self.weight(X[~labeled], X)
-        W += self.smoothing
-        D = W.sum(axis=1)
-        W_ul = W[:, labeled]
-        W_uu = W[:, ~labeled]
+            W_uu = self.weight(X[~labeled]) + self.smoothing
+            W_ul = self.weight(X[~labeled], X[labeled]) + self.smoothing
+        D = W_uu.sum(axis=1) + W_ul.sum(axis=1)
 
         try:
             L_inv = CholSolver(np.diag(D) - W_uu)
@@ -151,11 +152,11 @@ class GaussianFieldRegressor:
         t_metric = time.perf_counter()
         labeled = np.isfinite(y)
         f_l = y[labeled]
-        W, dW = self.weight(X[~labeled], X, eval_gradient=True)
-        W += self.smoothing
-        D = W.sum(axis=1)
-        W_ul, dW_ul = W[:, labeled], dW[:, labeled, :]
-        W_uu, dW_uu = W[:, ~labeled], dW[:, ~labeled, :]
+        W_uu, dW_uu = self.weight(X[~labeled], eval_gradient=True)
+        W_ul, dW_ul = self.weight(X[~labeled], X[labeled], eval_gradient=True)
+        W_uu += self.smoothing
+        W_ul += self.smoothing
+        D = W_uu.sum(axis=1) + W_ul.sum(axis=1)
         t_metric = time.perf_counter() - t_metric
 
         t_solve = time.perf_counter()
@@ -219,7 +220,7 @@ class GaussianFieldRegressor:
         loss = -np.mean(z * np.log(z) + (1 - z) * np.log(1 - z))
         if eval_gradient is True:
             dloss = np.log(z) - np.log(1 - z)
-            grad = -np.mean(dloss[:, None] * dz, axis=0)
+            grad = -np.mean(dloss * dz.T, axis=1) * np.exp(self.weight.theta)
             retval = (loss, grad)
         else:
             retval = loss

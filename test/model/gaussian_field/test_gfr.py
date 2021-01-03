@@ -226,7 +226,7 @@ def test_average_label_entropy_gradient(n, k, d, smoothing):
         f_pos = gfr.average_label_entropy(X, y, theta=pos)
         f_neg = gfr.average_label_entropy(X, y, theta=neg)
         delta = (f_pos - f_neg) / (2 * eps)
-        assert delta == pytest.approx(dloss[i], rel=1e-5, abs=1e-8)
+        assert delta == pytest.approx(dloss[i], rel=1e-5, abs=1e-6)
 
 
 def test_laplacian():

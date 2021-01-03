@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.8a7 (2021-01-02)
+
+- Gradient evaluation for the MaxiMin graph metric.
+- Gradient evaluation for Gaussian field regressor prediction loss.
+
 ## 0.8a6 (2020-12-29)
 
 - Optimized the evaluation of the gradient of the loss function for the
