@@ -71,10 +71,11 @@ class RBFOverDistance(Weight):
         underlying distance matrix remains unchanged during the process.
     '''
 
-    def __init__(self, metric, sigma, sigma_bounds=(1e-3, 1e3)):
+    def __init__(self, metric, sigma, sigma_bounds=(1e-3, 1e3), mopts={}):
         self.sigma = sigma
         self.sigma_bounds = sigma_bounds
         self.metric = metric
+        self.mopts = mopts
 
     def __call__(self, X, Y=None, eval_gradient=False):
         '''
@@ -90,9 +91,9 @@ class RBFOverDistance(Weight):
             Z = (X, Y)
 
         if eval_gradient is True:
-            D, dD = self.metric(*Z, eval_gradient=True)
+            D, dD = self.metric(*Z, eval_gradient=True, **self.mopts)
         else:
-            D = self.metric(*Z)
+            D = self.metric(*Z, **self.mopts)
 
         W = np.exp(-0.5 * D**2 * self.sigma**-2)
         if eval_gradient:
