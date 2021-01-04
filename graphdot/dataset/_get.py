@@ -4,7 +4,7 @@ import os
 import requests
 
 
-def get(url, local_filename, overwrite=False):
+def get(url, local_filename, overwrite=False, parser=None):
     '''Download a file from a given URL.'''
 
     if not os.path.exists(local_filename) or overwrite is True:
@@ -16,4 +16,7 @@ def get(url, local_filename, overwrite=False):
             )
         open(local_filename, 'wb').write(r.content)
 
-    return local_filename
+    if parser is not None:
+        return parser(local_filename)
+    else:
+        return local_filename
