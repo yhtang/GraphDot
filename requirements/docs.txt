@@ -12,4 +12,5 @@ treelib
 kahypar
 numba
 requests
+xlrd
 m2r
