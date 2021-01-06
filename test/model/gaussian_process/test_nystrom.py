@@ -221,7 +221,7 @@ def test_nystrom_predict_loocv(cstride, f):
         def diag(self, X):
             return np.ones_like(X)
 
-    alpha = 1e-14
+    alpha = 1e-13
     beta = 1e-14
     kernel = Kernel()
     X = np.linspace(0, 1, 24)

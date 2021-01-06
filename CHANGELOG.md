@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.8a8 (2021-01-05)
+
+- Normalized the MaxiMin graph distance metric to [0, 1].
+- More data downloaders: METLIN SMRT, AMES, and a custom downloader.
+
 ## 0.8a7 (2021-01-02)
 
 - Gradient evaluation for the MaxiMin graph metric.

@@ -29,18 +29,18 @@ def test_maximin_basic():
     distance = metric(G)
     assert distance.shape == (len(G), len(G))
     assert np.allclose(distance.diagonal(), 0, atol=1e-3)
-    assert np.all(distance > 0)
+    assert np.all(distance >= 0)
     assert np.allclose(distance, distance.T, rtol=1e-14, atol=1e-14)
 
     distance = metric(G, G)
     assert distance.shape == (len(G), len(G))
     assert np.allclose(distance.diagonal(), 0, atol=1e-3)
-    assert np.all(distance > 0)
+    assert np.all(distance >= 0)
     assert np.allclose(distance, distance.T, rtol=1e-4, atol=1e-4)
 
     distance = metric(G, H)
     assert distance.shape == (len(G), len(H))
-    assert np.all(distance > 0)
+    assert np.all(distance >= 0)
 
 
 # def test_maximin_hotspot():

@@ -26,6 +26,16 @@ using solver_t  = solver_ns::labeled_compact_block_dynsched_pcg<graph_t>;
 
 __constant__ char shmem_bytes_per_warp[solver_t::shmem_bytes_per_warp];
 
+namespace num_hacks {
+    // Use 0.9999995 instead of 1 to cancel some round-off error
+    // and ensure self-distances are close enough to 0.
+    constexpr static float32 one = 0.9999995f;
+    // Use eps to nudge the reciprocal of distance so that gradients near
+    // 0 do not explode.
+    constexpr static float32 eps = 0.0001f;    
+}
+
+
 extern "C" {
     __global__ void graph_maximin_distance(
         graph_t const   * graphs,
@@ -120,14 +130,8 @@ extern "C" {
             };
 
             auto const kernel_induced_distance = [](auto k12, auto k1, auto k2){
-                return sqrtf(max(1e-15f, 2.f - 2.f * k12 * rsqrtf(k1 * k2)));
+                return sqrtf(max(0.f, num_hacks::one - k12 * rsqrtf(k1 * k2)));
             };
-            /*
-            auto const kernel_square_distance = [](auto k12, auto k1, auto k2){
-                // TODO: what about r1^2 + r2^2 - 2 * k?                
-                return max(0.f, 2.f - 2.f * k12 * rsqrtf(k1 * k2));
-            };
-            */
 
             auto const normalized_kernel_grad = [](
                 auto k12, auto dk12, auto k1, auto dk1, auto k2, auto dk2
@@ -237,8 +241,7 @@ extern "C" {
                     for(int j = 0; j < p_start.jac_dims; ++j) {
                         auto dk12 = x * (p1 * dp2[j] + p2 * dp1[j]);
                         auto dk = normalized_kernel_grad(k12, dk12, k1, dk1(i1, _offset_p + j), k2, dk2(i2, _offset_p + j));
-                        // auto grad = -2 * dk;  // for square distance
-                        auto grad = -dk / d;
+                        auto grad = -0.5f * dk / (d + num_hacks::eps);
                         J(I1, I2, _offset_p + j) = grad;
                         #if ?{traits.symmetric is True}
                             if (job.x != job.y) J(I2, I1, _offset_p + j) = grad;
@@ -391,8 +394,7 @@ extern "C" {
                     for(int j = _offset_q; j < nJ; ++j) {
                         auto dk12 = J(I1, I2, j) * p1 * p2;
                         auto dk = normalized_kernel_grad(k12, dk12, k1, dk1(i1, j), k2, dk2(i2, j));
-                        auto grad = -dk / d;
-                        // auto grad = -2 * dk;  // for square distance
+                        auto grad = -0.5f * dk / (d + num_hacks::eps);
                         J(I1, I2, j) = grad;
                         if (?{traits.symmetric is True} && job.x != job.y) {
                             J(I2, I1, j) = grad;
