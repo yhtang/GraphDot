@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a9 (2021-01-12)
+
+- Leave-one-out cross validation for Gaussian field regressor.
+
 ## 0.8a8 (2021-01-05)
 
 - Normalized the MaxiMin graph distance metric to [0, 1].
