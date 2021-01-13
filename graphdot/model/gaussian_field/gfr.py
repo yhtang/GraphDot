@@ -52,10 +52,10 @@ class GaussianFieldRegressor:
             The loss function to be used to optimizing the hyperparameters.
             Options are:
 
-            - 'ale' or 'average-label-entropy': average label entropy. Suitable
-            for binary 0/1 labels.
-            - 'laplacian': measures how well the known labels conform to the
-            graph Laplacian operator. Suitable for continuous labels.
+            - 'ale' or 'average-label-entropy': average label entropy. Only
+            works if the labels are 0/1 binary.
+            - 'loocv': measures how well the known labels conform to the
+            graph Laplacian operator.
 
         return_influence: bool
             If True, also returns the contributions of each labeled sample to
@@ -81,7 +81,7 @@ class GaussianFieldRegressor:
                 objective = {
                     'ale': self.average_label_entropy,
                     'average-label-entropy': self.average_label_entropy,
-                    'laplacian': self.laplacian,
+                    'loocv': self.loocv_error
                 }[loss]
             except KeyError:
                 raise RuntimeError(f'Unknown loss function \'{loss}\'')
@@ -199,6 +199,8 @@ class GaussianFieldRegressor:
         eval_gradients:
             Whether or not to evaluate the gradient of the average label
             entropy with respect to weight hyperparameters.
+        verbose: bool
+            If true, print out some additional information as a markdown table.
 
         Returns
         -------
@@ -236,23 +238,31 @@ class GaussianFieldRegressor:
 
         return retval
 
-    def laplacian(self, X, y, theta=None):
-        '''Evaluate the Laplacian Error and gradient using the trained Gaussian
-        field model on a dataset.
+    def loocv_error(self, X, y, p=2, theta=None, eval_gradient=False,
+                    verbose=False):
+        '''Evaluate the leave-one-out cross validation error and gradient.
 
         Parameters
         ----------
-        theta: 1D array or list of objects
-            Hyperparameters for the weight class
-
+        X: 2D array or list of objects
+            Feature vectors or other generic representations of input data.
+        y: 1D array
+            Label of each data point. Values of None or NaN indicates
+            missing labels that will be filled in by the model.
+        p: float > 1
+            The order of the p-norm for LOOCV error.
+        theta: 1D array
+            Hyperparameters for the weight class.
         eval_gradients:
-            Whether or not to evaluate the gradients.
+            Whether or not to evaluate the gradient of the average label
+            entropy with respect to weight hyperparameters.
+        verbose: bool
+            If true, print out some additional information as a markdown table.
 
         Returns
         -------
         err: 1D array
-            Laplacian Error
-
+            LOOCV Error
         grad: 1D array
             Gradient with respect to the hyperparameters.
         '''
@@ -261,12 +271,45 @@ class GaussianFieldRegressor:
 
         labeled = np.isfinite(y)
         y = y[labeled]
-        if self.weight == 'precomputed':
-            W = X[labeled, :][:, labeled]
+        n = len(y)
+        t_metric = time.perf_counter()
+        if eval_gradient is True:
+            W, dW = self.weight(X[labeled], eval_gradient=True)
         else:
-            W = self.weight(X[labeled])
+            if self.weight == 'precomputed':
+                W = X[labeled, :][:, labeled]
+            else:
+                W = self.weight(X[labeled])
+        t_metric = time.perf_counter() - t_metric
+
+        t_chain = time.perf_counter()
         W += self.smoothing
         D = W.sum(axis=1)
-        h = D * y - W @ y
-        h_norm = np.linalg.norm(h, ord=2)
-        return h_norm
+        P = (1 / D)[:, None] * W
+        e = y - P @ y
+        loocv_error = np.mean(np.abs(e)**p)**(1/p)
+        if eval_gradient is True:
+            derr_de = (
+                np.mean(np.abs(e)**p)**(1/p - 1)
+                * np.abs(e)**(p - 1) * np.sign(e) / n
+            )
+            de_dW = (
+                -np.einsum('ip,q,i->ipq', np.eye(n), y, 1 / D)
+                + np.diag(1 / D**2 * (W @ y))[:, :, None]
+            )
+            derr_dW = np.einsum('i, ipq->pq', derr_de, de_dW)
+            derr_dtheta = np.einsum('pq,pqr->r', derr_dW, dW)
+            retval = (loocv_error, derr_dtheta)
+        else:
+            retval = loocv_error
+        t_chain = time.perf_counter() - t_chain
+
+        if verbose and eval_gradient is True:
+            mprint.table(
+                ('LOOCV Err.', '%12.5g', loocv_error),
+                ('Gradient', '%12.5g', np.linalg.norm(derr_dtheta)),
+                ('Metric time', '%12.2g', t_metric),
+                ('BackProp time', '%14.2g', t_chain),
+            )
+
+        return retval
