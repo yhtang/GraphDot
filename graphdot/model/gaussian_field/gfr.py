@@ -36,8 +36,119 @@ class GaussianFieldRegressor:
             self.optimizer = 'L-BFGS-B'
         self.smoothing = smoothing
 
-    def fit_predict(self, X, y, loss='average-label-entropy', options=None,
-                    return_influence=False, verbose=False):
+    def fit(self, X, y, loss='loocv2', tol=1e-5, repeat=1, theta_jitter=1.0,
+            verbose=False):
+        '''Train the Gaussian field model.
+
+        Parameters
+        ----------
+        X: 2D array or list of objects
+            Feature vectors or other generic representations of input data.
+        y: 1D array
+            Label of each data point. Values of None or NaN indicates
+            missing labels that will be filled in by the model.
+        loss: str
+            The loss function to be used to optimizing the hyperparameters.
+            Options are:
+
+            - 'ale' or 'average-label-entropy': average label entropy. Only
+            works if the labels are 0/1 binary.
+            - 'loocv1' or 'loocv2': the leave-one-out cross validation of the
+            labeled samples as measured in L1/L2 norm.
+
+        tol: float
+            Tolerance for termination.
+        repeat: int
+            Repeat the hyperparameter optimization by the specified number of
+            times and return the best result.
+        theta_jitter: float
+            Standard deviation of the random noise added to the initial
+            logscale hyperparameters across repeated optimization runs.
+
+        Returns
+        -------
+        self: GaussianFieldRegressor
+            returns an instance of self.
+        '''
+        assert len(X) == len(y)
+        X = np.asarray(X)
+        y = np.asarray(y, dtype=np.float)
+
+        if hasattr(self.weight, 'theta') and self.optimizer:
+            try:
+                objective = {
+                    'ale': self.average_label_entropy,
+                    'average-label-entropy': self.average_label_entropy,
+                    'loocv1': self.loocv_error_1,
+                    'loocv2': self.loocv_error_2,
+                }[loss]
+            except KeyError:
+                raise RuntimeError(f'Unknown loss function \'{loss}\'')
+
+            def xgen(n):
+                x0 = self.weight.theta.copy()
+                yield x0
+                yield from x0 + theta_jitter * np.random.randn(n - 1, len(x0))
+
+            opt = self._hyper_opt(
+                method=self.optimizer,
+                fun=lambda theta, objective=objective: objective(
+                    X, y, theta=theta, eval_gradient=True, verbose=verbose
+                ),
+                xgen=xgen(repeat), tol=tol, verbose=verbose
+            )
+            if verbose:
+                print(f'Optimization result:\n{opt}')
+
+            if opt.success:
+                self.weight.theta = opt.x
+            else:
+                raise RuntimeError(
+                    f'Optimizer did not converge, got:\n'
+                    f'{opt}'
+                )
+
+        return self
+
+    def predict(self, X, y, return_influence=False):
+        '''Make predictions for the unlabeled elements in y.
+
+        Parameters
+        ----------
+        X: 2D array or list of objects
+            Feature vectors or other generic representations of input data.
+        y: 1D array
+            Label of each data point. Values of None or NaN indicates
+            missing labels that will be filled in by the model.
+        return_influence: bool
+            If True, also returns the contributions of each labeled sample to
+            each predicted label as an 'influence matrix'.
+
+        Returns
+        -------
+        z: 1D array
+            Node labels with missing ones filled in by prediction.
+        influence_matrix: 2D array
+            Contributions of each labeled sample to each predicted label. Only
+            returned if ``return_influence`` is True.
+        '''
+        assert len(X) == len(y)
+        X = np.asarray(X)
+        y = np.asarray(y, dtype=np.float)
+
+        z = y.copy()
+        if return_influence is True:
+            z[~np.isfinite(y)], influence = self._predict(
+                X, y, return_influence=True
+            )
+            return z, influence
+        else:
+            z[~np.isfinite(y)] = self._predict(X, y, return_influence=False)
+            return z
+
+    def fit_predict(self, X, y, loss='average-label-entropy', tol=1e-5,
+                    repeat=1, theta_jitter=1.0, return_influence=False,
+                    verbose=False):
         '''Train the Gaussian field model and make predictions for the
         unlabeled nodes.
 
@@ -54,9 +165,17 @@ class GaussianFieldRegressor:
 
             - 'ale' or 'average-label-entropy': average label entropy. Only
             works if the labels are 0/1 binary.
-            - 'loocv': measures how well the known labels conform to the
-            graph Laplacian operator.
+            - 'loocv1' or 'loocv2': the leave-one-out cross validation of the
+            labeled samples as measured in L1/L2 norm.
 
+        tol: float
+            Tolerance for termination.
+        repeat: int
+            Repeat the hyperparameter optimization by the specified number of
+            times and return the best result.
+        theta_jitter: float
+            Standard deviation of the random noise added to the initial
+            logscale hyperparameters across repeated optimization runs.
         return_influence: bool
             If True, also returns the contributions of each labeled sample to
             each predicted label as an 'influence matrix'.
@@ -68,62 +187,42 @@ class GaussianFieldRegressor:
         influence_matrix: 2D array
             Contributions of each labeled sample to each predicted label. Only
             returned if ``return_influence`` is True.
-        # predictive_uncertainty: 1D array
-        #     Weighted Standard Deviation of the predicted labels.
         '''
-        assert len(X) == len(y)
-        X = np.asarray(X)
-        y = np.asarray(y, dtype=np.float)
+        self.fit(
+            X, y, loss=loss, tol=tol, repeat=repeat,
+            theta_jitter=theta_jitter, verbose=verbose
+        )
 
-        '''The 'fit' part'''
-        if hasattr(self.weight, 'theta') and self.optimizer:
-            try:
-                objective = {
-                    'ale': self.average_label_entropy,
-                    'average-label-entropy': self.average_label_entropy,
-                    'loocv': self.loocv_error
-                }[loss]
-            except KeyError:
-                raise RuntimeError(f'Unknown loss function \'{loss}\'')
+        return self.predict(X, y, return_influence=return_influence)
 
-            if verbose is True:
+    def _hyper_opt(self, method, fun, xgen, tol, verbose):
+        opt = None
+
+        for x in xgen:
+            if verbose:
                 mprint.table_start()
 
-            opt = minimize(
-                fun=lambda theta, objective=objective: objective(
-                    X, y, theta, eval_gradient=True, verbose=verbose
-                ),
-                method=self.optimizer,
-                x0=self.weight.theta,
+            opt_local = minimize(
+                fun=fun,
+                method=method,
+                x0=x,
                 bounds=self.weight.bounds,
                 jac=True,
-                tol=1e-5,
-                options=options
+                tol=tol
             )
-            if verbose:
-                print(f'Optimization result:\n{opt}')
-            if opt.success:
-                self.weight.theta = opt.x
-            else:
-                raise RuntimeError(
-                    f'Optimizer did not converge, got:\n'
-                    f'{opt}'
-                )
 
-        '''The 'predict' part'''
-        z = y.copy()
-        if return_influence is True:
-            z[~np.isfinite(y)], influence = self._predict(
-                X, y, return_influence=True
-            )
-            return z, influence
-        else:
-            z[~np.isfinite(y)] = self._predict(X, y, return_influence=False)
-            return z
+            if not opt or (opt_local.success and opt_local.fun < opt.fun):
+                opt = opt_local
+
+        return opt
 
     def _predict(self, X, y, return_influence=False):
         labeled = np.isfinite(y)
         f_l = y[labeled]
+        if len(f_l) == len(y):
+            raise RuntimeError(
+                'All samples are labeled, no predictions will be made.'
+            )
         if self.weight == 'precomputed':
             W_uu = X[~labeled, :][:, ~labeled] + self.smoothing
             W_ul = X[~labeled, :][:, labeled] + self.smoothing
@@ -152,6 +251,10 @@ class GaussianFieldRegressor:
         t_metric = time.perf_counter()
         labeled = np.isfinite(y)
         f_l = y[labeled]
+        if len(f_l) == len(y):
+            raise RuntimeError(
+                'All samples are labeled, no predictions will be made.'
+            )
         W_uu, dW_uu = self.weight(X[~labeled], eval_gradient=True)
         W_ul, dW_ul = self.weight(X[~labeled], X[labeled], eval_gradient=True)
         W_uu += self.smoothing
@@ -313,3 +416,15 @@ class GaussianFieldRegressor:
             )
 
         return retval
+
+    def loocv_error_1(self, X, y, **kwargs):
+        '''Leave-one-out cross validation error measured in L1 norm.
+        Equivalent to :py:method:`loocv_error(X, y, p=1, **kwargs)`.
+        '''
+        return self.loocv_error(X, y, p=1, **kwargs)
+
+    def loocv_error_2(self, X, y, **kwargs):
+        '''Leave-one-out cross validation error measured in L2 norm.
+        Equivalent to :py:method:`loocv_error(X, y, p=2, **kwargs)`.
+        '''
+        return self.loocv_error(X, y, p=2, **kwargs)
