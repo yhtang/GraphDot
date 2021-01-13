@@ -96,6 +96,8 @@ class RBFOverDistance(Weight):
             D = self.metric(*Z, **self.mopts)
 
         W = np.exp(-0.5 * D**2 * self.sigma**-2)
+        if Y is None:
+            W[np.diag_indices_from(W)] = 0
         if eval_gradient:
             dsigma = D**2 * W * self.sigma**-3
             dtheta = (-D * W * self.sigma**-2)[:, :, None] * dD
@@ -151,9 +153,10 @@ class RBFOverFixedDistance(Weight):
             If true, also return the gradient of the weights with respect to
             the **log-scale** hyperparameters.
         '''
-        Y = X if Y is None else Y
-        d = self.D[X, :][:, Y]
+        d = self.D[X, :][:, X if Y is None else Y]
         w = np.exp(-0.5 * d**2 * self.sigma**-2)
+        if Y is None:
+            w[np.diag_indices_from(w)] = 0
         if eval_gradient:
             j = d**2 * w * self.sigma**-3
             return w, np.stack([j], axis=2)

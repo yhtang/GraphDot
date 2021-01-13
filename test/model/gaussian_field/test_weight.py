@@ -60,7 +60,7 @@ def test_rbf_over_fixed_distance():
     for i in range(2, n):
         X = np.arange(i)
         Y = np.arange(i, n)
-        assert np.allclose(weight(X).diagonal(), 1)
+        assert np.allclose(weight(X).diagonal(), 0)
         assert np.all(weight(X, Y) > 0)
         assert np.all(weight(X, Y) < 1)
 
@@ -109,8 +109,8 @@ def test_rbf_over_distance():
         for k in range(2, 7):
             X = np.random.rand(n, k)
             Y = np.random.rand(n // 2, k)
-            assert np.allclose(weight(X).diagonal(), 1)
-            assert np.allclose(weight(Y).diagonal(), 1)
+            assert np.allclose(weight(X).diagonal(), 0)
+            assert np.allclose(weight(Y).diagonal(), 0)
             assert np.all(weight(X, Y) > 0)
             assert np.all(weight(X, Y) < 1)
 
