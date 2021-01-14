@@ -390,18 +390,24 @@ class GaussianFieldRegressor:
         D = W.sum(axis=1)
         P = (1 / D)[:, None] * W
         e = y - P @ y
-        loocv_error = np.mean(np.abs(e)**p)**(1/p)
+        loocv_error_p = np.mean(np.abs(e)**p)
+        loocv_error = loocv_error_p**(1/p)
         if eval_gradient is True:
             derr_de = (
-                np.mean(np.abs(e)**p)**(1/p - 1)
-                * np.abs(e)**(p - 1) * np.sign(e) / n
+                loocv_error_p**(1/p - 1) * np.abs(e)**(p - 1) * np.sign(e) / n
             )
-            de_dW = (
-                -np.einsum('ip,q,i->ipq', np.eye(n), y, 1 / D)
-                + np.diag(1 / D**2 * (W @ y))[:, :, None]
+            derr_dtheta = (
+                np.einsum(
+                    'pq, pqi',
+                    (derr_de / D**2 * (W @ y))[:, None],
+                    dW
+                ) - np.einsum(
+                    'p, q, pqi',
+                    derr_de / D,
+                    y,
+                    dW
+                )
             )
-            derr_dW = np.einsum('i, ipq->pq', derr_de, de_dW)
-            derr_dtheta = np.einsum('pq,pqr->r', derr_dW, dW)
             retval = (loocv_error, derr_dtheta)
         else:
             retval = loocv_error
