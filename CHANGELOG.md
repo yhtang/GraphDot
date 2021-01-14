@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a10 (2021-01-14)
+
+- Performance optimization for GFR leave-one-out cross validation gradients.
+
 ## 0.8a9 (2021-01-12)
 
 - Leave-one-out cross validation for Gaussian field regressor.
