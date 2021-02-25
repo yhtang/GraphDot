@@ -35,7 +35,7 @@ class HierarchicalDrafter:
         else:
             self.leaf_ratio = leaf_ratio
 
-    def __call__(self, X, n, random_state=None):
+    def __call__(self, X, n, random_state=None, verbose=False):
         '''Find a n-sample subset of X that attempts to maximize a certain
         diversity criterion.
 
@@ -65,17 +65,26 @@ class HierarchicalDrafter:
         else:
             rng = np.random.default_rng()
 
-        return np.sort(self._pick(X, rng.permutation(len(X)), n))
+        return np.sort(self._pick(X, rng.permutation(len(X)), n,
+                                  verbose=verbose))
 
-    def _pick(self, X, nominee, n, level=0):
-        # print((' ' * level) + f'C_{len(nominee)}_{n}', n / len(nominee), self.leaf_ratio)
+    def _pick(self, X, nominee, n, lvl=0, verbose=False):
+        if verbose:
+            print(
+                (' ' * lvl) + f'C_{len(nominee)}_{n}',
+                n / len(nominee),
+                self.leaf_ratio
+            )
         if len(nominee) <= n:
             return nominee
         elif n / len(nominee) < self.leaf_ratio and n > self.k / self.a:
             '''divide and conquer'''
             stops = np.linspace(0, len(nominee), self.k + 1, dtype=np.int)
             nominee = np.concatenate([
-                self._pick(X, nominee[b:e], int(n * self.a // self.k), level + 1)
+                self._pick(
+                    X, nominee[b:e], int(n * self.a // self.k), lvl + 1,
+                    verbose=verbose
+                )
                 for b, e in zip(stops[:-1], stops[1:])
             ])
         return nominee[self.selector(X[nominee], n)]
