@@ -35,7 +35,11 @@ X = np.sort(np.random.randn(300) * 10)
 y = f(X)
 n = 40  # training set budget
 # drafter = HierarchicalDrafter(DeterminantMaximizer(kernel))
-drafter = HierarchicalDrafter(VarianceMinimizer(kernel))
+drafter = HierarchicalDrafter(
+    VarianceMinimizer(kernel),
+    k=4,
+    a=3
+)
 trials = [drafter(X, n) for _ in range(5)]
 for i, trial in enumerate(trials):
     print(f'trial {i} det {np.prod(np.linalg.slogdet(kernel(X[trial])))}')

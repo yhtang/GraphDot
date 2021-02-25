@@ -14,16 +14,26 @@ class HierarchicalDrafter:
         dataset to maximize a certain acquisition function.
     k: int > 1
         The branching factor of the search hierarchy.
-    batch: int
-        The size of the leaf batches in the search hierarchy.
+    a: float in (1, k]
+        The multiplier to the number of samples that each level need to
+        generate during hierarchical screening. For example, if n samples are
+        wanted in the end, then the immediate next level should forward
+        at least m * n samples for the last level drafter to choose from.
+    leaf_ratio: float in (0, 1)
+        If ratio berween output and input samples is greater than it, stop
+        further division and carry out selection using the given selector.
     '''
 
-    def __init__(self, selector, k=2, batch='auto'):
+    def __init__(self, selector, k=2, a=2, leaf_ratio='auto'):
         assert k > 1, "k must be an integer greater than 1"
         assert callable(selector)
         self.selector = selector
         self.k = k
-        self.batch = batch
+        self.a = a
+        if leaf_ratio == 'auto':
+            self.leaf_ratio = 0.5
+        else:
+            self.leaf_ratio = leaf_ratio
 
     def __call__(self, X, n, random_state=None):
         '''Find a n-sample subset of X that attempts to maximize a certain
@@ -48,12 +58,6 @@ class HierarchicalDrafter:
         if not isinstance(X, np.ndarray):
             X = np.asarray(X, np.object)
 
-        if self.batch == 'auto':
-            batch = self.k * n
-        else:
-            assert self.batch >= n, "Batch size must be greater than n!"
-            batch = self.batch
-
         if isinstance(random_state, np.random.Generator):
             rng = random_state
         elif random_state is not None:
@@ -61,22 +65,17 @@ class HierarchicalDrafter:
         else:
             rng = np.random.default_rng()
 
-        return np.sort(
-            self._pick(
-                X,
-                rng.permutation(len(X)),
-                n,
-                batch
-            )
-        )
+        return np.sort(self._pick(X, rng.permutation(len(X)), n))
 
-    def _pick(self, X, nominee, n, batch):
-        if len(nominee) > batch:
+    def _pick(self, X, nominee, n, level=0):
+        # print((' ' * level) + f'C_{len(nominee)}_{n}', n / len(nominee), self.leaf_ratio)
+        if len(nominee) <= n:
+            return nominee
+        elif n / len(nominee) < self.leaf_ratio and n > self.k / self.a:
             '''divide and conquer'''
             stops = np.linspace(0, len(nominee), self.k + 1, dtype=np.int)
             nominee = np.concatenate([
-                self._pick(X, nominee[b:e], n, batch)
+                self._pick(X, nominee[b:e], int(n * self.a // self.k), level + 1)
                 for b, e in zip(stops[:-1], stops[1:])
             ])
-
         return nominee[self.selector(X[nominee], n)]
