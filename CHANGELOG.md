@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a11 (2021-02-25)
+
+- Improvements to the active learning hierarchical drafter.
+
 ## 0.8a10 (2021-01-14)
 
 - Performance optimization for GFR leave-one-out cross validation gradients.
