@@ -52,7 +52,7 @@ setup(
         'numba>=0.51.0',
     ] + [
         'ase>=3.17',
-        'pymatgen>=2019',
+        'pymatgen==2019.11.11',
         'mendeleev'
     ],
     extras_require={

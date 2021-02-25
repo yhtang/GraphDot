@@ -6,7 +6,7 @@ pandas>=0.24
 networkx>=2.4
 pycuda>=2019
 ase>=3.17
-pymatgen<=2019
+pymatgen==2019.11.11
 mendeleev
 treelib>=1.6.1
 kahypar>=1.1.4
