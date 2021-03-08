@@ -5,7 +5,6 @@ import itertools as it
 from collections import deque
 import numpy as np
 from treelib import Tree
-from graphdot.graph import Graph
 
 
 class AbstractRewriter(ABC):

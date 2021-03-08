@@ -96,9 +96,15 @@ def test_sequence_rewriter_context_match():
 
     rw = LookAheadSequenceRewriter(n=3)
     rw.fit(['AXABXABCXABCDX'])
-    assert rw.tree.parent(rw._match_context(rw.tree, 'AX', 2, 3).identifier).tag == 'A'
-    assert rw.tree.parent(rw._match_context(rw.tree, 'ABX', 3, 3).identifier).tag == 'B'
-    assert rw.tree.parent(rw._match_context(rw.tree, 'ABCX', 4, 3).identifier).tag == 'C'
+    assert rw.tree.parent(
+        rw._match_context(rw.tree, 'AX', 2, 3).identifier
+    ).tag == 'A'
+    assert rw.tree.parent(
+        rw._match_context(rw.tree, 'AX', 3, 3).identifier
+    ).tag == 'B'
+    assert rw.tree.parent(
+        rw._match_context(rw.tree, 'AX', 4, 3).identifier
+    ).tag == 'C'
     # due to lack of appending symbols
     assert rw._match_context(rw.tree, 'ABCDX', 5, 3) is None
 
