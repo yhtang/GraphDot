@@ -212,9 +212,9 @@ def get_ringlist(mol):
     return [sorted(rings) if len(rings) else [0] for rings in ringlist]
 
 
-def _from_rdkit(cls, mol, bond_type='order', set_ring_list=True,
+def _from_rdkit(cls, mol, title=None, bond_type='order', set_ring_list=True,
                 set_ring_stereo=True):
-    g = nx.Graph()
+    g = nx.Graph(title=title)
 
     for i, atom in enumerate(mol.GetAtoms()):
         g.add_node(i)
