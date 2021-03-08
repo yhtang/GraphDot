@@ -27,18 +27,20 @@ class AbstractRewriter(ABC):
 
 
 class LookAheadSequenceRewriter(AbstractRewriter):
-    '''A sequence rewriter that performs contextual updates to a sequence using
-    the n-gram preceding the location of modification. It can carry out three
-    types of operations:
+    '''A sequence rewriter that performs contextual updates to a symbol
+    sequence using the n-gram preceding the location of modification. It can
+    carry out three types of operations:
 
-    - Deletion: remove an item at random from a sequence.
-    This is context-insensitive.
-    - Addition: insert an item at a random location. The item inserted should
-    be probabilistically determined by up to **n** items in front of it unless
-    when there are less than n symbols in the front, or when there is no
-    matching n-gram in the training set. In that case, the longest k-gram
-    (k < n) is used.
-    - Mutation: replace an item by a random one. This is context-sensitive.
+    - Insertion: insert an symbol at a random location. The symbol inserted
+      should be probabilistically determined by up to **n** items in front of
+      it unless when there are less than n symbols in the front, or when there
+      is no matching n-gram in the training set. In that case, the longest
+      matching k-gram (k < n) is used.
+
+    - Mutation: replace an symbol by a random one. This is context-sensitive.
+
+    - Deletion: remove an symbol at random from a sequence.
+      This is context-insensitive.
 
     Parameters
     ----------
