@@ -1,5 +1,11 @@
 # Change log of GraphDot
 
+## 0.8a12 (2021-03-07)
+
+- A sequence-based rewriter for Monte Carlo tree search.
+- Convert any kernel into a metric via `KernelInducedDistance`.
+- Convert any norm into a kernel via `KernelOverMetric`.
+
 ## 0.8a11 (2021-02-25)
 
 - Improvements to the active learning hierarchical drafter.
