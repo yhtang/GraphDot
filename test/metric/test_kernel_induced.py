@@ -23,7 +23,8 @@ class Kernel:
 
     def __call__(self, X, Y=None, eval_gradient=False):
         fun = sym.lambdify('d', self.expr.subs([('v', self.v), ('L', self.L)]))
-        jac = [sym.lambdify('d', j.subs([('v', self.v), ('L', self.L)])) for j in self.expr_jac]
+        jac = [sym.lambdify('d', j.subs([('v', self.v), ('L', self.L)]))
+               for j in self.expr_jac]
         d = np.subtract.outer(X, Y if Y is not None else X)
         f = fun(d)
         if eval_gradient is False:
@@ -59,31 +60,29 @@ class Kernel:
         return Kernel(*np.exp(theta))
 
 
-# def test_maximin_basic():
-#     metric = MaxiMin(
-#         node_kernel=TensorProduct(
-#             element=KroneckerDelta(0.5)
-#         ),
-#         edge_kernel=TensorProduct(
-#             length=SquareExponential(0.1)
-#         ),
-#         q=0.01
-#     )
-#     distance = metric(G)
-#     assert distance.shape == (len(G), len(G))
-#     assert np.allclose(distance.diagonal(), 0, atol=1e-3)
-#     assert np.all(distance >= 0)
-#     assert np.allclose(distance, distance.T, rtol=1e-14, atol=1e-14)
+def test_basic():
+    d = KernelInducedDistance(kernel=Kernel(1.0, 1.0))
+    X = np.arange(4)
+    Y = np.arange(2)
 
-#     distance = metric(G, G)
-#     assert distance.shape == (len(G), len(G))
-#     assert np.allclose(distance.diagonal(), 0, atol=1e-3)
-#     assert np.all(distance >= 0)
-#     assert np.allclose(distance, distance.T, rtol=1e-4, atol=1e-4)
+    distance = d(X)
+    assert d.hyperparameters is not None
+    assert distance.shape == (len(X), len(X))
+    assert np.allclose(distance.diagonal(), 0, atol=1e-3)
+    assert np.all(distance >= 0)
+    assert np.allclose(distance, distance.T, rtol=1e-14, atol=1e-14)
+    distance, gradient = d(X, eval_gradient=True)
+    assert gradient.shape == (len(X), len(X), len(d.theta))
 
-#     distance = metric(G, H)
-#     assert distance.shape == (len(G), len(H))
-#     assert np.all(distance >= 0)
+    distance = d(X, X)
+    assert distance.shape == (len(X), len(X))
+    assert np.allclose(distance.diagonal(), 0, atol=1e-3)
+    assert np.all(distance >= 0)
+    assert np.allclose(distance, distance.T, rtol=1e-4, atol=1e-4)
+
+    distance = d(X, Y)
+    assert distance.shape == (len(X), len(Y))
+    assert np.all(distance >= 0)
 
 
 @pytest.mark.parametrize('X', [
