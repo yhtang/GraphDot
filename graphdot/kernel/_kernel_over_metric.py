@@ -20,7 +20,7 @@ class KernelOverMetric:
         for key, val in hyperparameters.items():
             if not hasattr(val, '__iter__'):
                 self._hyperparams[key] = val
-                self._hyperbounds[key] = (0, np.inf)            
+                self._hyperbounds[key] = (0, np.inf)
             elif len(val) == 1:
                 self._hyperparams[key] = val[0]
                 self._hyperbounds[key] = (0, np.inf)
