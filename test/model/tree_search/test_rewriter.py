@@ -96,6 +96,7 @@ def test_sequence_rewriter_context_match():
 
     rw = LookAheadSequenceRewriter(n=3)
     rw.fit(['AXABXABCXABCDX'])
+    rw.tree.show()
     assert rw.tree.parent(
         rw._match_context(rw.tree, 'AX', 2, 3).identifier
     ).tag == 'A'
@@ -105,8 +106,14 @@ def test_sequence_rewriter_context_match():
     assert rw.tree.parent(
         rw._match_context(rw.tree, 'ABCX', 4, 3).identifier
     ).tag == 'C'
-    # due to lack of appending symbols
-    assert rw._match_context(rw.tree, 'ABCDX', 5, 3) is None
+    # no exact 3-gram/2-gram match, fallback to 1-gram match
+    assert rw._match_context(rw.tree, 'ABCDX', 5, 3).tag == 'X'
+    assert rw.tree.children(
+        rw._match_context(rw.tree, 'ABCDX', 5, 3).identifier
+    )[0].tag == 'A'
+    assert rw.tree.parent(
+        rw._match_context(rw.tree, 'ABCDX', 5, 3).identifier
+    ).tag == '$'
 
 
 def test_sequence_rewriter_insert():
