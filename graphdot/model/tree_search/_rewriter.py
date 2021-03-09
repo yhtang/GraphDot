@@ -142,14 +142,15 @@ class LookAheadSequenceRewriter(AbstractRewriter):
     @staticmethod
     def _match_context(tree, s, k, n):
         ptrs = [tree[tree.root] for _ in range(n + 1)]
-        for i in range(max(k - n, 0), k):
+        for i, loc in enumerate(range(max(k - n, 0), k)):
             for j, p in enumerate(ptrs[:i + 1]):
-                try:
-                    next, = [c for c in tree.children(p.identifier)
-                             if c.tag == s[i]]
-                except (KeyError, ValueError):
-                    next = None
-                ptrs[j] = next
+                if p is not None:
+                    try:
+                        next, = [c for c in tree.children(p.identifier)
+                                 if c.tag == s[loc]]
+                    except (KeyError, ValueError):
+                        next = None
+                    ptrs[j] = next
         for n in ptrs:
             if n is not None and len(tree.children(n.identifier)) > 0:
                 return n
