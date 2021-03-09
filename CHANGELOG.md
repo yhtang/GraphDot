@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.8a13 (2021-03-08)
+
+- A new and experimental calling convention to allow evaluations of the
+  graph kernels at a list of specific indices.
+
 ## 0.8a12 (2021-03-07)
 
 - A sequence-based rewriter for Monte Carlo tree search.
