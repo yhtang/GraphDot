@@ -320,7 +320,7 @@ class Graph:
         )
 
     @classmethod
-    def from_rdkit(cls, mol, bond_type='order', set_ring_list=True,
+    def from_rdkit(cls, mol, title=None, bond_type='order', set_ring_list=True,
                    set_ring_stereo=True):
         """Convert a RDKit molecule to a graph
 
@@ -346,8 +346,7 @@ class Graph:
             node and edge carries an array of features as inferred from the
             chemical structure of the molecule.
         """
-        return _from_rdkit(cls, mol,
-                           bond_type=bond_type,
+        return _from_rdkit(cls, mol, title=title, bond_type=bond_type,
                            set_ring_list=set_ring_list,
                            set_ring_stereo=set_ring_stereo)
 
