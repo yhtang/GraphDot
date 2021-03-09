@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a14 (2021-03-09)
+
+- Minor tweaks to look-ahead rewriter logic.
+
 ## 0.8a13 (2021-03-08)
 
 - A new and experimental calling convention to allow evaluations of the
