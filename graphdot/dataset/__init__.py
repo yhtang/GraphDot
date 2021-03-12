@@ -3,9 +3,10 @@
 import pandas as pd
 from ._get import get
 from .qm7 import QM7
+from .qm9 import QM9
 
 
-__all__ = ['get', 'QM7', 'METLIN_SMRT', 'AMES']
+__all__ = ['get', 'QM7', 'QM9', 'METLIN_SMRT', 'AMES']
 
 
 def METLIN_SMRT(

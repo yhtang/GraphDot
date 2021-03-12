@@ -32,7 +32,7 @@ def QM7(
     overwrite: bool
         Whether or not to overwrite the local file if one already exists.
     ase: bool
-        Whether to create ASE Atoms objects from the given.
+        Whether to create ASE Atoms objects from the dataset.
 
     Returns
     -------

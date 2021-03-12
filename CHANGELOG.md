@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a15 (2021-03-12)
+
+- Downloader for QM9.
+
 ## 0.8a14 (2021-03-09)
 
 - Minor tweaks to look-ahead rewriter logic.
