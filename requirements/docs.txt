@@ -14,3 +14,4 @@ numba
 requests
 xlrd
 m2r
+tqdm

@@ -50,6 +50,7 @@ setup(
         'treelib>=1.6.1',
         'kahypar>=1.1.4',
         'numba>=0.51.0',
+        'tqdm>=4.55',
     ] + [
         'ase>=3.17',
         'pymatgen==2019.11.11',
