@@ -13,3 +13,4 @@ kahypar>=1.1.4
 numba>=0.51.0
 requests>=2.25.1
 xlrd>=2.0
+tqdm>=4.55

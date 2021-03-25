@@ -4,7 +4,7 @@ import re
 import copy
 import functools
 import numpy as np
-from mendeleev import get_table
+from mendeleev.fetch import fetch_table
 from graphdot.graph.adjacency.euclidean import Tent, Gaussian, CompactBell
 
 
@@ -21,7 +21,7 @@ def copying_lru_cache(*args, **kwargs):
 
 @copying_lru_cache(maxsize=32)
 def get_ptable():
-    return get_table('elements')
+    return fetch_table('elements')
 
 
 @copying_lru_cache(maxsize=128)
