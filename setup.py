@@ -54,7 +54,7 @@ setup(
     ] + [
         'ase>=3.17',
         'pymatgen==2019.11.11',
-        'mendeleev'
+        'mendeleev>=0.7'
     ],
     extras_require={
         'docs': ['sphinx', 'sphinx-rtd-theme'],
