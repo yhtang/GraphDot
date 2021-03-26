@@ -10,6 +10,7 @@ from graphdot.microkernel import (
     SquareExponential,
     TensorProduct,
 )
+from graphdot.kernel.marginalized.starting_probability import Uniform
 
 
 G = [Graph.from_ase(molecule(f)) for f in ['CH3SCH3', 'CH3OCH3']]
@@ -89,9 +90,13 @@ def test_maximin_basic():
 #     assert I[0, 1] == index_S
 
 
-@pytest.mark.parametrize('X', [(G,), (G, H), ([G[0], G[1]], [H[0], G[1]])])
-def test_maximin_gradient(X):
-    metric = MaxiMin(
+@pytest.mark.parametrize('X', [
+    (G,),
+    (G, H),
+    ([G[0], G[1]], [H[0], G[1]])
+])
+@pytest.mark.parametrize('metric', [
+    MaxiMin(
         node_kernel=TensorProduct(
             element=KroneckerDelta(0.5)
         ),
@@ -99,9 +104,22 @@ def test_maximin_gradient(X):
             length=SquareExponential(0.1)
         ),
         q=0.01
-    )
+    ),
+    MaxiMin(
+        node_kernel=TensorProduct(
+            element=KroneckerDelta(0.5)
+        ),
+        edge_kernel=TensorProduct(
+            length=SquareExponential(0.1)
+        ),
+        p=Uniform(1.0, p_bounds='fixed'),
+        q=0.01
+    ),
+])
+def test_maximin_gradient(X, metric):
 
     _, gradient = metric(*X, eval_gradient=True)
+
     if len(X) == 1:
         n1 = n2 = len(X[0])
     elif len(X) == 2:
