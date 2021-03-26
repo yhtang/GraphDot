@@ -263,7 +263,8 @@ class MarginalizedGraphKernel:
         else:
             return gramian.astype(self.element_dtype)
 
-    def diag(self, X, eval_gradient=False, nodal=False, lmin=0, timing=False):
+    def diag(self, X, eval_gradient=False, nodal=False, lmin=0,
+             active_theta_only=True, timing=False):
         """Compute the self-similarities for a list of graphs
 
         Parameters
@@ -286,6 +287,9 @@ class MarginalizedGraphKernel:
             of Eq. 1 in Tang & de Jong, 2019 https://doi.org/10.1063/1.5078640
             (or the first unnumbered equation in Section 3.3 of Kashima, Tsuda,
             and Inokuchi, 2003).
+        active_theta_only: bool
+            Whether or not to return only gradients with regard to the
+            non-fixed hyperparameters.
 
         Returns
         -------
@@ -382,7 +386,9 @@ class MarginalizedGraphKernel:
         if gradient is not None:
             gradient = gradient.reshape(
                 (output_length, self.n_dims), order='F'
-            )[:, self.active_theta_mask]
+            )
+            if active_theta_only:
+                gradient = gradient[:, self.active_theta_mask]
         if nodal == 'block':
             retval = [gramian[s:s + n**2].reshape(n, n)
                       for s, n in zip(starts[:-1], sizes)]

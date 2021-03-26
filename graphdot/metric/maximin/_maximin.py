@@ -120,7 +120,8 @@ class MaxiMin(MarginalizedGraphKernel):
             starts_nodal = backend.zeros(len(X) + 1, dtype=np.uint32)
             sizes = np.array([len(g.nodes) for g in X], dtype=np.uint32)
             np.cumsum(sizes, out=starts_nodal[1:])
-            diag = super().diag(X, eval_gradient, nodal=True, lmin=lmin)
+            diag = super().diag(X, eval_gradient, nodal=True, lmin=lmin,
+                                active_theta_only=False)
         else:
             output_shape = (len(X), len(Y))
             XY = np.concatenate((X, Y))
@@ -130,7 +131,8 @@ class MaxiMin(MarginalizedGraphKernel):
             starts_nodal = backend.zeros(len(XY) + 1, dtype=np.uint32)
             sizes = np.array([len(g.nodes) for g in XY], dtype=np.uint32)
             np.cumsum(sizes, out=starts_nodal[1:])
-            diag = super().diag(XY, eval_gradient, nodal=True, lmin=lmin)
+            diag = super().diag(XY, eval_gradient, nodal=True, lmin=lmin,
+                                active_theta_only=False)
 
         distance = backend.empty(int(np.prod(output_shape)), np.float32)
         hotspot = backend.empty(int(np.prod(output_shape)), np.int32)

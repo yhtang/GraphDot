@@ -7,7 +7,7 @@ networkx>=2.4
 pycuda>=2019
 ase>=3.17
 pymatgen==2019.11.11
-mendeleev
+mendeleev>=0.7
 treelib>=1.6.1
 kahypar>=1.1.4
 numba>=0.51.0
