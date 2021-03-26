@@ -55,7 +55,7 @@ def QM9(
                                           for line in lines[2:n_atoms + 2]])
         data.append(tuple(
             # scalar properties
-            [int(fields[0])] + [float(w) for w in fields[1:]] + 
+            [int(fields[0])] + [float(w) for w in fields[1:]] +
             # atomic coordinates
             [symbols, np.array([x, y, z]).T.tolist(), charges] +
             # vibrational frequencies

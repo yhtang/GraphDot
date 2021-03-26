@@ -13,6 +13,6 @@ def test_qm9():
         qm9 = QM9(local_filename=tempf, ase=True)
 
         assert len(qm9) > 133000
-        assert 'tag' in qm9
+        assert 'id' in qm9
         assert 'zpve' in qm9
         assert 'atoms' in qm9
