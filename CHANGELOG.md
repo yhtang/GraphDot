@@ -1,5 +1,10 @@
 # Change log of GraphDot
 
+## 0.8a17 (2021-03-12)
+
+- Fixed a QM9 downloader issue.
+- Fixed a bug with the Maximin metric when some hyperparameters are fixed.
+
 ## 0.8a15 (2021-03-12)
 
 - Downloader for QM9.
