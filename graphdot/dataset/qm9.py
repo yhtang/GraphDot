@@ -43,21 +43,19 @@ def QM9(
             f'Acquiring {local_filename} failed due to error: {e}.'
         )
 
-    tf = tarfile.open(f, 'r:bz2')
-
     data = []
-
+    tf = tarfile.open(f, 'r:bz2')
     for xyz in tqdm(tf, total=133885):
         content = io.TextIOWrapper(tf.extractfile(xyz)).read()
         content = content.replace('*^', 'E')
         lines = content.split('\n')
         n_atoms = int(lines[0])
+        fields = lines[1][4:].strip().split('\t')
         symbols, x, y, z, charges = zip(*[line.split('\t')
                                           for line in lines[2:n_atoms + 2]])
         data.append(tuple(
             # scalar properties
-            [float(s) if i > 0 else s
-             for i, s in enumerate(lines[1].strip().split('\t'))] +
+            [int(fields[0])] + [float(w) for w in fields[1:]] +
             # atomic coordinates
             [symbols, np.array([x, y, z]).T.tolist(), charges] +
             # vibrational frequencies
@@ -71,10 +69,10 @@ def QM9(
     qm9 = pd.DataFrame(
         data,
         columns=[
-            'tag', 'A', 'B', 'C', 'mu', 'alpha', 'e_HOMO', 'e_LUMO', 'e_gap',
+            'id', 'A', 'B', 'C', 'mu', 'alpha', 'e_HOMO', 'e_LUMO', 'e_gap',
             'R2', 'zpve', 'U0', 'U', 'H', 'G', 'Cv', 'symbols', 'xyz',
-            'charges_mulliken', 'freq', 'smiles_gdb', 'smiles_b3lyp',
-            'inchi_gdb', 'inchi_b3lyp'
+            'charges_mulliken', 'freq', 'smiles_gdb', 'smiles_opt',
+            'inchi_gdb', 'inchi_opt'
         ]
     )
 
