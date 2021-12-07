@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8a18 (2021-09-30)
+
+- Maintenance update.
+
 ## 0.8a17 (2021-03-12)
 
 - Fixed a QM9 downloader issue.

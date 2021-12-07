@@ -322,6 +322,8 @@ class GaussianFieldRegressor:
             )
         else:
             z = self._predict(X, y)
+        eps = 1e-7
+        z = np.minimum(1 - eps, np.maximum(eps, z))
         loss = -np.mean(z * np.log(z) + (1 - z) * np.log(1 - z))
         if eval_gradient is True:
             dloss = np.log(z) - np.log(1 - z)
