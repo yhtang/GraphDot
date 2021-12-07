@@ -1,5 +1,20 @@
 # Change log of GraphDot
 
+## 0.8 (2021-12-07)
+
+This version formalizes the inclusion of new features introduced from 0.8a1
+to 0.8a18. An (incomplete) list of features include:
+- Dataset downloaders (`graphdot.dataset`)
+- Graph Hausdorff distance metric (`graphdot.metric.maximin`)
+- Gaussian field regressor (`graphdot.model.gfr`)
+- Kernel-induced distance metrics (`graphdot.metric`)
+- Low-rank GPR via Nystrom approximation (`graphdot.model.gpr.nystrom`)
+- Multiplicative regularization for GPR
+
+## 0.8a18 (2021-09-30)
+
+- Maintenance update.
+
 ## 0.8a17 (2021-03-12)
 
 - Fixed a QM9 downloader issue.
