@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import time
+import warnings
 import numpy as np
 from scipy.optimize import minimize
 from graphdot.linalg.cholesky import CholSolver
@@ -234,7 +235,8 @@ class GaussianFieldRegressor:
         try:
             L_inv = CholSolver(np.diag(D) - W_uu)
         except np.linalg.LinAlgError:
-            raise RuntimeError(
+            L_inv = np.linalg.pinv(np.diag(D) - W_uu)
+            warnings.warn(
                 'The Graph Laplacian is not positive definite. Some'
                 'weights on edges may be invalid.'
             )
@@ -266,7 +268,8 @@ class GaussianFieldRegressor:
         try:
             L_inv = CholSolver(np.diag(D) - W_uu).todense()
         except np.linalg.LinAlgError:
-            raise RuntimeError(
+            L_inv = np.linalg.pinv(np.diag(D) - W_uu)
+            warnings.warn(
                 'The Graph Laplacian is not positive definite. Some'
                 'weights on edges may be invalid.'
             )
