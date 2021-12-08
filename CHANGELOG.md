@@ -1,5 +1,9 @@
 # Change log of GraphDot
 
+## 0.8.1 (2021-12-08)
+
+- Hotfix to improve GFR numerical stability when adjacency is nearly zero.
+
 ## 0.8 (2021-12-07)
 
 This version formalizes the inclusion of new features introduced from 0.8a1
